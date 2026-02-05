@@ -1,59 +1,84 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import '../global.css';
+import { getUserProfile, onAuthChange } from '../services/auth';
 
-import { useColorScheme } from '@/components/useColorScheme';
+const DEMO_MODE_KEY = 'hkcampus_demo_mode';
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
-
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+// Helper to check/set demo mode
+export const setDemoMode = async (enabled: boolean) => {
+  if (enabled) {
+    await AsyncStorage.setItem(DEMO_MODE_KEY, 'true');
+  } else {
+    await AsyncStorage.removeItem(DEMO_MODE_KEY);
+  }
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+export const isDemoMode = async () => {
+  const value = await AsyncStorage.getItem(DEMO_MODE_KEY);
+  return value === 'true';
+};
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    ...FontAwesome.font,
-  });
-
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  const router = useRouter();
+  const segments = useSegments();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+    const checkAuth = async () => {
+      const inAuthGroup = segments[0] === '(auth)';
 
-  if (!loaded) {
-    return null;
+      // Check for demo mode first
+      const demoMode = await isDemoMode();
+      if (demoMode) {
+        if (inAuthGroup) {
+          router.replace('/(tabs)/campus');
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Normal auth check
+      const unsubscribe = onAuthChange(async (user) => {
+        if (!user) {
+          if (!inAuthGroup) {
+            router.replace('/(auth)/login');
+          }
+        } else {
+          const profile = await getUserProfile(user.uid);
+          if (!profile) {
+            if (segments.length > 1 && (segments as string[])[1] !== 'setup') {
+              router.replace('/(auth)/setup');
+            }
+          } else if (inAuthGroup) {
+            router.replace('/(tabs)/campus');
+          }
+        }
+        setLoading(false);
+      });
+
+      return unsubscribe;
+    };
+
+    checkAuth();
+  }, [segments]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#1E3A8A" />
+        <StatusBar style="dark" />
+      </View>
+    );
   }
 
-  return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <>
+      <Slot />
+      <StatusBar style="auto" />
+    </>
   );
 }
