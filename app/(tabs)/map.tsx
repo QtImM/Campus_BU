@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
@@ -21,9 +22,11 @@ import {
     View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { CAMPUS_BUILDINGS } from '../../data/buildings';
 import { CAMPUS_LOCATIONS } from '../../services/locations';
 import { CampusLocation } from '../../types';
 import { compressImage } from '../../utils/image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -86,7 +89,7 @@ const MOCK_DATA = {
 };
 
 // Generate Leaflet HTML with markers
-const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], showFoodMap: boolean = false): string => {
+const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], buildings: CampusLocation[] = [], showFoodMap: boolean = false, showBuildingMap: boolean = false, editMode: boolean = false): string => {
     // Pin SVG Template (Teardrop shape like standard marker)
     const pinSvg = (color: string) => `
         <svg width="24" height="32" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.3));">
@@ -138,6 +141,39 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], showFoo
         `;
     };
 
+    // Building Marker Template (Blue Square with Label)
+    const buildingMarkerHtml = (name: string) => {
+        // Extract common abbreviations (last parentheses)
+        const match = name.match(/\(([^)]+)\)$/);
+        const abbr = match ? match[1] : name.substring(0, 3).toUpperCase();
+
+        return `
+            <div style="display: flex; flex-direction: column; align-items: center;">
+                <div style="
+                    background: #4B0082;
+                    color: white;
+                    font-size: 10px;
+                    font-weight: bold;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    border: 1px solid white;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    margin-bottom: -4px;
+                    z-index: 10;
+                    white-space: nowrap;
+                ">${abbr}</div>
+                <div style="
+                    width: 12px;
+                    height: 12px;
+                    background: #4B0082;
+                    border: 2px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                "></div>
+            </div>
+        `;
+    };
+
     const markers = posts.map(post => {
         if (!post || !post.location) return '';
         return `
@@ -167,7 +203,6 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], showFoo
                 </div>
             </div>
         \`);
-    `;
     }).join('\n');
 
     const foodMarkers = foodSpots.map(spot => {
@@ -175,9 +210,10 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], showFoo
         const labelPos = (['o5', 'o7', 'o14'].includes(spot.id)) ? 'bottom' : 'top';
 
         return `
-            var foodIcon_${spot.id.replace(/-/g, '_')} = L.divIcon({
-                className: 'food-marker-icon',
-                html: \`${foodMarkerHtml(spot.imageUrl || '', spot.name, spot.description || '', labelPos)}\`,
+        var foodIcon_${ spot.id.replace(/-/g, '_')
+    } = L.divIcon({
+        className: 'food-marker-icon',
+        html: \`${foodMarkerHtml(spot.imageUrl || '', spot.name, spot.description || '', labelPos)}\`,
                 iconSize: [50, 50],
                 iconAnchor: [25, 25],
                 popupAnchor: [0, -18]
@@ -207,9 +243,47 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], showFoo
                 </div>
             \`, { closeButton: false });
         `;
-    }).join('\n');
+}).join('\n');
 
+const buildingMarkers = buildings.map(b => {
     return `
+            var buildingIcon_${b.id.replace(/-/g, '_')} = L.divIcon({
+                className: 'building-marker-icon',
+                html: \`${buildingMarkerHtml(b.name)}\`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 26],
+                popupAnchor: [0, -20]
+            });
+
+
+
+            var bm = L.marker([${b.coordinates.latitude}, ${b.coordinates.longitude}], { 
+                icon: buildingIcon_${b.id.replace(/-/g, '_')},
+                draggable: ${editMode} 
+            })
+            .addTo(buildingLayer)
+            .bindPopup(\`
+                <div style="min-width: 160px; padding: 2px;">
+                    <img src="${b.imageUrl}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" onerror="this.style.display='none'" />
+                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #111;">${b.name}</div>
+                    <div style="font-size: 11px; color: #444; line-height: 1.4;">${b.description}</div>
+                    ${editMode ? '<div style="font-size: 10px; color: red; margin-top: 4px;">Drag to move</div>' : ''}
+                </div>
+            \`, { closeButton: false });
+
+            bm.on('dragend', function(e) {
+                var newLatLng = e.target.getLatLng();
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'building_dragged',
+                    id: '${b.id}',
+                    lat: newLatLng.lat,
+                    lng: newLatLng.lng
+                }));
+            });
+        `;
+}).join('\n');
+
+return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -285,10 +359,14 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], showFoo
         // Marker Layer Group
         var markerLayer = L.layerGroup().addTo(map);
         var foodLayer = L.layerGroup();
+        var buildingLayer = L.layerGroup();
+        
         if (${showFoodMap}) foodLayer.addTo(map);
+        if (${showBuildingMap}) buildingLayer.addTo(map);
         
         ${markers}
         ${foodMarkers}
+        ${buildingMarkers}
         
         // Manual Toggle Function
         window.setMarkersVisible = function(visible) {
@@ -304,6 +382,14 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], showFoo
                 foodLayer.addTo(map);
             } else {
                 map.removeLayer(foodLayer);
+            }
+        };
+
+        window.setBuildingMapVisible = function(visible) {
+            if (visible) {
+                buildingLayer.addTo(map);
+            } else {
+                map.removeLayer(buildingLayer);
             }
         };
         
@@ -403,9 +489,47 @@ export default function MapScreen() {
     const [locating, setLocating] = useState(false);
     const [markersVisible, setMarkersVisible] = useState(true);
     const [showFoodMap, setShowFoodMap] = useState(false);
+    const [showBuildingMap, setShowBuildingMap] = useState(false);
+    const [editMode, setEditMode] = useState(false);
+    const [buildingsData, setBuildingsData] = useState(CAMPUS_BUILDINGS);
     const [isCommentModalVisible, setIsCommentModalVisible] = useState(false);
     const [commentText, setCommentText] = useState('');
     const [commentImage, setCommentImage] = useState<string | null>(null);
+
+    // Load saved buildings from storage on mount
+    useEffect(() => {
+        const loadSavedBuildings = async () => {
+            try {
+                const savedData = await AsyncStorage.getItem('savedBuildingsData');
+                if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    // Merge with current data structure to ensure new fields/buildings are present
+                    // but prefer saved coordinates
+                    const mergedData = CAMPUS_BUILDINGS.map(defaultB => {
+                        const savedB = parsed.find((p: any) => p.id === defaultB.id);
+                        if (savedB) {
+                            return { ...defaultB, coordinates: savedB.coordinates };
+                        }
+                        return defaultB;
+                    });
+                    setBuildingsData(mergedData);
+                }
+            } catch (e) {
+                console.error("Failed to load saved buildings", e);
+            }
+        };
+        loadSavedBuildings();
+    }, []);
+
+    // Save to storage whenever buildingsData changes (debounced or on key events)
+    // For simplicity, we'll save on drag end (which updates state) and on export.
+
+    useEffect(() => {
+        if (buildingsData !== CAMPUS_BUILDINGS) {
+            AsyncStorage.setItem('savedBuildingsData', JSON.stringify(buildingsData)).catch(e => console.error(e));
+        }
+    }, [buildingsData]);
+
     const webViewRef = useRef<WebView>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -477,6 +601,17 @@ export default function MapScreen() {
             true;
         `);
     }, [markersVisible, showFoodMap]);
+
+    // Sync building map visibility with WebView
+    React.useEffect(() => {
+        webViewRef.current?.injectJavaScript(`
+            if (window.setBuildingMapVisible) {
+                window.setBuildingMapVisible(${showBuildingMap});
+            }
+            // Auto hide other layers if one is active to reduce clutter? For now keep independent or managed by user
+            true;
+        `);
+    }, [showBuildingMap]);
 
     const currentPosts = MOCK_DATA[activeFilter];
 
@@ -578,9 +713,22 @@ export default function MapScreen() {
                 router.push(`/food/${data.id}` as any);
                 return;
             }
+            if (data.type === 'building_dragged') {
+                const { id, lat, lng } = data;
+                setBuildingsData(prev => prev.map(b =>
+                    b.id === id ? { ...b, coordinates: { latitude: lat, longitude: lng } } : b
+                ));
+            }
         } catch (e) {
             // Ignore
         }
+    };
+
+    const handleExportBuildings = async () => {
+        const json = JSON.stringify(buildingsData, null, 4);
+        console.log(json);
+        await Clipboard.setStringAsync(json);
+        Alert.alert('Data Exported', 'The new building data has been copied to your clipboard. Please paste it to me so I can update the file.');
     };
 
     const handleLike = () => {
@@ -639,8 +787,8 @@ export default function MapScreen() {
             {/* Real Map */}
             <WebView
                 ref={webViewRef}
-                key={activeFilter}
-                source={{ html: String(generateMapHTML(currentPosts || [], (CAMPUS_LOCATIONS || []).filter(l => l.category === 'Food'), showFoodMap)) }}
+                key={activeFilter + (editMode ? '_edit' : '')} // Force re-render on edit mode toggle
+                source={{ html: String(generateMapHTML(currentPosts || [], (CAMPUS_LOCATIONS || []).filter(l => l.category === 'Food'), buildingsData || [], showFoodMap, showBuildingMap, editMode)) }}
                 style={styles.map}
                 onMessage={handleWebViewMessage}
                 javaScriptEnabled={true}
@@ -668,6 +816,20 @@ export default function MapScreen() {
                     <Utensils size={18} color={showFoodMap ? "#fff" : "#FF6B6B"} />
                     <Text style={[styles.foodMapBadgeText, showFoodMap && { color: '#fff' }]}>
                         {showFoodMap ? '美食地图: 开' : '美食地图'}
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[
+                        styles.foodMapBadge,
+                        { marginLeft: 8 }, // Add margin
+                        showBuildingMap ? { backgroundColor: '#4B0082', borderColor: '#4B0082' } : styles.foodMapBadgeInactive
+                    ]}
+                    onPress={() => setShowBuildingMap(!showBuildingMap)}
+                >
+                    <Building size={16} color={showBuildingMap ? "#fff" : "#4B0082"} />
+                    <Text style={[styles.foodMapBadgeText, showBuildingMap && { color: '#fff' }]}>
+                        {showBuildingMap ? '建筑地图: 开' : '建筑地图'}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -724,6 +886,22 @@ export default function MapScreen() {
                     <Building size={20} color="#4B0082" />
                     <Text style={styles.iconButtonText}>教室</Text>
                 </TouchableOpacity>
+
+                {showBuildingMap && (
+                    <TouchableOpacity
+                        style={[styles.iconButton, editMode && { backgroundColor: '#FFD700' }]}
+                        onPress={() => {
+                            if (editMode) {
+                                // Save/Exit
+                                handleExportBuildings();
+                            }
+                            setEditMode(!editMode);
+                        }}
+                    >
+                        <MapPin size={20} color={editMode ? "#000" : "#4B0082"} />
+                        <Text style={styles.iconButtonText}>{editMode ? 'Save' : 'Edit'}</Text>
+                    </TouchableOpacity>
+                )}
 
                 <TouchableOpacity style={styles.iconButton} onPress={handleFindFood}>
                     <Utensils size={20} color="#E65100" />
