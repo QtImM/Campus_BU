@@ -8,6 +8,11 @@ const TEAMING_COMMENTS_TABLE = 'teaming_comments';
  * Fetch teaming requests for a specific course.
  */
 export const fetchTeamingRequests = async (courseId: string): Promise<CourseTeaming[]> => {
+    // Skip DB query for local/offline courses to avoid UUID type mismatch
+    if (courseId.startsWith('local_')) {
+        return getMockTeaming(courseId);
+    }
+
     try {
         const { data, error } = await supabase
             .from(TEAMING_TABLE)
@@ -176,18 +181,7 @@ const mapSupabaseToTeamingComment = (data: any): TeamingComment => ({
 
 const incrementTeamingCommentCount = async (teamingId: string) => {
     try {
-        const { data: teaming } = await supabase
-            .from(TEAMING_TABLE)
-            .select('comment_count')
-            .eq('id', teamingId)
-            .single();
-
-        if (teaming) {
-            await supabase
-                .from(TEAMING_TABLE)
-                .update({ comment_count: (teaming.comment_count || 0) + 1 })
-                .eq('id', teamingId);
-        }
+        await supabase.rpc('increment_teaming_comment_count', { row_id: teamingId });
     } catch (e) {
         console.error('Error incrementing comment count:', e);
     }

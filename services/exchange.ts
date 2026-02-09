@@ -39,7 +39,7 @@ export const postExchange = async (exchange: Omit<CourseExchange, 'id' | 'create
             user_major: exchange.userMajor,
             have_course: exchange.haveCourse,
             have_section: exchange.haveSection,
-            have_instructor: exchange.haveInstructor,
+            have_teacher: exchange.haveTeacher,
             have_time: exchange.haveTime,
             want_courses: exchange.wantCourses,
             reason: exchange.reason,
@@ -160,7 +160,7 @@ const mapSupabaseToExchange = (data: any): CourseExchange => ({
     userMajor: data.user_major,
     haveCourse: data.have_course,
     haveSection: data.have_section,
-    haveInstructor: data.have_instructor,
+    haveTeacher: data.have_teacher,
     haveTime: data.have_time,
     wantCourses: data.want_courses,
     reason: data.reason,
@@ -211,12 +211,12 @@ const getMockExchanges = (): CourseExchange[] => [
         userAvatar: '👤',
         userMajor: 'Computer Science',
         haveCourse: 'COMP3015',
-        haveSection: 'Sec1',
-        haveInstructor: 'Dr. Smith',
+        haveSection: '1',
+        haveTeacher: 'Dr. Smith',
         haveTime: 'Mon 2:30 PM',
         wantCourses: [
-            { code: 'COMP3011', section: 'Sec2', instructor: 'Prof. Wong', time: 'Wed 10:30 AM' },
-            { code: 'COMP3016', section: 'Sec1' }
+            { code: 'COMP3011', section: '2', teacher: 'Prof. Wong', time: 'Wed 10:30 AM' },
+            { code: 'COMP3016', section: '1' }
         ],
         reason: 'Time conflict with my other core course.',
         contacts: [
@@ -236,11 +236,11 @@ const getMockExchanges = (): CourseExchange[] => [
         userAvatar: '👩‍🎓',
         userMajor: 'Marketing',
         haveCourse: 'MKTG2005',
-        haveSection: 'Sec3',
-        haveInstructor: 'Dr. Johnson',
+        haveSection: '3',
+        haveTeacher: 'Dr. Johnson',
         haveTime: 'Tue 1:00 PM',
         wantCourses: [
-            { code: 'MKTG3010', section: 'Sec1' },
+            { code: 'MKTG3010', section: '1' },
             { code: 'MKTG3020' }
         ],
         contacts: [

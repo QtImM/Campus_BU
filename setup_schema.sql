@@ -74,7 +74,7 @@ insert into storage.buckets (id, name, public) values ('posts', 'posts', true);
 create policy "Public Access" on storage.objects for select using ( bucket_id = 'posts' );
 -- 6. 创建课程表 (Courses)
 create table public.courses (
-  id uuid default gen_random_uuid() primary key,
+  id text default gen_random_uuid()::text primary key,
   code text unique not null,
   name text,
   instructor text,
@@ -93,7 +93,7 @@ create policy "Anyone can insert courses." on public.courses for insert with che
 -- 8. 课程评价表 (Course Reviews)
 create table public.course_reviews (
   id uuid default gen_random_uuid() primary key,
-  course_id uuid references public.courses(id) on delete cascade,
+  course_id text references public.courses(id) on delete cascade,
   author_id uuid references public.users(id),
   author_name text,
   author_avatar text,
@@ -142,7 +142,10 @@ create table public.course_exchanges (
   user_avatar text,
   user_major text,
   have_course text,
-  want_course text,
+  have_section text,
+  have_teacher text,
+  have_time text,
+  want_courses jsonb,
   reason text,
   contacts jsonb,
   status text default 'open',
@@ -180,3 +183,69 @@ begin
 end;
 $$ language plpgsql security definer;
 
+
+-- 12. 建筑位置表 (Buildings)
+create table public.buildings (
+  id text primary key,
+  name text not null,
+  category text,
+  description text,
+  image_url text,
+  lat float,
+  lng float,
+  is_deleted boolean default false,
+  updated_at timestamptz default now()
+);
+
+alter table public.buildings enable row level security;
+create policy "Buildings are viewable by everyone." on public.buildings for select using ( true );
+create policy "Only authenticated users can insert/update buildings." on public.buildings 
+  for all using ( auth.role() = 'authenticated' );
+
+
+-- 13. 课程组队表 (Course Teaming)
+create table public.course_teaming (
+  id uuid default gen_random_uuid() primary key,
+  course_id text references public.courses(id) on delete cascade,
+  user_id uuid references public.users(id),
+  user_name text,
+  user_avatar text,
+  user_major text,
+  section text,
+  self_intro text,
+  target_teammate text,
+  contacts jsonb,
+  status text default 'open',
+  likes int default 0,
+  comment_count int default 0,
+  created_at timestamptz default now()
+);
+
+alter table public.course_teaming enable row level security;
+create policy "Teaming requests are viewable by everyone." on public.course_teaming for select using ( true );
+create policy "Anyone can insert teaming requests." on public.course_teaming for insert with check ( true );
+
+-- 14. 组队评论表 (Teaming Comments)
+create table public.teaming_comments (
+  id uuid default gen_random_uuid() primary key,
+  teaming_id uuid references public.course_teaming(id) on delete cascade,
+  author_id uuid references public.users(id),
+  author_name text,
+  author_avatar text,
+  content text,
+  created_at timestamptz default now()
+);
+
+alter table public.teaming_comments enable row level security;
+create policy "Teaming comments are viewable by everyone." on public.teaming_comments for select using ( true );
+create policy "Anyone can insert teaming comments." on public.teaming_comments for insert with check ( true );
+
+-- 15. 组队评论数自增函数
+create or replace function public.increment_teaming_comment_count(row_id uuid)
+returns void as $$
+begin
+  update public.course_teaming
+  set comment_count = comment_count + 1
+  where id = row_id;
+end;
+$$ language plpgsql security definer;

@@ -1,8 +1,9 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Building, Camera, ChevronLeft, MapPin, Navigation, Share2 } from 'lucide-react-native';
+import { Building, Camera, ChevronLeft, Navigation, Share2 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Dimensions,
     Image,
@@ -12,9 +13,10 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 // Import from data directly
 import { CAMPUS_BUILDINGS } from '../../data/buildings';
+import { getBuildings } from '../../services/buildings';
+import { CampusLocation } from '../../types';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,9 +25,34 @@ export default function BuildingDetail() {
     const router = useRouter();
     const [photos, setPhotos] = useState<string[]>([]); // User uploaded photos
     const [isMapModalVisible, setIsMapModalVisible] = useState(false);
+    const [building, setBuilding] = useState<CampusLocation | undefined>(CAMPUS_BUILDINGS.find(b => b.id === id));
+    const [loading, setLoading] = useState(true);
 
-    // Find in CAMPUS_BUILDINGS
-    const building = CAMPUS_BUILDINGS.find(b => b.id === id);
+    React.useEffect(() => {
+        const fetchBuilding = async () => {
+            setLoading(true);
+            try {
+                const buildings = await getBuildings();
+                const found = buildings.find(b => b.id === id);
+                if (found) {
+                    setBuilding(found);
+                }
+            } catch (e) {
+                console.error('Failed to fetch building detail', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchBuilding();
+    }, [id]);
+
+    if (loading) {
+        return (
+            <View style={styles.errorContainer}>
+                <ActivityIndicator size="large" color="#1E3A8A" />
+            </View>
+        );
+    }
 
     if (!building) {
         return (
@@ -52,30 +79,6 @@ export default function BuildingDetail() {
         }
     };
 
-    const generateMapHTML = () => {
-        return `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                <style>
-                    * { margin: 0; padding: 0; }
-                    html, body, #map { height: 100%; width: 100%; }
-                </style>
-            </head>
-            <body>
-                <div id="map"></div>
-                <script>
-                    var map = L.map('map', { zoomControl: false, dragging: false, touchZoom: false }).setView([${building.coordinates.latitude}, ${building.coordinates.longitude}], 17);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                    L.marker([${building.coordinates.latitude}, ${building.coordinates.longitude}]).addTo(map);
-                </script>
-            </body>
-            </html>
-        `;
-    };
 
     return (
         <View style={styles.container}>
@@ -115,35 +118,14 @@ export default function BuildingDetail() {
                 <View style={styles.infoCard}>
                     <View style={styles.infoRow}>
                         <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{building.category || 'Academic'}</Text>
+                            <Text style={styles.badgeText}>Name</Text>
                         </View>
                     </View>
 
                     <Text style={styles.buildingName}>
-                        <Building size={16} color="#1E3A8A" /> {building.description || building.name}
+                        <Building size={16} color="#1E3A8A" /> {building.description} ({building.name})
                     </Text>
 
-                    <View style={styles.divider} />
-
-                    <View style={styles.locationSection}>
-                        <View style={styles.sectionHeaderRow}>
-                            <Text style={styles.sectionTitle}>🗺️ Location</Text>
-                        </View>
-
-                        <View style={styles.mapWrap}>
-                            <WebView
-                                source={{ html: generateMapHTML() }}
-                                style={styles.miniMap}
-                                javaScriptEnabled={true}
-                                domStorageEnabled={true}
-                            />
-                        </View>
-
-                        <View style={styles.pathHint}>
-                            <MapPin size={16} color="#EF4444" />
-                            <Text style={styles.pathText}>{building.name}</Text>
-                        </View>
-                    </View>
                 </View>
 
                 {/* Actions */}

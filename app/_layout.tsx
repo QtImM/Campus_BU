@@ -3,6 +3,7 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import 'react-native-url-polyfill/auto';
 import '../global.css';
 import { getUserProfile, onAuthChange } from '../services/auth';
 

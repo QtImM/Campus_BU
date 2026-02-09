@@ -131,7 +131,7 @@ export interface ContactMethod {
 export interface ExchangeCourseDetail {
     code: string;
     section?: string;
-    instructor?: string;
+    teacher?: string;
     time?: string;
 }
 
@@ -143,7 +143,7 @@ export interface CourseExchange {
     userMajor: string;
     haveCourse: string; // Course code
     haveSection?: string;
-    haveInstructor?: string;
+    haveTeacher?: string;
     haveTime?: string;
     wantCourses: ExchangeCourseDetail[]; // Support multiple choices
     reason?: string;

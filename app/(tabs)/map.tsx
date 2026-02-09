@@ -24,16 +24,17 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { CAMPUS_BUILDINGS } from '../../data/buildings';
+import { getBuildings } from '../../services/buildings';
 import { CAMPUS_LOCATIONS } from '../../services/locations';
 import { CampusLocation } from '../../types';
 import { compressImage } from '../../utils/image';
 
 const { width, height } = Dimensions.get('window');
 
-// HKBU Campus coordinates
+// HKBU Campus coordinates (Aligned with WLB/Heart of Campus)
 const HKBU_CENTER = {
-    lat: 22.3380,
-    lng: 114.1813
+    lat: 22.3377659528824,
+    lng: 114.181895256042
 };
 
 type FilterType = 'newest' | 'hottest' | 'viewed' | 'mine';
@@ -89,7 +90,17 @@ const MOCK_DATA = {
 };
 
 // Generate Leaflet HTML with markers
-const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], buildings: CampusLocation[] = [], showFoodMap: boolean = false, showBuildingMap: boolean = false, editMode: boolean = false): string => {
+const generateMapHTML = (
+    posts: any[],
+    foodSpots: CampusLocation[] = [],
+    buildings: CampusLocation[] = [],
+    showFoodMap: boolean = false,
+    showBuildingMap: boolean = false,
+    editMode: boolean = false,
+    userLoc: { lat: number, lng: number } | null = null,
+    navTarget: { lat: number, lng: number } | null = null,
+    isNavigating: boolean = false
+): string => {
     // Pin SVG Template (Teardrop shape like standard marker)
     const pinSvg = (color: string) => `
         <svg width="24" height="32" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.3));">
@@ -143,9 +154,9 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], buildin
 
     // Building Marker Template (Blue Square with Label)
     const buildingMarkerHtml = (name: string) => {
-        // Extract common abbreviations (last parentheses)
-        const match = name.match(/\(([^)]+)\)$/);
-        const abbr = match ? match[1] : name.substring(0, 3).toUpperCase();
+        // If name is "Full Name (ABBR)", extract "ABBR". Otherwise use clean name.
+        const abbrMatch = name.match(/\(([^)]+)\)/);
+        const abbr = abbrMatch ? abbrMatch[1] : name;
 
         return `
             <div style="display: flex; flex-direction: column; align-items: center;">
@@ -260,8 +271,8 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], buildin
             .bindPopup(\`
                 <div style="min-width: 160px; padding: 2px;">
                     <img src="${b.imageUrl}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" onerror="this.style.display='none'" />
-                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #111;">${b.name}</div>
-                    <div style="font-size: 11px; color: #444; line-height: 1.4;">${b.description}</div>
+                    <div style="font-weight: bold; font-size: 14px; margin-bottom: 2px; color: #111;">${b.description || b.name}</div>
+                    <div style="font-size: 11px; color: #444; line-height: 1.4;">${b.description ? b.name : ''} Building</div>
                     ${editMode ? '<div style="font-size: 10px; color: red; margin-top: 4px;">Drag to move</div>' : ''}
                 </div>
             \`, { closeButton: false });
@@ -397,16 +408,17 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], buildin
             } else {
                 var userIcon = L.divIcon({
                     className: 'user-marker-icon-container',
-                    html: \`
-                        <div id="user-heading-container" class="user-direction-container">
-                            <div class="user-direction-arrow"></div>
-                            <div class="user-marker-pulse"></div>
-                        </div>
-                    \`,
+                    html: '<div id="user-heading-container" class="user-direction-container"><div class="user-direction-arrow"></div><div class="user-marker-pulse"></div></div>',
                     iconSize: [32, 32],
                     iconAnchor: [16, 16]
                 });
-                userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+                userMarker = L.marker([lat, lng], { 
+                    icon: userIcon, 
+                    zIndexOffset: 1000 
+                }).addTo(map);
+            }
+            if (userMarker && userMarker.getElement()) {
+                userMarker.getElement().style.display = 'block';
             }
         };
 
@@ -480,12 +492,15 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], buildin
             ];
             window.navPath = L.polyline(latlngs, {
                 color: '#2196F3',
-                weight: 4,
-                opacity: 0.7,
+                weight: 6, // Thicker line
+                opacity: 0.8,
                 dashArray: '10, 10',
                 lineCap: 'round'
             }).addTo(map);
-            map.fitBounds(latlngs, { padding: [50, 50] });
+            
+            if (latlngs[0][0] !== 0 && latlngs[1][0] !== 0) {
+                map.fitBounds(latlngs, { padding: [80, 80] });
+            }
 
         };
 
@@ -495,6 +510,22 @@ const generateMapHTML = (posts: any[], foodSpots: CampusLocation[] = [], buildin
                 window.navPath = null;
             }
         };
+
+        // --- Initial State Injection ---
+        
+        // 1. Initial User Location
+        if (${userLoc ? 'true' : 'false'}) {
+            try {
+                window.updateUserLocation(${userLoc?.lat || 0}, ${userLoc?.lng || 0});
+            } catch(e) { console.error('Initial location failed', e); }
+        }
+
+        // 2. Initial Navigation Path
+        if (${isNavigating && userLoc && navTarget ? 'true' : 'false'}) {
+            try {
+                window.drawNavigationPath(${userLoc?.lat || 0}, ${userLoc?.lng || 0}, ${navTarget?.lat || 0}, ${navTarget?.lng || 0});
+            } catch(e) { console.error('Initial path failed', e); }
+        }
     </script>
 </body>
 </html>
@@ -534,18 +565,18 @@ export default function MapScreen() {
             if (!navTarget || navTarget.lat !== lat || navTarget.lng !== lng) {
                 setNavTarget({ lat, lng });
                 setIsNavigating(true);
+                setShowBuildingMap(true); // 1. 建筑地图：开
+                setMarkersVisible(false); // 4. 隐藏原本Map出现的其他Newest出现的蓝色箭头标
+                setShowFoodMap(false);
 
-                // 1. Immediately focus on target
+                // 1. Immediately focus on target in existing view if possible
                 webViewRef.current?.injectJavaScript(`
-                    window.centerMap(${lat}, ${lng});
+                    if (window.centerMap) window.centerMap(${lat}, ${lng});
                     true;
                 `);
 
-                // 2. Trigger location fetch if not already known
-                // pass autoCenter = false to avoid overriding the target view until we have both points
-                if (!userLocation) {
-                    handleLocationPress(false);
-                }
+                // 2. Trigger location fetch
+                handleLocationPress(false);
             }
         }
     }, [params.navLat, params.navLng]);
@@ -553,24 +584,43 @@ export default function MapScreen() {
     // Effect to draw line when both locations are known and navigating
     useEffect(() => {
         if (isNavigating && navTarget && userLocation) {
-            webViewRef.current?.injectJavaScript(`
-                if (window.drawNavigationPath) {
-                    window.drawNavigationPath(${userLocation.lat}, ${userLocation.lng}, ${navTarget.lat}, ${navTarget.lng});
-                }
-                true;
-            `);
+            // Give the WebView a small delay to ensure it's finished loading its internal script
+            const timer = setTimeout(() => {
+                webViewRef.current?.injectJavaScript(`
+                    console.log('Navigating: Injecting user marker and path');
+                    if (window.updateUserLocation) {
+                        window.updateUserLocation(${userLocation.lat}, ${userLocation.lng});
+                    }
+                    if (window.drawNavigationPath) {
+                        window.drawNavigationPath(${userLocation.lat}, ${userLocation.lng}, ${navTarget.lat}, ${navTarget.lng});
+                    }
+                    true;
+                `);
+            }, 500);
+            return () => clearTimeout(timer);
         }
     }, [isNavigating, navTarget, userLocation]);
 
-    // Load saved buildings from storage on mount
+    // Load buildings from Supabase on mount
     useEffect(() => {
-        const loadSavedBuildings = async () => {
+        const loadBuildings = async () => {
+            try {
+                // 1. Try fetching from Supabase first (precision data)
+                const cloudBuildings = await getBuildings();
+                if (cloudBuildings && cloudBuildings.length > 0) {
+                    console.log('Successfully fetched buildings from Supabase');
+                    setBuildingsData(cloudBuildings);
+                    return;
+                }
+            } catch (e) {
+                console.warn("Failed to fetch from Supabase, falling back to local storage/static", e);
+            }
+
+            // 2. Fallback to Local Storage or Static
             try {
                 const savedData = await AsyncStorage.getItem('savedBuildingsData');
                 if (savedData) {
                     const parsed = JSON.parse(savedData);
-                    // Merge with current data structure to ensure new fields/buildings are present
-                    // but prefer saved coordinates
                     const mergedData = CAMPUS_BUILDINGS.map(defaultB => {
                         const savedB = parsed.find((p: any) => p.id === defaultB.id);
                         if (savedB) {
@@ -584,7 +634,7 @@ export default function MapScreen() {
                 console.error("Failed to load saved buildings", e);
             }
         };
-        loadSavedBuildings();
+        loadBuildings();
     }, []);
 
     // Save to storage whenever buildingsData changes (debounced or on key events)
@@ -880,17 +930,33 @@ export default function MapScreen() {
 
     return (
         <View style={styles.container}>
-            {/* Real Map */}
             <WebView
                 ref={webViewRef}
-                key={activeFilter + (editMode ? '_edit' : '') + (isNavigating ? '_nav' : '')} // Force re-render on mode change
-                source={{ html: String(generateMapHTML(currentPosts, currentFoodSpots, currentBuildings, showFoodMap, showBuildingMap, editMode)) }}
+                key={isNavigating ? 'nav_mode' : 'normal_mode'} // Only reload when entering/exiting nav
+                originWhitelist={['*']}
+                source={{
+                    html: generateMapHTML(
+                        currentPosts,
+                        currentFoodSpots,
+                        currentBuildings,
+                        showFoodMap,
+                        showBuildingMap,
+                        editMode,
+                        userLocation,
+                        navTarget,
+                        isNavigating
+                    )
+                }}
                 style={styles.map}
                 onMessage={handleWebViewMessage}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
                 startInLoadingState={true}
-                scalesPageToFit={true}
+                renderLoading={() => (
+                    <View style={styles.loadingOverlay}>
+                        <ActivityIndicator size="large" color="#1E3A8A" />
+                    </View>
+                )}
             />
 
             {/* Header Overlay */}
@@ -1685,5 +1751,12 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.6)',
         padding: 4,
         borderRadius: 10,
+    },
+    loadingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
     },
 });

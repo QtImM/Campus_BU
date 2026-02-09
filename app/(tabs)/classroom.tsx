@@ -11,14 +11,30 @@ import {
     View
 } from 'react-native';
 import { CAMPUS_BUILDINGS } from '../../data/buildings';
+import { getBuildings } from '../../services/buildings';
 
 export default function ClassroomIndex() {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [favorites, setFavorites] = useState<string[]>([]);
+    const [buildingsData, setBuildingsData] = useState(CAMPUS_BUILDINGS);
+
+    React.useEffect(() => {
+        const fetchBuildings = async () => {
+            try {
+                const data = await getBuildings();
+                if (data && data.length > 0) {
+                    setBuildingsData(data);
+                }
+            } catch (e) {
+                console.error('Failed to fetch buildings for classroom tab', e);
+            }
+        };
+        fetchBuildings();
+    }, []);
 
     const filteredBuildings = searchQuery.trim()
-        ? CAMPUS_BUILDINGS.filter(b => {
+        ? buildingsData.filter(b => {
             const query = searchQuery.toLowerCase();
             return (
                 (b.name || '').toLowerCase().includes(query) ||
@@ -26,7 +42,7 @@ export default function ClassroomIndex() {
                 (b.description || '').toLowerCase().includes(query)
             );
         })
-        : CAMPUS_BUILDINGS;
+        : buildingsData;
 
     const handleBuildingSelect = (buildingId: string) => {
         router.push(`/classroom/${buildingId}` as any);
@@ -114,7 +130,7 @@ export default function ClassroomIndex() {
                             </View>
                             <View style={styles.roomInfo}>
                                 <Text style={styles.roomName}>{item.name}</Text>
-                                <Text style={styles.roomDetails}>
+                                <Text style={styles.roomDetails} numberOfLines={1}>
                                     {item.description}
                                 </Text>
                             </View>
