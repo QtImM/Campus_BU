@@ -39,5 +39,27 @@
         "search_placeholder": "搜尋課程代碼、名稱或講師...",
         "add_new_course": "添加新課程",
         "no_courses_found": "未找到相關課程"
+    },
+    "profile": {
+        "title": "個人中心",
+        "language": "語言",
+        "language_hint": "切換介面顯示語言",
+        "notifications": "通知",
+        "see_all": "查看全部",
+        "no_notifications": "暫無新通知",
+        "social_tags": "社交標籤",
+        "select_tags": "最多選擇 3 個標籤",
+        "my_activity": "我的動態",
+        "posts": "發文",
+        "connections": "好友",
+        "likes": "獲讚",
+        "ghost_mode": "隱身模式",
+        "ghost_hint": "開啟後，附近的用戶將看不到你",
+        "privacy": "隱私設定",
+        "help": "幫助與支援",
+        "sign_out": "登出",
+        "sign_out_confirm": "確定要登出嗎？",
+        "mark_all_read": "全部標為已讀",
+        "no_notifications_yet": "暫無通知"
     }
 }

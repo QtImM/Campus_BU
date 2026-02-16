@@ -39,5 +39,27 @@
         "search_placeholder": "Search course code, name or instructor...",
         "add_new_course": "Add New Course",
         "no_courses_found": "No courses found"
+    },
+    "profile": {
+        "title": "Profile",
+        "language": "Language",
+        "language_hint": "Switch interface language",
+        "notifications": "Notifications",
+        "see_all": "See All",
+        "no_notifications": "No new notifications",
+        "social_tags": "Social Tags",
+        "select_tags": "Select up to 3 tags",
+        "my_activity": "My Activity",
+        "posts": "Posts",
+        "connections": "Connections",
+        "likes": "Likes",
+        "ghost_mode": "Ghost Mode",
+        "ghost_hint": "When enabled, you won't appear in nearby users",
+        "privacy": "Privacy Settings",
+        "help": "Help & Support",
+        "sign_out": "Sign Out",
+        "sign_out_confirm": "Are you sure you want to sign out?",
+        "mark_all_read": "Mark all as read",
+        "no_notifications_yet": "No notifications yet"
     }
 }

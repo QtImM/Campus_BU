@@ -39,5 +39,27 @@
         "search_placeholder": "搜索课程代码、名称或讲师...",
         "add_new_course": "添加新课程",
         "no_courses_found": "未找到相关课程"
+    },
+    "profile": {
+        "title": "个人中心",
+        "language": "语言",
+        "language_hint": "切换界面显示语言",
+        "notifications": "通知",
+        "see_all": "查看全部",
+        "no_notifications": "暂无新通知",
+        "social_tags": "社交标签",
+        "select_tags": "最多选择 3 个标签",
+        "my_activity": "我的动态",
+        "posts": "发帖",
+        "connections": "好友",
+        "likes": "获赞",
+        "ghost_mode": "隐身模式",
+        "ghost_hint": "开启后，附近的用户将看不到你",
+        "privacy": "隐私设置",
+        "help": "帮助与支持",
+        "sign_out": "退出登录",
+        "sign_out_confirm": "确定要退出登录吗？",
+        "mark_all_read": "全部标为已读",
+        "no_notifications_yet": "暂无通知"
     }
 }

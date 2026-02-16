@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'expo-router';
-import { Bell, ChevronRight, Edit3, Eye, Heart as HeartIcon, HelpCircle, LogOut, MessageSquare, Shield, Sparkles, X } from 'lucide-react-native';
+import { Bell, ChevronRight, Edit3, Eye, Globe, Heart as HeartIcon, HelpCircle, LogOut, MessageSquare, Shield, Sparkles, X } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { getCurrentUser, signOut } from '../../services/auth';
 import { fetchNotifications, markAllAsRead, markAsRead, Notification, subscribeToNotifications } from '../../services/notifications';
+import { changeLanguage } from '../i18n/i18n';
 
 const DEMO_MODE_KEY = 'hkcampus_demo_mode';
 
@@ -15,10 +17,18 @@ const SOCIAL_TAGS = [
     'Music Lover 🎵', 'Tech Geek 💻', 'Film Buff 🎬'
 ];
 
+const LANGUAGE_OPTIONS = [
+    { key: 'zh-Hans', label: '简' },
+    { key: 'zh-Hant', label: '繁' },
+    { key: 'en', label: 'EN' },
+];
+
 export default function ProfileScreen() {
     const router = useRouter();
+    const { t, i18n } = useTranslation();
     const [ghostMode, setGhostMode] = useState(false);
     const [selectedTags, setSelectedTags] = useState<string[]>(['Coffee Addict ☕', 'Night Owl 🦉']);
+    const currentLang = i18n.language;
     const [showNotifications, setShowNotifications] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loadingNotifications, setLoadingNotifications] = useState(true);
@@ -91,17 +101,21 @@ export default function ProfileScreen() {
         }
     };
 
+    const handleLanguageChange = async (lang: string) => {
+        await changeLanguage(lang);
+    };
+
     const handleSignOut = () => {
         Alert.alert(
-            'Sign Out',
-            'Are you sure you want to sign out?',
+            t('profile.sign_out'),
+            t('profile.sign_out_confirm'),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('common.cancel'), style: 'cancel' },
                 {
-                    text: 'Sign Out',
+                    text: t('profile.sign_out'),
                     style: 'destructive',
                     onPress: async () => {
-                        await signOut(); // Clear Supabase session
+                        await signOut();
                         await AsyncStorage.removeItem(DEMO_MODE_KEY);
                         router.replace('/(auth)/login');
                     }
@@ -124,7 +138,7 @@ export default function ProfileScreen() {
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Profile</Text>
+                <Text style={styles.headerTitle}>{t('profile.title')}</Text>
             </View>
 
             {/* Profile Card */}
@@ -146,7 +160,7 @@ export default function ProfileScreen() {
                 <View style={[styles.sectionHeader, { marginBottom: 16 }]}>
                     <View style={styles.settingLeft}>
                         <Bell size={20} color="#1E3A8A" />
-                        <Text style={[styles.sectionTitle, { marginLeft: 12, marginBottom: 0 }]}>Notifications</Text>
+                        <Text style={[styles.sectionTitle, { marginLeft: 12, marginBottom: 0 }]}>{t('profile.notifications')}</Text>
                         {unreadCount > 0 && (
                             <View style={styles.countBadgeInline}>
                                 <Text style={styles.countTextInline}>{unreadCount}</Text>
@@ -154,14 +168,14 @@ export default function ProfileScreen() {
                         )}
                     </View>
                     <TouchableOpacity onPress={() => setShowNotifications(true)}>
-                        <Text style={styles.seeAllText}>See All</Text>
+                        <Text style={styles.seeAllText}>{t('profile.see_all')}</Text>
                     </TouchableOpacity>
                 </View>
 
                 {loadingNotifications ? (
                     <ActivityIndicator color="#1E3A8A" />
                 ) : notifications.length === 0 ? (
-                    <Text style={styles.emptyText}>No new notifications</Text>
+                    <Text style={styles.emptyText}>{t('profile.no_notifications')}</Text>
                 ) : (
                     <View style={styles.notificationPreviewList}>
                         {notifications.slice(0, 2).map((notif) => (
@@ -190,8 +204,8 @@ export default function ProfileScreen() {
 
             {/* Social Tags */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Social Tags</Text>
-                <Text style={styles.sectionSubtitle}>Select up to 3 tags</Text>
+                <Text style={styles.sectionTitle}>{t('profile.social_tags')}</Text>
+                <Text style={styles.sectionSubtitle}>{t('profile.select_tags')}</Text>
                 <View style={styles.tagsGrid}>
                     {SOCIAL_TAGS.map((tag) => (
                         <TouchableOpacity
@@ -215,21 +229,21 @@ export default function ProfileScreen() {
 
             {/* Activity Stats */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>My Activity</Text>
+                <Text style={styles.sectionTitle}>{t('profile.my_activity')}</Text>
                 <View style={styles.statsRow}>
                     <View style={styles.statItem}>
                         <Text style={styles.statValue}>12</Text>
-                        <Text style={styles.statLabel}>Posts</Text>
+                        <Text style={styles.statLabel}>{t('profile.posts')}</Text>
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statItem}>
                         <Text style={styles.statValue}>48</Text>
-                        <Text style={styles.statLabel}>Connections</Text>
+                        <Text style={styles.statLabel}>{t('profile.connections')}</Text>
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statItem}>
                         <Text style={styles.statValue}>156</Text>
-                        <Text style={styles.statLabel}>Likes</Text>
+                        <Text style={styles.statLabel}>{t('profile.likes')}</Text>
                     </View>
                 </View>
             </View>
@@ -239,7 +253,7 @@ export default function ProfileScreen() {
                 <View style={styles.settingRow}>
                     <View style={styles.settingLeft}>
                         <Eye size={20} color="#4B0082" />
-                        <Text style={styles.settingLabel}>Ghost Mode</Text>
+                        <Text style={styles.settingLabel}>{t('profile.ghost_mode')}</Text>
                     </View>
                     <Switch
                         value={ghostMode}
@@ -249,20 +263,50 @@ export default function ProfileScreen() {
                     />
                 </View>
                 <Text style={styles.settingHint}>
-                    When enabled, you won't appear in nearby users
+                    {t('profile.ghost_hint')}
                 </Text>
+            </View>
+
+            {/* Language Switcher */}
+            <View style={styles.section}>
+                <View style={styles.settingRow}>
+                    <View style={styles.settingLeft}>
+                        <Globe size={20} color="#1E3A8A" />
+                        <Text style={styles.settingLabel}>{t('profile.language')}</Text>
+                    </View>
+                </View>
+                <Text style={styles.settingHint}>{t('profile.language_hint')}</Text>
+                <View style={styles.langSwitcher}>
+                    {LANGUAGE_OPTIONS.map(opt => (
+                        <TouchableOpacity
+                            key={opt.key}
+                            style={[
+                                styles.langBtn,
+                                currentLang === opt.key && styles.langBtnActive
+                            ]}
+                            onPress={() => handleLanguageChange(opt.key)}
+                        >
+                            <Text style={[
+                                styles.langBtnText,
+                                currentLang === opt.key && styles.langBtnTextActive
+                            ]}>
+                                {opt.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
             </View>
 
             {/* Settings */}
             <View style={styles.section}>
                 <TouchableOpacity style={styles.menuItem}>
                     <Shield size={20} color="#6B7280" />
-                    <Text style={styles.menuText}>Privacy Settings</Text>
+                    <Text style={styles.menuText}>{t('profile.privacy')}</Text>
                     <ChevronRight size={20} color="#9CA3AF" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItem}>
                     <HelpCircle size={20} color="#6B7280" />
-                    <Text style={styles.menuText}>Help & Support</Text>
+                    <Text style={styles.menuText}>{t('profile.help')}</Text>
                     <ChevronRight size={20} color="#9CA3AF" />
                 </TouchableOpacity>
             </View>
@@ -270,7 +314,7 @@ export default function ProfileScreen() {
             {/* Sign Out */}
             <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
                 <LogOut size={20} color="#EF4444" />
-                <Text style={styles.signOutText}>Sign Out</Text>
+                <Text style={styles.signOutText}>{t('profile.sign_out')}</Text>
             </TouchableOpacity>
 
             <View style={{ height: 100 }} />
@@ -284,7 +328,7 @@ export default function ProfileScreen() {
             >
                 <View style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Notifications</Text>
+                        <Text style={styles.modalTitle}>{t('profile.notifications')}</Text>
                         <TouchableOpacity onPress={() => setShowNotifications(false)} style={styles.closeButton}>
                             <X size={24} color="#1F2937" />
                         </TouchableOpacity>
@@ -326,7 +370,7 @@ export default function ProfileScreen() {
                         ListEmptyComponent={
                             <View style={styles.emptyNotif}>
                                 <Bell size={48} color="#D1D5DB" />
-                                <Text style={styles.emptyNotifText}>No notifications yet</Text>
+                                <Text style={styles.emptyNotifText}>{t('profile.no_notifications_yet')}</Text>
                             </View>
                         }
                     />
@@ -336,7 +380,7 @@ export default function ProfileScreen() {
                             style={styles.clearAllButton}
                             onPress={handleMarkAllRead}
                         >
-                            <Text style={styles.clearAllText}>Mark all as read</Text>
+                            <Text style={styles.clearAllText}>{t('profile.mark_all_read')}</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -711,5 +755,34 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#1E3A8A',
         fontWeight: '600',
+    },
+    langSwitcher: {
+        flexDirection: 'row',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 12,
+        padding: 4,
+        marginTop: 12,
+    },
+    langBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 10,
+    },
+    langBtnActive: {
+        backgroundColor: '#1E3A8A',
+        shadowColor: '#1E3A8A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    langBtnText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#6B7280',
+    },
+    langBtnTextActive: {
+        color: '#fff',
     },
 });

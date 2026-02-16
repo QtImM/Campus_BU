@@ -49,4 +49,12 @@ const initI18n = async () => {
 
 initI18n();
 
+/**
+ * Switch language and persist the choice
+ */
+export const changeLanguage = async (lang: string) => {
+    await i18n.changeLanguage(lang);
+    await AsyncStorage.setItem('language', lang);
+};
+
 export default i18n;
