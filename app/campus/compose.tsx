@@ -2,6 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image as ImageIcon, MapPin, X } from 'lucide-react-native';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Image,
@@ -20,9 +21,14 @@ import { createPost, uploadPostImage } from '../../services/campus';
 import { PostCategory } from '../../types';
 import { getNearestBuilding } from '../../utils/location';
 
-const CATEGORIES: PostCategory[] = ['Events', 'Reviews', 'Guides', 'Lost & Found'];
-
 export default function ComposeScreen() {
+    const { t } = useTranslation();
+    const CATEGORIES: { id: PostCategory; label: string }[] = [
+        { id: 'Events', label: t('campus.categories.events') },
+        { id: 'Reviews', label: t('campus.categories.reviews') },
+        { id: 'Guides', label: t('campus.categories.guides') },
+        { id: 'Lost & Found', label: t('campus.categories.lost_found') },
+    ];
     const router = useRouter();
     const params = useLocalSearchParams();
     const { lat, lng, fromMap } = params;
@@ -106,13 +112,13 @@ export default function ComposeScreen() {
                 } : undefined
             });
 
-            showToast('Post published successfully!');
+            showToast(t('campus.modals.delete_success')); // Mapping to success msg
             setTimeout(() => {
                 router.back();
             }, 1500);
         } catch (error: any) {
             console.error('Submit error:', error);
-            showToast(error.message || 'Failed to publish post', 'error');
+            showToast(error.message || t('campus.modals.delete_error'), 'error');
         } finally {
             setSubmitting(false);
         }
@@ -129,7 +135,7 @@ export default function ComposeScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
                     <X size={24} color="#374151" />
                 </TouchableOpacity>
-                <Text style={styles.title}>New Post</Text>
+                <Text style={styles.title}>{t('map.alerts.create_post_title')}</Text>
                 <TouchableOpacity
                     style={[styles.publishButton, (!content.trim() || submitting) && styles.publishButtonDisabled]}
                     onPress={handleSubmit}
@@ -138,7 +144,7 @@ export default function ComposeScreen() {
                     {submitting ? (
                         <ActivityIndicator color="#fff" size="small" />
                     ) : (
-                        <Text style={styles.publishText}>Publish</Text>
+                        <Text style={styles.publishText}>{t('map.modal.post')}</Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -158,17 +164,17 @@ export default function ComposeScreen() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         {CATEGORIES.map((cat) => (
                             <TouchableOpacity
-                                key={cat}
+                                key={cat.id}
                                 style={[
                                     styles.categoryButton,
-                                    category === cat && styles.categoryButtonActive
+                                    category === cat.id && styles.categoryButtonActive
                                 ]}
-                                onPress={() => setCategory(cat)}
+                                onPress={() => setCategory(cat.id)}
                             >
                                 <Text style={[
                                     styles.categoryText,
-                                    category === cat && styles.categoryTextActive
-                                ]}>{cat}</Text>
+                                    category === cat.id && styles.categoryTextActive
+                                ]}>{cat.label}</Text>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
@@ -177,7 +183,7 @@ export default function ComposeScreen() {
                 {/* Input Area */}
                 <TextInput
                     style={styles.input}
-                    placeholder="Share something with the campus..."
+                    placeholder={t('map.modal.comment_placeholder')}
                     multiline
                     value={content}
                     onChangeText={setContent}
@@ -216,7 +222,7 @@ export default function ComposeScreen() {
                     >
                         <ImageIcon size={24} color={images.length >= 3 ? "#E5E7EB" : "#1E3A8A"} />
                         <Text style={[styles.optionText, images.length >= 3 && styles.optionTextDisabled]}>
-                            Photo ({images.length}/3)
+                            {t('map.modal.add_image')} ({images.length}/3)
                         </Text>
                     </TouchableOpacity>
 
@@ -227,7 +233,7 @@ export default function ComposeScreen() {
                         <View style={[styles.checkbox, isAnonymous && styles.checkboxActive]}>
                             {isAnonymous && <View style={styles.checkboxInner} />}
                         </View>
-                        <Text style={styles.optionText}>Post Anonymously</Text>
+                        <Text style={styles.optionText}>{t('teachers.anonymous_student')}</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

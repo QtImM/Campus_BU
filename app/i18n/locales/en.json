@@ -61,5 +61,83 @@
         "sign_out_confirm": "Are you sure you want to sign out?",
         "mark_all_read": "Mark all as read",
         "no_notifications_yet": "No notifications yet"
+    },
+    "map": {
+        "title": "Map",
+        "filters": {
+            "all": "All",
+            "newest": "Newest",
+            "hottest": "Hottest",
+            "viewed": "Most Viewed",
+            "mine": "My Pins"
+        },
+        "overlay": {
+            "food": "Food",
+            "buildings": "Buildings",
+            "classroom": "Room",
+            "show": "Show",
+            "hide": "Hide",
+            "edit": "Edit",
+            "save": "Save",
+            "on": "On"
+        },
+        "markers": {
+            "user": "User",
+            "general": "General",
+            "just_now": "Just now",
+            "view_details": "View Details",
+            "drag_to_move": "Drag to move"
+        },
+        "modal": {
+            "comments": "Comments",
+            "like": "Like",
+            "write_comment": "Write a Comment",
+            "add_image": "Add Image",
+            "change_image": "Change Image",
+            "no_comments": "No comments yet. Be the first to share!",
+            "post": "Post",
+            "comment_placeholder": "What are your thoughts?"
+        },
+        "alerts": {
+            "location_denied": "Permission to access location was denied",
+            "location_error": "Could not fetch location",
+            "create_post_title": "Create Post",
+            "create_post_msg": "Tap on the map to pin a specific location, or post without a location?",
+            "pin_first": "Pin on Map First",
+            "post_anyway": "Post Anyway",
+            "data_exported": "Data Exported",
+            "export_msg": "The new building data has been copied to your clipboard. Please paste it to me so I can update the file."
+        }
+    },
+    "campus": {
+        "title": "Campus Circle",
+        "campus_filter": "Campus",
+        "categories": {
+            "all": "All",
+            "events": "Events",
+            "reviews": "Reviews",
+            "guides": "Guides",
+            "lost_found": "Lost & Found"
+        },
+        "empty": {
+            "no_posts": "No posts found.",
+            "be_first": "Be the first to post!"
+        },
+        "modals": {
+            "delete_title": "Delete Post",
+            "delete_msg": "Are you sure you want to delete this post? This action cannot be undone.",
+            "delete_confirm": "Delete",
+            "delete_success": "Post deleted successfully",
+            "delete_error": "Failed to delete post"
+        }
+    },
+    "classroom_tab": {
+        "title": "Campus Buildings",
+        "subtitle": "Find details & Navigation",
+        "search_hint": "Search buildings (e.g. AAB, OEW...)",
+        "favorites": "Favorite Buildings",
+        "all_buildings": "All Buildings",
+        "results": "Results",
+        "swap_courses": "Swap"
     }
 }

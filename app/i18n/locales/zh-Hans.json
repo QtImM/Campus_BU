@@ -61,5 +61,83 @@
         "sign_out_confirm": "确定要退出登录吗？",
         "mark_all_read": "全部标为已读",
         "no_notifications_yet": "暂无通知"
+    },
+    "map": {
+        "title": "校园地图",
+        "filters": {
+            "all": "全部",
+            "newest": "最新",
+            "hottest": "最热",
+            "viewed": "最多查看",
+            "mine": "我的标记"
+        },
+        "overlay": {
+            "food": "美食",
+            "buildings": "建筑",
+            "classroom": "教室",
+            "show": "显示",
+            "hide": "隐藏",
+            "edit": "编辑",
+            "save": "保存",
+            "on": "开"
+        },
+        "markers": {
+            "user": "用户",
+            "general": "通用",
+            "just_now": "刚刚",
+            "view_details": "查看详情",
+            "drag_to_move": "拖拽移动"
+        },
+        "modal": {
+            "comments": "评论",
+            "like": "点赞",
+            "write_comment": "写评论",
+            "add_image": "添加图片",
+            "change_image": "更换图片",
+            "no_comments": "暂无评论，快来抢沙发！",
+            "post": "发布",
+            "comment_placeholder": "说说你的看法..."
+        },
+        "alerts": {
+            "location_denied": "获取位置权限被拒绝",
+            "location_error": "无法获取位置信息",
+            "create_post_title": "发帖",
+            "create_post_msg": "在地图上点击以标记位置，或者直接发帖？",
+            "pin_first": "先标记位置",
+            "post_anyway": "直接发帖",
+            "data_exported": "数据已导出",
+            "export_msg": "建筑数据已复制到剪贴板，请发送给我以更新文件。"
+        }
+    },
+    "campus": {
+        "title": "校园圈",
+        "campus_filter": "校园",
+        "categories": {
+            "all": "全部",
+            "events": "活动",
+            "reviews": "评价",
+            "guides": "攻略",
+            "lost_found": "失物招领"
+        },
+        "empty": {
+            "no_posts": "暂无贴子",
+            "be_first": "成为第一个发帖的人吧！"
+        },
+        "modals": {
+            "delete_title": "删除贴子",
+            "delete_msg": "确定要删除这条贴子吗？此操作不可撤销。",
+            "delete_confirm": "删除",
+            "delete_success": "贴子删除成功",
+            "delete_error": "删除失败"
+        }
+    },
+    "classroom_tab": {
+        "title": "校园建筑",
+        "subtitle": "查看详情与导航",
+        "search_hint": "搜索建筑 (如 AAB, OEW...)",
+        "favorites": "我的收藏",
+        "all_buildings": "全部建筑",
+        "results": "搜索结果",
+        "swap_courses": "换课"
     }
 }

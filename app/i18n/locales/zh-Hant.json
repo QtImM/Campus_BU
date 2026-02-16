@@ -61,5 +61,83 @@
         "sign_out_confirm": "確定要登出嗎？",
         "mark_all_read": "全部標為已讀",
         "no_notifications_yet": "暫無通知"
+    },
+    "map": {
+        "title": "校園地圖",
+        "filters": {
+            "all": "全部",
+            "newest": "最新",
+            "hottest": "最熱",
+            "viewed": "最多查看",
+            "mine": "我的標記"
+        },
+        "overlay": {
+            "food": "美食",
+            "buildings": "建築",
+            "classroom": "教室",
+            "show": "顯示",
+            "hide": "隱藏",
+            "edit": "編輯",
+            "save": "保存",
+            "on": "開"
+        },
+        "markers": {
+            "user": "用戶",
+            "general": "通用",
+            "just_now": "剛剛",
+            "view_details": "查看詳情",
+            "drag_to_move": "拖拽移動"
+        },
+        "modal": {
+            "comments": "評論",
+            "like": "點讚",
+            "write_comment": "寫評論",
+            "add_image": "添加圖片",
+            "change_image": "更換圖片",
+            "no_comments": "暫無評論，快來搶沙發！",
+            "post": "發佈",
+            "comment_placeholder": "說說你的看法..."
+        },
+        "alerts": {
+            "location_denied": "獲取位置權限被拒絕",
+            "location_error": "無法獲取位置資訊",
+            "create_post_title": "發文",
+            "create_post_msg": "在地圖上點擊以標記位置，或者直接發文？",
+            "pin_first": "先標記位置",
+            "post_anyway": "直接發文",
+            "data_exported": "數據已匯出",
+            "export_msg": "建築數據已複製到剪貼板，請發送給我以更新文件。"
+        }
+    },
+    "campus": {
+        "title": "校園圈",
+        "campus_filter": "校園",
+        "categories": {
+            "all": "全部",
+            "events": "活動",
+            "reviews": "評價",
+            "guides": "攻略",
+            "lost_found": "失物招領"
+        },
+        "empty": {
+            "no_posts": "暫無貼文",
+            "be_first": "成為第一個發文的人吧！"
+        },
+        "modals": {
+            "delete_title": "刪除貼文",
+            "delete_msg": "確定要刪除這條貼文嗎？此操作不可撤銷。",
+            "delete_confirm": "刪除",
+            "delete_success": "貼文刪除成功",
+            "delete_error": "刪除失敗"
+        }
+    },
+    "classroom_tab": {
+        "title": "校園建築",
+        "subtitle": "查看詳情與導航",
+        "search_hint": "搜尋建築 (如 AAB, OEW...)",
+        "favorites": "我的收藏",
+        "all_buildings": "全部建築",
+        "results": "搜尋結果",
+        "swap_courses": "換課"
     }
 }

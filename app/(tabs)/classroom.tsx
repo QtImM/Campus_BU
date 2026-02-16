@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ArrowLeftRight, ChevronRight, Search, Star, X } from 'lucide-react-native';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     FlatList,
     Keyboard,
@@ -14,6 +15,7 @@ import { CAMPUS_BUILDINGS } from '../../data/buildings';
 import { getBuildings } from '../../services/buildings';
 
 export default function ClassroomIndex() {
+    const { t } = useTranslation();
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [favorites, setFavorites] = useState<string[]>([]);
@@ -63,8 +65,8 @@ export default function ClassroomIndex() {
             <View style={styles.header}>
                 <View style={styles.headerRow}>
                     <View style={styles.headerTitleContainer}>
-                        <Text style={styles.headerTitle}>Campus Buildings</Text>
-                        <Text style={styles.headerSubtitle}>Find details & Navigation</Text>
+                        <Text style={styles.headerTitle}>{t('classroom_tab.title')}</Text>
+                        <Text style={styles.headerSubtitle}>{t('classroom_tab.subtitle')}</Text>
                     </View>
                 </View>
             </View>
@@ -75,7 +77,7 @@ export default function ClassroomIndex() {
                     <Search size={20} color="#9CA3AF" />
                     <TextInput
                         style={styles.searchInput}
-                        placeholder="Search buildings (e.g. AAB, OEW...)"
+                        placeholder={t('classroom_tab.search_hint')}
                         placeholderTextColor="#9CA3AF"
                         value={searchQuery}
                         onChangeText={setSearchQuery}
@@ -91,7 +93,7 @@ export default function ClassroomIndex() {
             {/* Favorites Section */}
             {favorites.length > 0 && !searchQuery && (
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>⭐ Favorite Buildings</Text>
+                    <Text style={styles.sectionTitle}>⭐ {t('classroom_tab.favorites')}</Text>
                     <FlatList
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -114,7 +116,7 @@ export default function ClassroomIndex() {
             {/* Building List */}
             <View style={styles.listSection}>
                 <Text style={styles.sectionTitle}>
-                    {searchQuery ? `Results (${filteredBuildings.length})` : 'All Buildings'}
+                    {searchQuery ? `${t('classroom_tab.results')} (${filteredBuildings.length})` : t('classroom_tab.all_buildings')}
                 </Text>
                 <FlatList
                     data={filteredBuildings}
@@ -157,7 +159,7 @@ export default function ClassroomIndex() {
             >
                 <ArrowLeftRight size={24} color="#fff" />
                 <View style={styles.fabBadge}>
-                    <Text style={styles.fabBadgeText}>换课</Text>
+                    <Text style={styles.fabBadgeText}>{t('classroom_tab.swap_courses')}</Text>
                 </View>
             </TouchableOpacity>
         </View>

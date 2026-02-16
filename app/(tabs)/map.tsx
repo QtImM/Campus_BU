@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Building, Crosshair, Heart, Image as ImageIcon, MapPin, MapPinOff, MessageCircle, Plus, Utensils, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Alert,
@@ -58,7 +59,8 @@ const generateMapHTML = (
     editMode: boolean = false,
     navTarget: { lat: number, lng: number } | null = null,
     isNavigating: boolean = false,
-    currentUserId: string | null = null
+    currentUserId: string | null = null,
+    t: any
 ): string => {
     // Pin SVG Template (Teardrop shape like standard marker)
     const pinSvg = (color: string, isMine: boolean = false) => `
@@ -150,6 +152,13 @@ const generateMapHTML = (
         const isMine = !!(currentUserId && post.authorId === currentUserId);
         const color = isMine ? '#FF4500' : (post.pinColor || '#2196F3');
 
+        // Translate category if it's one of the standards
+        let displayCategory = post.category || t('map.markers.general');
+        if (displayCategory === 'Events') displayCategory = t('campus.categories.events');
+        else if (displayCategory === 'Reviews') displayCategory = t('campus.categories.reviews');
+        else if (displayCategory === 'Guides') displayCategory = t('campus.categories.guides');
+        else if (displayCategory === 'Lost & Found') displayCategory = t('campus.categories.lost_found');
+
         return `
         L.marker([${post.location.lat}, ${post.location.lng}], { 
             icon: L.divIcon({
@@ -164,10 +173,10 @@ const generateMapHTML = (
         .bindPopup(\`
             <div style="min-width: 150px; padding: 2px;">
                 <div style="font-weight: bold; margin-bottom: 4px; color: ${color};">
-                    ${post.authorName || 'User'} • ${post.category || 'General'}
+                    ${post.authorName || t('map.markers.user')} • ${displayCategory}
                 </div>
                 <div style="font-size: 11px; color: #888; margin-bottom: 6px;">
-                    ${post.time || 'Just now'}
+                    ${post.time || t('map.markers.just_now')}
                 </div>
                 <div style="font-size: 13px; line-height: 1.4; color: #333;">
                     ${post.content ? post.content.replace(/`/g, "\\`").replace(/'/g, "\\'").replace(/\n/g, '<br/>') : ''}
@@ -214,7 +223,7 @@ const generateMapHTML = (
                             font-weight: bold;
                             cursor: pointer;
                             width: 100%;
-                        ">View Details</button>
+                        ">${t('map.markers.view_details')}</button>
                     </div>
                 </div>
             \`, { closeButton: false });
@@ -238,8 +247,8 @@ const generateMapHTML = (
                 <div style="min-width: 160px; padding: 2px;">
                     <img src="${b.imageUrl}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" onerror="this.style.display='none'" />
                     <div style="font-weight: bold; font-size: 14px; margin-bottom: 2px; color: #111;">${b.description || b.name}</div>
-                    <div style="font-size: 11px; color: #444; line-height: 1.4;">${b.description ? b.name : ''} Building</div>
-                    ${editMode ? '<div style="font-size: 10px; color: red; margin-top: 4px;">Drag to move</div>' : ''}
+                    <div style="font-size: 11px; color: #444; line-height: 1.4;">${b.description ? b.name : ''} ${t('map.markers.building')}</div>
+                    ${editMode ? `<div style="font-size: 10px; color: red; margin-top: 4px;">${t('map.markers.drag_to_move')}</div>` : ''}
                 </div>
             \`, { closeButton: false });
 
@@ -498,8 +507,17 @@ const generateMapHTML = (
 };
 
 export default function MapScreen() {
+    const { t } = useTranslation();
     const router = useRouter();
     const params = useLocalSearchParams();
+
+    const FILTERS: { id: FilterType; label: string; color: string; bg: string }[] = [
+        { id: 'newest', label: t('map.filters.newest'), color: '#2196F3', bg: '#BBDEFB' },     // Blue
+        { id: 'hottest', label: t('map.filters.hottest'), color: '#F44336', bg: '#FFCDD2' },   // Red
+        { id: 'viewed', label: t('map.filters.viewed'), color: '#FF9800', bg: '#FFE0B2' }, // Orange
+        { id: 'mine', label: t('map.filters.mine'), color: '#FFEB3B', bg: '#FFF9C4' },      // Yellow
+    ];
+
     const [activeFilter, setActiveFilter] = useState<FilterType>('newest');
     const [selectedPost, setSelectedPost] = useState<any>(null);
     const [heading, setHeading] = useState<number>(0);
@@ -769,7 +787,8 @@ export default function MapScreen() {
             editMode,
             navTarget,
             isNavigating,
-            currentUserId
+            currentUserId,
+            t
         );
     }, [
         currentPosts,
@@ -780,7 +799,8 @@ export default function MapScreen() {
         editMode,
         navTarget,
         isNavigating,
-        currentUserId
+        currentUserId,
+        t
     ]);
 
     const handleLocationPress = async (autoCenter = true) => {
@@ -813,7 +833,7 @@ export default function MapScreen() {
 
             setUserLocation({ lat: latitude, lng: longitude }); // Update state to persist through reloads
         } catch (error) {
-            Alert.alert('Error', 'Could not fetch location');
+            Alert.alert(t('courses.error'), t('map.alerts.location_error'));
         } finally {
             setLocating(false);
         }
@@ -832,11 +852,11 @@ export default function MapScreen() {
             setPendingLocation(null);
         } else {
             Alert.alert(
-                'Create Post',
-                'Tap on the map to pin a specific location, or post without a location?',
+                t('map.alerts.create_post_title'),
+                t('map.alerts.create_post_msg'),
                 [
-                    { text: 'Pin on Map First', style: 'cancel' },
-                    { text: 'Post Anyway', onPress: () => router.push('/campus/compose') }
+                    { text: t('map.alerts.pin_first'), style: 'cancel' },
+                    { text: t('map.alerts.post_anyway'), onPress: () => router.push('/campus/compose') }
                 ]
             );
         }
@@ -893,7 +913,7 @@ export default function MapScreen() {
         const json = JSON.stringify(buildingsData, null, 4);
         console.log(json);
         await Clipboard.setStringAsync(json);
-        Alert.alert('Data Exported', 'The new building data has been copied to your clipboard. Please paste it to me so I can update the file.');
+        Alert.alert(t('map.alerts.data_exported'), t('map.alerts.export_msg'));
     };
 
     const handleLike = () => {
@@ -950,10 +970,10 @@ export default function MapScreen() {
         if (commentText.trim()) {
             const newComment = {
                 id: `new_${Date.now()}`,
-                author: 'Me',
+                author: t('map.markers.user'),
                 content: commentText.trim(),
                 image: commentImage,
-                time: 'Just now'
+                time: t('map.markers.just_now')
             };
 
             setSelectedPost((prev: any) => ({
@@ -992,7 +1012,7 @@ export default function MapScreen() {
             {/* Header Overlay */}
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <Text style={styles.headerTitle} numberOfLines={1}>Campus</Text>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{t('campus.campus_filter')}</Text>
                 </View>
                 <View style={styles.headerRight}>
                     <TouchableOpacity
@@ -1004,7 +1024,7 @@ export default function MapScreen() {
                     >
                         <Utensils size={18} color={showFoodMap ? "#fff" : "#FF6B6B"} />
                         <Text style={[styles.foodMapBadgeText, showFoodMap && { color: '#fff' }]}>
-                            {showFoodMap ? '美食: 开' : '美食'}
+                            {showFoodMap ? `${t('map.overlay.food')}: ${t('map.overlay.on')}` : t('map.overlay.food')}
                         </Text>
                     </TouchableOpacity>
 
@@ -1018,7 +1038,7 @@ export default function MapScreen() {
                     >
                         <Building size={16} color={showBuildingMap ? "#fff" : "#4B0082"} />
                         <Text style={[styles.foodMapBadgeText, showBuildingMap && { color: '#fff' }]}>
-                            {showBuildingMap ? '建筑: 开' : '建筑'}
+                            {showBuildingMap ? `${t('map.overlay.buildings')}: ${t('map.overlay.on')}` : t('map.overlay.buildings')}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -1068,13 +1088,13 @@ export default function MapScreen() {
                         <MapPinOff size={22} color="#6B7280" />
                     )}
                     <Text style={[styles.iconButtonText, !markersVisible && { color: '#6B7280' }]}>
-                        {markersVisible ? '隐藏' : '显示'}
+                        {markersVisible ? t('map.overlay.hide') : t('map.overlay.show')}
                     </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.iconButton} onPress={handleFindClassroom}>
                     <Building size={20} color="#4B0082" />
-                    <Text style={styles.iconButtonText}>教室</Text>
+                    <Text style={styles.iconButtonText}>{t('map.overlay.classroom')}</Text>
                 </TouchableOpacity>
 
                 {showBuildingMap && (
@@ -1089,13 +1109,13 @@ export default function MapScreen() {
                         }}
                     >
                         <MapPin size={20} color={editMode ? "#000" : "#4B0082"} />
-                        <Text style={styles.iconButtonText}>{editMode ? 'Save' : 'Edit'}</Text>
+                        <Text style={styles.iconButtonText}>{editMode ? t('map.overlay.save') : t('map.overlay.edit')}</Text>
                     </TouchableOpacity>
                 )}
 
                 <TouchableOpacity style={styles.iconButton} onPress={handleFindFood}>
                     <Utensils size={20} color="#E65100" />
-                    <Text style={styles.iconButtonText}>美食</Text>
+                    <Text style={styles.iconButtonText}>{t('map.overlay.food')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1199,8 +1219,8 @@ export default function MapScreen() {
                             <View style={styles.modalHeader}>
                                 <Text style={styles.modalAvatar}>{selectedPost.author?.avatar || '👤'}</Text>
                                 <View style={styles.modalInfo}>
-                                    <Text style={styles.modalAuthor}>{selectedPost.author?.name || 'Anonymous'}</Text>
-                                    <Text style={styles.modalCategory}>{selectedPost.category || ''} · {selectedPost.time || ''}</Text>
+                                    <Text style={styles.modalAuthor}>{selectedPost.author?.name || t('map.markers.user')}</Text>
+                                    <Text style={styles.modalCategory}>{selectedPost.category || t('map.markers.general')} · {selectedPost.time || t('map.markers.just_now')}</Text>
                                 </View>
                             </View>
 
@@ -1213,7 +1233,7 @@ export default function MapScreen() {
                             {/* Comment List Section */}
                             {selectedPost?.commentList && selectedPost.commentList.length > 0 ? (
                                 <View style={styles.commentsSection}>
-                                    <Text style={styles.commentsHeader}>Comments ({selectedPost.commentList.length})</Text>
+                                    <Text style={styles.commentsHeader}>{t('map.modal.comments')} ({selectedPost.commentList.length})</Text>
                                     <ScrollView
                                         style={styles.commentsList}
                                         nestedScrollEnabled={true}
@@ -1222,8 +1242,8 @@ export default function MapScreen() {
                                         {selectedPost.commentList.map((comment: any) => (
                                             <View key={comment.id} style={styles.commentItem}>
                                                 <View style={styles.commentHeader}>
-                                                    <Text style={styles.commentAuthor}>{comment?.author || 'User'}</Text>
-                                                    <Text style={styles.commentTime}>{comment?.time || ''}</Text>
+                                                    <Text style={styles.commentAuthor}>{comment?.author || t('map.markers.user')}</Text>
+                                                    <Text style={styles.commentTime}>{comment?.time || t('map.markers.just_now')}</Text>
                                                 </View>
                                                 <Text style={styles.commentContent}>{comment?.content || ''}</Text>
                                                 {comment?.image && (
@@ -1235,7 +1255,7 @@ export default function MapScreen() {
                                 </View>
                             ) : (
                                 <View style={styles.noCommentsContainer}>
-                                    <Text style={styles.noCommentsText}>No comments yet. Be the first to share!</Text>
+                                    <Text style={styles.noCommentsText}>{t('map.modal.no_comments')}</Text>
                                 </View>
                             )}
 
@@ -1248,7 +1268,7 @@ export default function MapScreen() {
                                             fill={selectedPost.isLiked ? "#E91E63" : "none"}
                                         />
                                         <Text style={[styles.actionText, selectedPost.isLiked && { color: "#E91E63" }]}>
-                                            Like {selectedPost.likes || 0}
+                                            {t('map.modal.like')} {selectedPost.likes || 0}
                                         </Text>
                                     </TouchableOpacity>
 
@@ -1261,10 +1281,10 @@ export default function MapScreen() {
                                 </View>
                             ) : (
                                 <View style={styles.commentInputContainer}>
-                                    <Text style={styles.commentModalTitle}>Write a Comment</Text>
+                                    <Text style={styles.commentModalTitle}>{t('map.modal.write_comment')}</Text>
                                     <TextInput
                                         style={styles.commentInput}
-                                        placeholder="What are your thoughts?"
+                                        placeholder={t('map.modal.comment_placeholder')}
                                         placeholderTextColor="#999"
                                         multiline
                                         autoFocus
@@ -1287,7 +1307,7 @@ export default function MapScreen() {
                                     <TouchableOpacity style={styles.addImageButton} onPress={pickCommentImage}>
                                         <ImageIcon size={20} color="#4B0082" />
                                         <Text style={styles.addImageText}>
-                                            {commentImage ? 'Change Image' : 'Add Image'}
+                                            {commentImage ? t('map.modal.change_image') : t('map.modal.add_image')}
                                         </Text>
                                     </TouchableOpacity>
                                     <View style={styles.commentActions}>
@@ -1295,13 +1315,13 @@ export default function MapScreen() {
                                             style={styles.commentCancelButton}
                                             onPress={() => setIsCommentModalVisible(false)}
                                         >
-                                            <Text style={styles.commentCancelText}>Cancel</Text>
+                                            <Text style={styles.commentCancelText}>{t('common.cancel')}</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={styles.commentPostButton}
                                             onPress={handleSubmitComment}
                                         >
-                                            <Text style={styles.commentPostText}>Post</Text>
+                                            <Text style={styles.commentPostText}>{t('map.modal.post')}</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>

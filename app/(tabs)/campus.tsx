@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Building, Plus } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ActionModal } from '../../components/campus/ActionModal';
 import { PostCard } from '../../components/campus/PostCard';
@@ -9,10 +10,18 @@ import { getCurrentUser } from '../../services/auth';
 import { deletePost, fetchPosts, subscribeToPosts, togglePostLike } from '../../services/campus';
 import { Post, PostCategory } from '../../types';
 
-const CATEGORIES: PostCategory[] = ['All', 'Events', 'Reviews', 'Guides', 'Lost & Found'];
-
 export default function CampusScreen() {
+    const { t } = useTranslation();
     const router = useRouter();
+
+    const CATEGORIES: { id: PostCategory; label: string }[] = [
+        { id: 'All', label: t('campus.categories.all') },
+        { id: 'Events', label: t('campus.categories.events') },
+        { id: 'Reviews', label: t('campus.categories.reviews') },
+        { id: 'Guides', label: t('campus.categories.guides') },
+        { id: 'Lost & Found', label: t('campus.categories.lost_found') },
+    ];
+
     const [activeCategory, setActiveCategory] = useState<PostCategory>('All');
     const [refreshing, setRefreshing] = useState(false);
     const [posts, setPosts] = useState<Post[]>([]);
@@ -92,13 +101,13 @@ export default function CampusScreen() {
         if (!selectedPostId) return;
         try {
             await deletePost(selectedPostId);
-            setToast({ visible: true, message: 'Post deleted successfully', type: 'success' });
+            setToast({ visible: true, message: t('campus.modals.delete_success'), type: 'success' });
             // The list will refresh via loadPosts if realtime is working, 
             // but let's filter locally for immediate feedback
             setPosts(prev => prev.filter(p => p.id !== selectedPostId));
         } catch (error) {
             console.error('Error deleting post:', error);
-            setToast({ visible: true, message: 'Failed to delete post', type: 'error' });
+            setToast({ visible: true, message: t('campus.modals.delete_error'), type: 'error' });
         } finally {
             setDeleteModalVisible(false);
             setSelectedPostId(null);
@@ -110,11 +119,11 @@ export default function CampusScreen() {
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerRow}>
-                    <Text style={styles.headerTitle}>Campus Circle</Text>
+                    <Text style={styles.headerTitle}>{t('campus.title')}</Text>
                     <View style={styles.headerActions}>
                         <TouchableOpacity style={styles.actionButton}>
                             <Building size={18} color="#1E3A8A" />
-                            <Text style={styles.actionText}>Campus</Text>
+                            <Text style={styles.actionText}>{t('campus.campus_filter')}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -131,15 +140,15 @@ export default function CampusScreen() {
                         <TouchableOpacity
                             style={[
                                 styles.filterButton,
-                                activeCategory === item && styles.filterButtonActive
+                                activeCategory === item.id && styles.filterButtonActive
                             ]}
-                            onPress={() => setActiveCategory(item)}
+                            onPress={() => setActiveCategory(item.id)}
                         >
                             <Text style={[
                                 styles.filterText,
-                                activeCategory === item && styles.filterTextActive
+                                activeCategory === item.id && styles.filterTextActive
                             ]}>
-                                {item}
+                                {item.label}
                             </Text>
                         </TouchableOpacity>
                     )}
@@ -174,8 +183,8 @@ export default function CampusScreen() {
                 )}
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No posts found.</Text>
-                        <Text style={styles.emptySubtext}>Be the first to post!</Text>
+                        <Text style={styles.emptyText}>{t('campus.empty.no_posts')}</Text>
+                        <Text style={styles.emptySubtext}>{t('campus.empty.be_first')}</Text>
                     </View>
                 }
             />
@@ -187,11 +196,11 @@ export default function CampusScreen() {
 
             <ActionModal
                 visible={deleteModalVisible}
-                title="Delete Post"
-                message="Are you sure you want to delete this post? This action cannot be undone."
+                title={t('campus.modals.delete_title')}
+                message={t('campus.modals.delete_msg')}
                 onConfirm={confirmDelete}
                 onCancel={() => setDeleteModalVisible(false)}
-                confirmText="Delete"
+                confirmText={t('campus.modals.delete_confirm')}
             />
 
             <Toast
