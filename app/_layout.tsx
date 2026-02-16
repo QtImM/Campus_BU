@@ -6,6 +6,7 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-url-polyfill/auto';
 import '../global.css';
 import { getUserProfile, onAuthChange } from '../services/auth';
+import './i18n/i18n'; // Initialize i18n
 
 const DEMO_MODE_KEY = 'hkcampus_demo_mode';
 

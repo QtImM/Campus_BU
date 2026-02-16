@@ -113,7 +113,7 @@ export default function CampusScreen() {
                     <Text style={styles.headerTitle}>Campus Circle</Text>
                     <View style={styles.headerActions}>
                         <TouchableOpacity style={styles.actionButton}>
-                            <Building size={20} color="#1E3A8A" />
+                            <Building size={18} color="#1E3A8A" />
                             <Text style={styles.actionText}>Campus</Text>
                         </TouchableOpacity>
                     </View>

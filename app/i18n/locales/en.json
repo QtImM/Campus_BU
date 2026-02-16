@@ -1,0 +1,43 @@
+{
+    "navigation": {
+        "home": "Home",
+        "map": "Map",
+        "course": "Course",
+        "classroom": "Classroom",
+        "me": "Me"
+    },
+    "common": {
+        "back": "Back",
+        "loading": "Loading...",
+        "search_placeholder": "Search...",
+        "retry": "Retry",
+        "cancel": "Cancel",
+        "submit": "Submit"
+    },
+    "teachers": {
+        "title": "Instructors",
+        "prof": "PROF",
+        "rate": "RATE",
+        "swap": "SWAP",
+        "sort_by": "Sort By",
+        "filter": "Filter",
+        "no_reviews": "No reviews yet",
+        "reviews_count": "{{count}} Reviews",
+        "teaching_quality": "Review",
+        "difficulty": "Difficulty",
+        "overall_score": "OverAll",
+        "take_again": "Take Again",
+        "grade": "Grade",
+        "tags": "Tags",
+        "comment_placeholder": "Share your experience with this instructor...",
+        "submit_review": "Submit Review",
+        "anonymous_student": "Anonymous Student",
+        "official_reply": "Official Reply"
+    },
+    "courses": {
+        "title": "Course Review",
+        "search_placeholder": "Search course code, name or instructor...",
+        "add_new_course": "Add New Course",
+        "no_courses_found": "No courses found"
+    }
+}

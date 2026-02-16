@@ -1,0 +1,43 @@
+{
+    "navigation": {
+        "home": "首页",
+        "map": "地图",
+        "course": "点评",
+        "classroom": "教室",
+        "me": "我的"
+    },
+    "common": {
+        "back": "返回",
+        "loading": "加载中...",
+        "search_placeholder": "搜索...",
+        "retry": "重试",
+        "cancel": "取消",
+        "submit": "提交"
+    },
+    "teachers": {
+        "title": "教师列表",
+        "prof": "点评",
+        "rate": "点评",
+        "swap": "换课",
+        "sort_by": "排序",
+        "filter": "筛选",
+        "no_reviews": "暂无评价",
+        "reviews_count": "{{count}} 条评价",
+        "teaching_quality": "教学质量",
+        "difficulty": "难度",
+        "overall_score": "综合得分",
+        "take_again": "想再修课",
+        "grade": "成绩",
+        "tags": "标签",
+        "comment_placeholder": "分享您的修课体验...",
+        "submit_review": "提交评价",
+        "anonymous_student": "匿名的同学",
+        "official_reply": "官方回复"
+    },
+    "courses": {
+        "title": "课程点评",
+        "search_placeholder": "搜索课程代码、名称或讲师...",
+        "add_new_course": "添加新课程",
+        "no_courses_found": "未找到相关课程"
+    }
+}

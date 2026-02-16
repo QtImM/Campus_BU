@@ -1,7 +1,10 @@
 import { Tabs } from 'expo-router';
 import { BookOpen, Calendar, Map, School, User } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
+
   return (
     <Tabs
       screenOptions={{
@@ -40,8 +43,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="campus"
         options={{
-          title: 'Campus',
-          tabBarLabel: 'Campus',
+          title: t('navigation.home'),
+          tabBarLabel: t('navigation.home'),
           tabBarIcon: ({ color, size }) => (
             <Calendar color={color} size={size} />
           ),
@@ -50,8 +53,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="map"
         options={{
-          title: 'Map',
-          tabBarLabel: 'Map',
+          title: t('navigation.map'),
+          tabBarLabel: t('navigation.map'),
           tabBarIcon: ({ color, size }) => (
             <Map color={color} size={size} />
           ),
@@ -60,8 +63,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="course"
         options={{
-          title: 'Review',
-          tabBarLabel: 'Review',
+          title: t('navigation.course'),
+          tabBarLabel: t('navigation.course'),
           tabBarIcon: ({ color, size }) => (
             <BookOpen color={color} size={size} />
           ),
@@ -70,8 +73,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="classroom"
         options={{
-          title: 'Course',
-          tabBarLabel: 'Course',
+          title: t('navigation.classroom'),
+          tabBarLabel: t('navigation.classroom'),
           tabBarIcon: ({ color, size }) => (
             <School color={color} size={size} />
           ),
@@ -86,8 +89,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarLabel: 'Me',
+          title: t('navigation.me'),
+          tabBarLabel: t('navigation.me'),
           tabBarIcon: ({ color, size }) => (
             <User color={color} size={size} />
           ),

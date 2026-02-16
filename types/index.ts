@@ -210,5 +210,36 @@ export interface AppNotification {
     read: boolean;
 }
 
+// Teacher Rating Types
+export interface Teacher {
+    id: string;
+    faculty: string;
+    department: string;
+    name: string;
+    title: string;
+    imageUrl: string;
+    email: string;
+    sourceUrl: string;
+    ratingAvg: number;
+    reviewCount: number;
+    tags: string[];
+}
+
+export interface TeacherReview {
+    id: string;
+    teacherId: string;
+    authorId: string;
+    authorName: string;
+    authorAvatar?: string;
+    rating: number;
+    difficulty: number;
+    workload: number;
+    content: string;
+    tags: string[];
+    likes: number;
+    isLiked?: boolean;
+    createdAt: Date;
+}
+
 // Navigation Types
 export type TabName = 'campus' | 'map' | 'class' | 'profile';

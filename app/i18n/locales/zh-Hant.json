@@ -1,0 +1,43 @@
+{
+    "navigation": {
+        "home": "首頁",
+        "map": "地圖",
+        "course": "點評",
+        "classroom": "教室",
+        "me": "我的"
+    },
+    "common": {
+        "back": "返回",
+        "loading": "載入中...",
+        "search_placeholder": "搜尋...",
+        "retry": "重試",
+        "cancel": "取消",
+        "submit": "提交"
+    },
+    "teachers": {
+        "title": "教師列表",
+        "prof": "點評",
+        "rate": "點評",
+        "swap": "換課",
+        "sort_by": "排序",
+        "filter": "篩選",
+        "no_reviews": "暫無評價",
+        "reviews_count": "{{count}} 條評價",
+        "teaching_quality": "教學品質",
+        "difficulty": "難度",
+        "overall_score": "綜合得分",
+        "take_again": "想再修課",
+        "grade": "成績",
+        "tags": "標籤",
+        "comment_placeholder": "分享您的修課體驗...",
+        "submit_review": "提交評價",
+        "anonymous_student": "匿名的同學",
+        "official_reply": "官方回覆"
+    },
+    "courses": {
+        "title": "課程點評",
+        "search_placeholder": "搜尋課程代碼、名稱或講師...",
+        "add_new_course": "添加新課程",
+        "no_courses_found": "未找到相關課程"
+    }
+}
