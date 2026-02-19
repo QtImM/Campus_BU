@@ -13,11 +13,13 @@ import {
     View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { APP_CONFIG } from '../../constants/Config';
 import { agentBridge } from '../../services/agent/bridge';
 import { AgentExecutor } from '../../services/agent/executor';
 import { LangGraphExecutor } from '../../services/agent/langgraph_executor';
 import { getCookieInjectionScript } from '../../services/agent/session';
 import { AgentStep } from '../../services/agent/types';
+import { getCurrentUser } from '../../services/auth';
 
 export default function AgentChatScreen() {
     const router = useRouter();
@@ -31,6 +33,7 @@ export default function AgentChatScreen() {
     const [loading, setLoading] = useState(false);
     const [showWebView, setShowWebView] = useState(false);
     const [useLangGraph, setUseLangGraph] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
     const scrollViewRef = useRef<ScrollView>(null);
     const webViewRef = useRef<WebView>(null);
     const agentRef = useRef<AgentExecutor>(new AgentExecutor('demo-user'));
@@ -40,6 +43,8 @@ export default function AgentChatScreen() {
 
     useEffect(() => {
         async function loadSession() {
+            const user = await getCurrentUser();
+            setCurrentUser(user);
             const script = await getCookieInjectionScript();
             setCookieScript(script);
         }
@@ -118,24 +123,30 @@ export default function AgentChatScreen() {
                 </TouchableOpacity>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle}>校园生活 Agent</Text>
-                    <View style={styles.statusRow}>
-                        <View style={styles.statusDot} />
-                        <Text style={styles.statusText}>AI 实验室 {useLangGraph ? '(LG)' : ''}</Text>
-                    </View>
+                    {APP_CONFIG.shouldShowDebug(currentUser?.uid) && (
+                        <View style={styles.statusRow}>
+                            <View style={styles.statusDot} />
+                            <Text style={styles.statusText}>AI 实验室 {useLangGraph ? '(LG)' : ''}</Text>
+                        </View>
+                    )}
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity onPress={() => {
-                        setUseLangGraph(!useLangGraph);
-                        setMessages(prev => [...prev, {
-                            role: 'assistant',
-                            content: `已切换至 ${!useLangGraph ? 'LangGraph (Pilot)' : '标准引擎'}`
-                        }]);
-                    }} style={[styles.pilotButton, useLangGraph && styles.pilotButtonActive]}>
-                        <Text style={[styles.pilotButtonText, useLangGraph && styles.pilotButtonTextActive]}>PILOT</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setShowWebView(!showWebView)} style={styles.debugButton}>
-                        <Bot size={20} color={showWebView ? '#3B82F6' : '#6B7280'} />
-                    </TouchableOpacity>
+                    {APP_CONFIG.shouldShowDebug(currentUser?.uid) && (
+                        <>
+                            <TouchableOpacity onPress={() => {
+                                setUseLangGraph(!useLangGraph);
+                                setMessages(prev => [...prev, {
+                                    role: 'assistant',
+                                    content: `已切换至 ${!useLangGraph ? 'LangGraph (Pilot)' : '标准引擎'}`
+                                }]);
+                            }} style={[styles.pilotButton, useLangGraph && styles.pilotButtonActive]}>
+                                <Text style={[styles.pilotButtonText, useLangGraph && styles.pilotButtonTextActive]}>PILOT</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setShowWebView(!showWebView)} style={styles.debugButton}>
+                                <Bot size={20} color={showWebView ? '#3B82F6' : '#6B7280'} />
+                            </TouchableOpacity>
+                        </>
+                    )}
                 </View>
             </View>
 
@@ -205,7 +216,7 @@ export default function AgentChatScreen() {
                             )}
 
                             {/* Agent Thinking Steps (Visualization for Interview) */}
-                            {msg.steps && msg.steps.length > 0 && (
+                            {APP_CONFIG.shouldShowDebug(currentUser?.uid) && msg.steps && msg.steps.length > 0 && (
                                 <View style={styles.stepsContainer}>
                                     {msg.steps.filter(s => s.action).map((step, idx) => (
                                         <View key={idx} style={styles.stepItem}>

@@ -1,4 +1,7 @@
 
+-- 0. 开启向量扩展 (PGVector)
+create extension if not exists vector;
+
 -- 1. 创建教师表 (Teachers)
 create table if not exists public.teachers (
   id uuid default gen_random_uuid() primary key,
@@ -12,6 +15,7 @@ create table if not exists public.teachers (
   rating_avg float default 0,
   review_count int default 0,
   tags jsonb default '[]'::jsonb, -- 虎扑式趣味标签
+  embedding vector(1536), -- OpenAI embedding 维度
   created_at timestamptz default now()
 );
 
@@ -67,8 +71,37 @@ $$ language plpgsql security definer;
 create or replace function public.decrement_teacher_review_likes(rid uuid)
 returns void as $$
 begin
-  update public.teacher_reviews
-  set likes = case when likes > 0 then likes - 1 else 0 end
   where id = rid;
 end;
 $$ language plpgsql security definer;
+
+-- 7. 向量检索函数 (Interview Highlight)
+-- 面试时可以演示：如何通过语义搜索老师（比如搜索“人工智能专家”）
+create or replace function public.match_teachers (
+  query_embedding vector(1536),
+  match_threshold float,
+  match_count int
+)
+returns table (
+  id uuid,
+  name text,
+  faculty text,
+  department text,
+  similarity float
+)
+language plpgsql
+as $$
+begin
+  return query
+  select
+    teachers.id,
+    teachers.name,
+    teachers.faculty,
+    teachers.department,
+    1 - (teachers.embedding <=> query_embedding) as similarity
+  from teachers
+  where 1 - (teachers.embedding <=> query_embedding) > match_threshold
+  order by similarity desc
+  limit match_count;
+end;
+$$;

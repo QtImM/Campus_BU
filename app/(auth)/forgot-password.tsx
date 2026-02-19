@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ChevronDown, Eye, EyeOff, Globe, Mail } from 'lucide-react-native';
+import { ArrowLeft, ChevronDown, Eye, EyeOff, Globe, Key } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -20,7 +20,7 @@ const LANGUAGES = [
     { label: 'English', value: 'en' },
 ];
 
-export default function RegisterScreen() {
+export default function ForgotPasswordScreen() {
     const router = useRouter();
     const { t, i18n } = useTranslation();
     const [emailPrefix, setEmailPrefix] = useState('');
@@ -29,14 +29,12 @@ export default function RegisterScreen() {
     const [showDomainPicker, setShowDomainPicker] = useState(false);
     const [showLangPicker, setShowLangPicker] = useState(false);
 
-    // New State for Single-Page Flow
     const [otp, setOtp] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [countdown, setCountdown] = useState(0);
     const [isOtpSent, setIsOtpSent] = useState(false);
 
-    // Countdown Timer Effect
     React.useEffect(() => {
         let timer: any;
         if (countdown > 0) {
@@ -58,7 +56,6 @@ export default function RegisterScreen() {
         }
 
         let prefix = emailPrefix.trim();
-        // If user pasted a full email with the same suffix, strip it to avoid duplication
         if (emailSuffix !== 'other' && prefix.toLowerCase().endsWith(emailSuffix.toLowerCase())) {
             prefix = prefix.substring(0, prefix.length - emailSuffix.length);
         }
@@ -78,8 +75,7 @@ export default function RegisterScreen() {
         }
     };
 
-    const handleRegister = async () => {
-        // Validation
+    const handleResetPassword = async () => {
         if (!isOtpSent) {
             Alert.alert(t('common.tip', 'Tip'), t('auth.send_otp_first', 'Please send verification code first'));
             return;
@@ -101,17 +97,16 @@ export default function RegisterScreen() {
 
         setLoading(true);
         try {
-            // 1. Verify OTP (Logs user in)
             const user = await verifyOTP(fullEmail, otp);
             if (!user) throw new Error('Verification failed');
 
-            // 2. Set Password
             await updatePassword(password);
 
-            // 3. Redirect to Setup
-            router.replace('/(auth)/setup');
+            Alert.alert(t('common.tip', 'Success'), t('auth.reset_success_msg', 'Password reset successful, please login'), [
+                { text: 'OK', onPress: () => router.replace('/login') }
+            ]);
         } catch (error: any) {
-            Alert.alert(t('common.error', 'Error'), error.message || t('auth.register_failed', 'Registration failed'));
+            Alert.alert(t('common.error', 'Error'), error.message || t('auth.register_failed', 'Reset failed'));
         } finally {
             setLoading(false);
         }
@@ -167,10 +162,10 @@ export default function RegisterScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                 <View style={styles.header}>
                     <View style={styles.iconContainer}>
-                        <Mail size={32} color="#1E3A8A" />
+                        <Key size={32} color="#1E3A8A" />
                     </View>
-                    <Text style={styles.title}>{t('auth.register_title')}</Text>
-                    <Text style={styles.subtitle}>{t('auth.register_subtitle', 'Use school email to register and start your campus journey')}</Text>
+                    <Text style={styles.title}>{t('auth.forgot_password_title')}</Text>
+                    <Text style={styles.subtitle}>{t('auth.forgot_password_subtitle', 'Verify email to set a new password')}</Text>
                 </View>
 
                 <View style={styles.form}>
@@ -217,7 +212,6 @@ export default function RegisterScreen() {
                         </View>
                     )}
 
-                    {/* OTP Input Row */}
                     <Text style={styles.label}>{t('auth.verification_code', 'Verification Code')}</Text>
                     <View style={styles.otpRow}>
                         <View style={[styles.inputContainer, { flex: 1 }]}>
@@ -242,7 +236,6 @@ export default function RegisterScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Password Input */}
                     <Text style={styles.label}>{t('auth.password_label')}</Text>
                     <View style={styles.passwordContainer}>
                         <TextInput
@@ -263,22 +256,15 @@ export default function RegisterScreen() {
 
                     <TouchableOpacity
                         style={[styles.button, loading && styles.buttonDisabled]}
-                        onPress={handleRegister}
+                        onPress={handleResetPassword}
                         disabled={loading}
                     >
                         {loading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text style={styles.buttonText}>{t('auth.register_btn_final', 'Sign Up')}</Text>
+                            <Text style={styles.buttonText}>{t('auth.reset_password_btn', 'Reset Password')}</Text>
                         )}
                     </TouchableOpacity>
-
-                    <View style={styles.footer}>
-                        <Text style={styles.footerText}>{t('auth.go_to_login_prefix', 'Already have an account?')}</Text>
-                        <TouchableOpacity onPress={() => router.push('/login')}>
-                            <Text style={styles.link}>{t('auth.go_to_login_link', 'Log In')}</Text>
-                        </TouchableOpacity>
-                    </View>
                 </View>
             </ScrollView>
 
@@ -434,21 +420,6 @@ const styles = StyleSheet.create({
         fontSize: 17,
         fontWeight: '700',
     },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 24,
-    },
-    footerText: {
-        color: '#9CA3AF',
-        fontSize: 14,
-    },
-    link: {
-        color: '#1E3A8A',
-        fontWeight: '700',
-        fontSize: 14,
-        marginLeft: 4,
-    },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -486,7 +457,6 @@ const styles = StyleSheet.create({
         color: '#1E3A8A',
         fontWeight: 'bold',
     },
-    // New Styles for Single Page Auth
     otpRow: {
         flexDirection: 'row',
         gap: 12,

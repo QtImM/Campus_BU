@@ -1,21 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatDistanceToNow } from 'date-fns';
-import { useRouter } from 'expo-router';
-import { Bell, Bot, ChevronRight, Edit3, Eye, Globe, Heart as HeartIcon, HelpCircle, LogOut, MessageSquare, Shield, Sparkles, X } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Bell, Bot, ChevronRight, Copy, Edit3, Globe, Heart as HeartIcon, HelpCircle, LogOut, Mail, MessageSquare, Sparkles, X } from 'lucide-react-native';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, FlatList, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { getCurrentUser, signOut } from '../../services/auth';
+import { ActivityIndicator, Alert, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { createUserProfile, getCurrentUser, getUserProfile, signOut } from '../../services/auth';
 import { fetchNotifications, markAllAsRead, markAsRead, Notification, subscribeToNotifications } from '../../services/notifications';
+import { SOCIAL_TAGS, User as UserProfile } from '../../types';
 import { changeLanguage } from '../i18n/i18n';
 
 const DEMO_MODE_KEY = 'hkcampus_demo_mode';
 
-const SOCIAL_TAGS = [
-    'Library Ghost 📚', 'Coffee Addict ☕', 'Night Owl 🦉',
-    'Foodie 🍜', 'Gym Rat 💪', 'Cat Person 🐱',
-    'Music Lover 🎵', 'Tech Geek 💻', 'Film Buff 🎬'
-];
 
 const LANGUAGE_OPTIONS = [
     { key: 'zh-Hans', label: '简' },
@@ -26,34 +23,50 @@ const LANGUAGE_OPTIONS = [
 export default function ProfileScreen() {
     const router = useRouter();
     const { t, i18n } = useTranslation();
-    const [ghostMode, setGhostMode] = useState(false);
-    const [selectedTags, setSelectedTags] = useState<string[]>(['Coffee Addict ☕', 'Night Owl 🦉']);
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const currentLang = i18n.language;
     const [showNotifications, setShowNotifications] = useState(false);
+    const [showHelp, setShowHelp] = useState(false);
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loadingNotifications, setLoadingNotifications] = useState(true);
+    const [loadingProfile, setLoadingProfile] = useState(true);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
 
     const unreadCount = notifications.filter(n => !n.is_read).length;
 
-    const loadNotifications = async () => {
+    const loadData = async () => {
         try {
             const user = await getCurrentUser();
             if (user) {
                 setUserId(user.uid);
-                const data = await fetchNotifications(user.uid);
-                setNotifications(data);
+
+                // Load Notifications
+                const notifData = await fetchNotifications(user.uid);
+                setNotifications(notifData);
+
+                // Load Profile
+                const userProfile = await getUserProfile(user.uid);
+                if (userProfile) {
+                    setProfile(userProfile);
+                    setSelectedTags(userProfile.socialTags || []);
+                }
             }
         } catch (error) {
-            console.error('Error loading notifications:', error);
+            console.error('Error loading data:', error);
         } finally {
             setLoadingNotifications(false);
+            setLoadingProfile(false);
         }
     };
 
-    useEffect(() => {
-        loadNotifications();
+    useFocusEffect(
+        useCallback(() => {
+            loadData();
+        }, [])
+    );
 
+    useEffect(() => {
         let subscription: any;
         const initSubscription = async () => {
             const user = await getCurrentUser();
@@ -124,13 +137,39 @@ export default function ProfileScreen() {
         );
     };
 
-    const toggleTag = (tag: string) => {
+    const handleCopyText = async (text: string) => {
+        await Clipboard.setStringAsync(text);
+        Alert.alert(t('common.tip'), t('profile.help_copied'));
+    };
+
+    const toggleTag = async (tag: string) => {
+        let newTags = [...selectedTags];
         if (selectedTags.includes(tag)) {
-            setSelectedTags(selectedTags.filter(t => t !== tag));
+            newTags = selectedTags.filter(t => t !== tag);
         } else if (selectedTags.length < 3) {
-            setSelectedTags([...selectedTags, tag]);
+            newTags = [...selectedTags, tag];
         } else {
-            Alert.alert('Limit Reached', 'You can only select up to 3 tags');
+            Alert.alert(t('common.tip', 'Tip'), t('setup.tags_limit', 'You can only select up to 3 tags'));
+            return;
+        }
+
+        setSelectedTags(newTags);
+
+        // Persist to DB
+        if (userId && profile) {
+            try {
+                await createUserProfile(
+                    userId,
+                    profile.displayName,
+                    newTags,
+                    profile.major,
+                    profile.avatarUrl
+                );
+            } catch (error) {
+                console.error('Failed to persist tags:', error);
+                // Rollback UI state on failure
+                setSelectedTags(selectedTags);
+            }
         }
     };
 
@@ -144,13 +183,17 @@ export default function ProfileScreen() {
             {/* Profile Card */}
             <View style={styles.profileCard}>
                 <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>你</Text>
+                    {profile?.avatarUrl ? (
+                        <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+                    ) : (
+                        <Text style={styles.avatarText}>{profile?.displayName?.charAt(0) || '你'}</Text>
+                    )}
                 </View>
                 <View style={styles.profileInfo}>
-                    <Text style={styles.profileName}>Demo Student</Text>
-                    <Text style={styles.profileMajor}>HKBU Student</Text>
+                    <Text style={styles.profileName}>{profile?.displayName || (loadingProfile ? '...' : 'Demo Student')}</Text>
+                    <Text style={styles.profileMajor}>{profile?.major || (loadingProfile ? '...' : 'HKBU Student')}</Text>
                 </View>
-                <TouchableOpacity style={styles.editButton}>
+                <TouchableOpacity style={styles.editButton} onPress={() => router.push('/(auth)/setup')}>
                     <Edit3 size={20} color="#1E3A8A" />
                 </TouchableOpacity>
             </View>
@@ -248,45 +291,6 @@ export default function ProfileScreen() {
                 </View>
             </View>
 
-            {/* Activity Stats */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>{t('profile.my_activity')}</Text>
-                <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statValue}>12</Text>
-                        <Text style={styles.statLabel}>{t('profile.posts')}</Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                        <Text style={styles.statValue}>48</Text>
-                        <Text style={styles.statLabel}>{t('profile.connections')}</Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                        <Text style={styles.statValue}>156</Text>
-                        <Text style={styles.statLabel}>{t('profile.likes')}</Text>
-                    </View>
-                </View>
-            </View>
-
-            {/* Ghost Mode */}
-            <View style={styles.section}>
-                <View style={styles.settingRow}>
-                    <View style={styles.settingLeft}>
-                        <Eye size={20} color="#4B0082" />
-                        <Text style={styles.settingLabel}>{t('profile.ghost_mode')}</Text>
-                    </View>
-                    <Switch
-                        value={ghostMode}
-                        onValueChange={setGhostMode}
-                        trackColor={{ false: '#E5E7EB', true: '#4B0082' }}
-                        thumbColor="#fff"
-                    />
-                </View>
-                <Text style={styles.settingHint}>
-                    {t('profile.ghost_hint')}
-                </Text>
-            </View>
 
             {/* Language Switcher */}
             <View style={styles.section}>
@@ -320,12 +324,10 @@ export default function ProfileScreen() {
 
             {/* Settings */}
             <View style={styles.section}>
-                <TouchableOpacity style={styles.menuItem}>
-                    <Shield size={20} color="#6B7280" />
-                    <Text style={styles.menuText}>{t('profile.privacy')}</Text>
-                    <ChevronRight size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem}>
+                <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => setShowHelp(true)}
+                >
                     <HelpCircle size={20} color="#6B7280" />
                     <Text style={styles.menuText}>{t('profile.help')}</Text>
                     <ChevronRight size={20} color="#9CA3AF" />
@@ -406,6 +408,58 @@ export default function ProfileScreen() {
                     )}
                 </View>
             </Modal>
+
+            {/* Help Modal */}
+            <Modal
+                visible={showHelp}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setShowHelp(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowHelp(false)}
+                >
+                    <View style={styles.helpCard}>
+                        <View style={styles.helpHeader}>
+                            <HelpCircle size={32} color="#1E3A8A" />
+                            <Text style={styles.helpTitle}>{t('profile.help')}</Text>
+                        </View>
+
+                        <Text style={styles.helpContent}>{t('profile.help_contact')}</Text>
+
+                        <TouchableOpacity
+                            style={styles.emailContainer}
+                            onPress={() => handleCopyText(t('profile.help_email'))}
+                        >
+                            <View style={styles.emailContent}>
+                                <Mail size={20} color="#1E3A8A" />
+                                <Text style={styles.emailText}>{t('profile.help_email')}</Text>
+                            </View>
+                            <Copy size={18} color="#94A3B8" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.emailContainer, { marginTop: -16 }]}
+                            onPress={() => handleCopyText(t('profile.help_email_2'))}
+                        >
+                            <View style={styles.emailContent}>
+                                <Mail size={20} color="#1E3A8A" />
+                                <Text style={styles.emailText}>{t('profile.help_email_2')}</Text>
+                            </View>
+                            <Copy size={18} color="#94A3B8" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.helpCloseBtn}
+                            onPress={() => setShowHelp(false)}
+                        >
+                            <Text style={styles.helpCloseText}>{t('common.ok')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </ScrollView>
     );
 }
@@ -450,6 +504,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#1E3A8A',
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    avatarImage: {
+        width: '100%',
+        height: '100%',
     },
     avatarText: {
         color: '#fff',
@@ -856,5 +915,76 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#DBEAFE',
         marginTop: 2,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    helpCard: {
+        width: '100%',
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        padding: 32,
+        alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    helpHeader: {
+        marginBottom: 24,
+        alignItems: 'center',
+    },
+    helpTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#1E293B',
+        marginTop: 12,
+    },
+    helpContent: {
+        fontSize: 16,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 32,
+    },
+    emailContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F8FAFC',
+        padding: 16,
+        borderRadius: 16,
+        width: '100%',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 32,
+    },
+    emailContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    emailText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#1E3A8A',
+        marginLeft: 12,
+    },
+    helpCloseBtn: {
+        backgroundColor: '#1E3A8A',
+        paddingVertical: 14,
+        paddingHorizontal: 32,
+        borderRadius: 14,
+        width: '100%',
+        alignItems: 'center',
+    },
+    helpCloseText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });

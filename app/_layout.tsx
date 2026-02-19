@@ -5,23 +5,18 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-url-polyfill/auto';
 import '../global.css';
-import { getUserProfile, onAuthChange } from '../services/auth';
+import { getUserProfile, isDemoMode, onAuthChange } from '../services/auth';
 import './i18n/i18n'; // Initialize i18n
 
 const DEMO_MODE_KEY = 'hkcampus_demo_mode';
 
-// Helper to check/set demo mode
+// Helper to set demo mode
 export const setDemoMode = async (enabled: boolean) => {
   if (enabled) {
     await AsyncStorage.setItem(DEMO_MODE_KEY, 'true');
   } else {
     await AsyncStorage.removeItem(DEMO_MODE_KEY);
   }
-};
-
-export const isDemoMode = async () => {
-  const value = await AsyncStorage.getItem(DEMO_MODE_KEY);
-  return value === 'true';
 };
 
 export default function RootLayout() {
@@ -51,12 +46,19 @@ export default function RootLayout() {
           }
         } else {
           const profile = await getUserProfile(user.uid);
+          const currentSegment = segments.length > 1 ? (segments as string[])[1] : '';
+
           if (!profile) {
-            if (segments.length > 1 && (segments as string[])[1] !== 'setup') {
+            // Allow setup (profile creation) AND verify (setting password after OTP)
+            if (currentSegment !== 'setup' && currentSegment !== 'verify') {
               router.replace('/(auth)/setup');
             }
           } else if (inAuthGroup) {
-            router.replace('/(tabs)/campus');
+            // If they have a profile, ONLY allow them to stay on 'setup' (for editing)
+            // Redirect from 'login', 'register', 'verify', etc.
+            if (currentSegment !== 'setup') {
+              router.replace('/(tabs)/campus');
+            }
           }
         }
         setLoading(false);
