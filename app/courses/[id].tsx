@@ -25,6 +25,12 @@ import { supabase } from '../../services/supabase';
 import { fetchTeamingComments, fetchTeamingRequests, postTeamingComment, postTeamingRequest, toggleTeamingLike } from '../../services/teaming';
 import { ContactMethod, Course, CourseTeaming, Review, TeamingComment } from '../../types';
 
+// Helper function to check if string is a URL
+const isImageUrl = (str: string): boolean => {
+    if (!str) return false;
+    return str.startsWith('http://') || str.startsWith('https://');
+};
+
 // Mock Data
 const MOCK_REVIEWS: Review[] = [
     {
@@ -513,7 +519,7 @@ export default function CourseDetailScreen() {
             <View style={styles.teamingHeader}>
                 <View style={styles.authorInfo}>
                     <View style={styles.avatarContainer}>
-                        {item.userAvatar && item.userAvatar.length > 2 ? (
+                        {isImageUrl(item.userAvatar) ? (
                             <Image source={{ uri: item.userAvatar }} style={styles.avatarImage} />
                         ) : (
                             <Text style={styles.avatarFallbackText}>{item.userAvatar || '👤'}</Text>
@@ -1109,7 +1115,14 @@ export default function CourseDetailScreen() {
                                             borderBottomWidth: 1,
                                             borderBottomColor: '#F3F4F6'
                                         }}>
-                                            <Text style={{ fontSize: 24, marginRight: 12 }}>{item.authorAvatar}</Text>
+                                            {isImageUrl(item.authorAvatar) ? (
+                                                <Image 
+                                                    source={{ uri: item.authorAvatar }} 
+                                                    style={{ width: 36, height: 36, borderRadius: 18, marginRight: 12 }}
+                                                />
+                                            ) : (
+                                                <Text style={{ fontSize: 24, marginRight: 12 }}>{item.authorAvatar || '👤'}</Text>
+                                            )}
                                             <View style={{ flex: 1 }}>
                                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                                                     <Text style={{ fontWeight: '700', color: '#111827' }}>{item.authorName}</Text>

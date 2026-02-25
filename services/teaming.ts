@@ -221,14 +221,31 @@ export const postTeamingComment = async (teamingId: string, author: any, content
 };
 
 // Helper functions
+
+// Helper to check if avatar is a valid URL (not local file path)
+const isValidAvatarUrl = (url: string): boolean => {
+    if (!url) return false;
+    return url.startsWith('http://') || url.startsWith('https://') || url.length <= 2; // Allow emoji
+};
+
 const mapSupabaseToTeaming = (data: any): CourseTeaming => {
     const author = data.author;
+    
+    // Prefer data.user_avatar (saved at post time), fallback to author.avatar_url only if valid
+    let avatarToUse = data.user_avatar;
+    if (!isValidAvatarUrl(avatarToUse) && author?.avatar_url && isValidAvatarUrl(author.avatar_url)) {
+        avatarToUse = author.avatar_url;
+    }
+    if (!isValidAvatarUrl(avatarToUse)) {
+        avatarToUse = '👤';
+    }
+    
     return {
         id: data.id,
         courseId: data.course_id,
         userId: data.user_id,
         userName: author ? (author.display_name || author.displayName) : data.user_name,
-        userAvatar: author ? author.avatar_url : data.user_avatar,
+        userAvatar: avatarToUse,
         userMajor: author ? author.major : data.user_major,
         section: data.section,
         selfIntro: data.self_intro,
@@ -243,12 +260,22 @@ const mapSupabaseToTeaming = (data: any): CourseTeaming => {
 
 const mapSupabaseToTeamingComment = (data: any): TeamingComment => {
     const author = data.author;
+    
+    // Prefer data.author_avatar (saved at comment time), fallback to author.avatar_url only if valid
+    let avatarToUse = data.author_avatar;
+    if (!isValidAvatarUrl(avatarToUse) && author?.avatar_url && isValidAvatarUrl(author.avatar_url)) {
+        avatarToUse = author.avatar_url;
+    }
+    if (!isValidAvatarUrl(avatarToUse)) {
+        avatarToUse = '👤';
+    }
+    
     return {
         id: data.id,
         teamingId: data.teaming_id,
         authorId: data.author_id,
         authorName: author ? (author.display_name || author.displayName) : data.author_name,
-        authorAvatar: author ? author.avatar_url : data.author_avatar,
+        authorAvatar: avatarToUse,
         content: data.content,
         createdAt: new Date(data.created_at),
     };
