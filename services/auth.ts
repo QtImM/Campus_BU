@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 const DEMO_MODE_KEY = 'hkcampus_demo_mode';
 const BIOMETRIC_KEY = 'hkcampus_biometric_enabled';
 const BIOMETRIC_CRED_KEY = 'hkcampus_user_credentials';
+const AVATAR_STORAGE_BUCKET = 'avatars';
 
 // Global flag to skip auth redirects during password reset flow
 let skipAuthRedirect = false;
@@ -16,6 +17,50 @@ export const setSkipAuthRedirect = (skip: boolean) => {
 };
 
 export const shouldSkipAuthRedirect = () => skipAuthRedirect;
+
+/**
+ * Check if a string is a local file path
+ */
+const isLocalFilePath = (uri: string): boolean => {
+    if (!uri) return false;
+    return uri.startsWith('file://') || 
+           uri.startsWith('/var/') || 
+           uri.startsWith('/data/') ||
+           uri.includes('ImagePicker') ||
+           uri.includes('ExponentExperienceData');
+};
+
+/**
+ * Upload avatar image to Supabase Storage and return public URL
+ */
+export const uploadAvatar = async (uri: string, userId: string): Promise<string> => {
+    try {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const fileName = `${userId}/${Date.now()}.jpg`;
+
+        const { data, error } = await supabase.storage
+            .from(AVATAR_STORAGE_BUCKET)
+            .upload(fileName, blob, {
+                contentType: 'image/jpeg',
+                upsert: true,
+            });
+
+        if (error) {
+            console.error('Avatar upload error:', error);
+            throw error;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from(AVATAR_STORAGE_BUCKET)
+            .getPublicUrl(fileName);
+
+        return publicUrl;
+    } catch (e) {
+        console.error('Failed to upload avatar:', e);
+        return uri; // Return original URI on failure
+    }
+};
 
 // Helper to check if we are in demo mode
 export const isDemoMode = async () => {
@@ -164,12 +209,23 @@ export const createUserProfile = async (
     major: string,
     avatarUrl: string = ''
 ) => {
+    // Upload avatar to cloud storage if it's a local file path
+    let finalAvatarUrl = avatarUrl;
+    if (avatarUrl && isLocalFilePath(avatarUrl)) {
+        try {
+            finalAvatarUrl = await uploadAvatar(avatarUrl, uid);
+        } catch (e) {
+            console.error('Failed to upload avatar, using empty:', e);
+            finalAvatarUrl = '';
+        }
+    }
+
     const userData: User = {
         uid, // Will be stored as 'id' in DB if column name differs, but usually we map JSON
         displayName,
         socialTags,
         major,
-        avatarUrl,
+        avatarUrl: finalAvatarUrl,
         createdAt: new Date(), // Supabase handles timestamp, but we keep structure
     };
 
@@ -182,7 +238,7 @@ export const createUserProfile = async (
             id: uid,
             display_name: displayName,
             major: major,
-            avatar_url: avatarUrl,
+            avatar_url: finalAvatarUrl,
             social_tags: socialTags,
             updated_at: new Date().toISOString(),
         });

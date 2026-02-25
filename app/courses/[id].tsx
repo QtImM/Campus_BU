@@ -333,7 +333,7 @@ export default function CourseDetailScreen() {
                 value: teamingContactValues[p] || ''
             }));
 
-            const { success, data } = await postTeamingRequest({
+            const { success, data, error } = await postTeamingRequest({
                 courseId: id as string,
                 userId: user.uid,
                 userName: user.display_name || 'Anonymous',
@@ -350,6 +350,8 @@ export default function CourseDetailScreen() {
                 setIsTeamingModalVisible(false);
                 resetTeamingForm();
                 Alert.alert('Success', 'Teaming request posted!');
+            } else {
+                Alert.alert('Error', error || 'Failed to post teaming request');
             }
         } catch (error) {
             Alert.alert('Error', 'Failed to post teaming request');
@@ -419,7 +421,7 @@ export default function CourseDetailScreen() {
     const handleSendTeamingComment = async () => {
         if (!user || !selectedTeamingForComments || !newTeamingComment.trim()) return;
 
-        const { success } = await postTeamingComment(selectedTeamingForComments.id, user, newTeamingComment.trim());
+        const { success, error } = await postTeamingComment(selectedTeamingForComments.id, user, newTeamingComment.trim());
         if (success) {
             setNewTeamingComment('');
             const comments = await fetchTeamingComments(selectedTeamingForComments.id);
@@ -432,7 +434,7 @@ export default function CourseDetailScreen() {
                 return req;
             }));
         } else {
-            Alert.alert('Error', 'Failed to post comment.');
+            Alert.alert('Error', error || 'Failed to post comment.');
         }
     };
 
