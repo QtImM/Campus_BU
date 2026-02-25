@@ -556,7 +556,8 @@ export default function ExchangeScreen() {
                                         <Text style={styles.inputLabel}>I Have (Course Code)</Text>
                                         <TextInput
                                             style={styles.input}
-                                            placeholder="Course Code (e.g. COMP3015)"
+                                            placeholder="Course Code"
+                                            placeholderTextColor="#9CA3AF"
                                             value={haveCourse}
                                             onChangeText={(text) => setHaveCourse(text.toUpperCase().replace(/[^A-Z0-9.]/g, ''))}
                                             autoCapitalize="characters"
@@ -572,14 +573,16 @@ export default function ExchangeScreen() {
                                             </TouchableOpacity>
                                             <TextInput
                                                 style={[styles.input, { flex: 2, marginTop: 10 }]}
-                                                placeholder="Teacher name"
+                                                placeholder="Teacher"
+                                                placeholderTextColor="#9CA3AF"
                                                 value={haveTeacher}
                                                 onChangeText={setHaveTeacher}
                                             />
                                         </View>
                                         <TextInput
                                             style={[styles.input, { marginTop: 10 }]}
-                                            placeholder="Class Time (e.g. Mon 2:30PM)"
+                                            placeholder="Class Time"
+                                            placeholderTextColor="#9CA3AF"
                                             value={haveTime}
                                             onChangeText={setHaveTime}
                                         />
@@ -606,7 +609,8 @@ export default function ExchangeScreen() {
                                                 </View>
                                                 <TextInput
                                                     style={styles.input}
-                                                    placeholder="Course Code (e.g. COMP3011)"
+                                                    placeholder="Course Code"
+                                                    placeholderTextColor="#9CA3AF"
                                                     value={want.code}
                                                     onChangeText={(text) => updateWantCourse(index, 'code', text.toUpperCase().replace(/[^A-Z0-9.]/g, ''))}
                                                     autoCapitalize="characters"
@@ -622,7 +626,8 @@ export default function ExchangeScreen() {
                                                     </TouchableOpacity>
                                                     <TextInput
                                                         style={[styles.input, { flex: 2, marginTop: 10 }]}
-                                                        placeholder="Teacher name"
+                                                        placeholder="Teacher"
+                                                        placeholderTextColor="#9CA3AF"
                                                         value={want.teacher}
                                                         onChangeText={(text) => updateWantCourse(index, 'teacher', text)}
                                                     />
@@ -630,6 +635,7 @@ export default function ExchangeScreen() {
                                                 <TextInput
                                                     style={[styles.input, { marginTop: 10 }]}
                                                     placeholder="Class Time"
+                                                    placeholderTextColor="#9CA3AF"
                                                     value={want.time}
                                                     onChangeText={(text) => updateWantCourse(index, 'time', text)}
                                                 />
@@ -695,7 +701,8 @@ export default function ExchangeScreen() {
                                         <Text style={styles.inputLabel}>Reason (Optional)</Text>
                                         <TextInput
                                             style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-                                            placeholder="e.g. Time conflict, professor preference"
+                                            placeholder="Reason"
+                                            placeholderTextColor="#9CA3AF"
                                             multiline
                                             value={reason}
                                             onChangeText={setReason}
