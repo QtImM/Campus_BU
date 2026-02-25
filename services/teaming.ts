@@ -1,3 +1,5 @@
+import { decode } from 'base64-arraybuffer';
+import * as FileSystem from 'expo-file-system/legacy';
 import { CourseTeaming, TeamingComment } from '../types';
 import { supabase } from './supabase';
 
@@ -22,14 +24,21 @@ const isLocalFilePath = (uri: string): boolean => {
  */
 const uploadTeamingAvatar = async (uri: string, prefix: string): Promise<string> => {
     try {
-        const response = await fetch(uri);
-        const blob = await response.blob();
         const fileName = `${prefix}/${Date.now()}.jpg`;
+
+        // Read the file as base64 using expo-file-system (reliable in React Native)
+        const base64Data = await FileSystem.readAsStringAsync(uri, {
+            encoding: 'base64',
+        });
+
+        // Decode base64 to ArrayBuffer for Supabase
+        const arrayBuffer = decode(base64Data);
 
         const { data, error } = await supabase.storage
             .from(TEAMING_STORAGE_BUCKET)
-            .upload(fileName, blob, {
+            .upload(fileName, arrayBuffer, {
                 contentType: 'image/jpeg',
+                upsert: true,
             });
 
         if (error) {
@@ -225,19 +234,25 @@ export const postTeamingComment = async (teamingId: string, author: any, content
 // Helper to check if avatar is a valid URL (not local file path)
 const isValidAvatarUrl = (url: string): boolean => {
     if (!url) return false;
-    return url.startsWith('http://') || url.startsWith('https://') || url.length <= 2; // Allow emoji
+    return url.startsWith('http://') || url.startsWith('https://');
+};
+
+const isEmojiAvatar = (str: string): boolean => {
+    return !!str && str.length <= 2 && !str.startsWith('http');
 };
 
 const mapSupabaseToTeaming = (data: any): CourseTeaming => {
     const author = data.author;
     
-    // Prefer data.user_avatar (saved at post time), fallback to author.avatar_url only if valid
-    let avatarToUse = data.user_avatar;
-    if (!isValidAvatarUrl(avatarToUse) && author?.avatar_url && isValidAvatarUrl(author.avatar_url)) {
+    // Priority: 1. Valid URL from user_avatar, 2. Valid URL from author.avatar_url, 3. Emoji fallback
+    let avatarToUse = '👤';
+    
+    if (isValidAvatarUrl(data.user_avatar)) {
+        avatarToUse = data.user_avatar;
+    } else if (author?.avatar_url && isValidAvatarUrl(author.avatar_url)) {
         avatarToUse = author.avatar_url;
-    }
-    if (!isValidAvatarUrl(avatarToUse)) {
-        avatarToUse = '👤';
+    } else if (isEmojiAvatar(data.user_avatar)) {
+        avatarToUse = data.user_avatar;
     }
     
     return {
@@ -261,13 +276,15 @@ const mapSupabaseToTeaming = (data: any): CourseTeaming => {
 const mapSupabaseToTeamingComment = (data: any): TeamingComment => {
     const author = data.author;
     
-    // Prefer data.author_avatar (saved at comment time), fallback to author.avatar_url only if valid
-    let avatarToUse = data.author_avatar;
-    if (!isValidAvatarUrl(avatarToUse) && author?.avatar_url && isValidAvatarUrl(author.avatar_url)) {
+    // Priority: 1. Valid URL from author_avatar, 2. Valid URL from author.avatar_url, 3. Emoji fallback
+    let avatarToUse = '👤';
+    
+    if (isValidAvatarUrl(data.author_avatar)) {
+        avatarToUse = data.author_avatar;
+    } else if (author?.avatar_url && isValidAvatarUrl(author.avatar_url)) {
         avatarToUse = author.avatar_url;
-    }
-    if (!isValidAvatarUrl(avatarToUse)) {
-        avatarToUse = '👤';
+    } else if (isEmojiAvatar(data.author_avatar)) {
+        avatarToUse = data.author_avatar;
     }
     
     return {
