@@ -120,7 +120,7 @@ export default function CourseDetailScreen() {
         const { data } = await supabase
             .from('messages')
             .select('*, users(display_name, avatar_url)')
-            .eq('room_id', roomId)
+            .eq('course_id', id as string)
             .order('created_at', { ascending: true });
 
         if (data) setMessages(data);
@@ -160,7 +160,7 @@ export default function CourseDetailScreen() {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'messages',
-                filter: `room_id=eq.${roomId}`
+                filter: `course_id=eq.${id}`
             }, async (payload) => {
                 // Fetch user info for the new message
                 const { data: userData } = await supabase
@@ -189,7 +189,7 @@ export default function CourseDetailScreen() {
         const { error } = await supabase
             .from('messages')
             .insert({
-                room_id: roomId,
+                course_id: id as string,
                 sender_id: user.uid,
                 content: newMessage.trim()
             });
