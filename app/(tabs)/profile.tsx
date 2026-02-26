@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { createUserProfile, getCurrentUser, getUserProfile, signOut, uploadAndUpdateAvatar } from '../../services/auth';
 import { fetchNotifications, markAllAsRead, markAsRead, Notification, subscribeToNotifications } from '../../services/notifications';
+import { supabase } from '../../services/supabase';
 import { SOCIAL_TAGS, User as UserProfile } from '../../types';
 import { changeLanguage } from '../i18n/i18n';
 
@@ -93,6 +94,17 @@ export default function ProfileScreen() {
         };
     }, []);
 
+    const resolveNotificationRoute = async (relatedId: string): Promise<string | null> => {
+        const [postResult, exchangeResult] = await Promise.all([
+            supabase.from('posts').select('id').eq('id', relatedId).maybeSingle(),
+            supabase.from('course_exchanges').select('id').eq('id', relatedId).maybeSingle(),
+        ]);
+
+        if (postResult.data) return `/campus/${relatedId}`;
+        if (exchangeResult.data) return '/courses/exchange';
+        return null;
+    };
+
     const handleNotificationPress = async (notification: Notification) => {
         if (!notification.is_read) {
             try {
@@ -107,7 +119,23 @@ export default function ProfileScreen() {
 
         if (notification.related_id) {
             setShowNotifications(false);
-            router.push('/courses/exchange');
+            try {
+                const route = await resolveNotificationRoute(notification.related_id);
+                if (route) {
+                    router.push(route as any);
+                    return;
+                }
+            } catch (error) {
+                console.error('Error resolving notification route:', error);
+            }
+
+            // Fallback for legacy/invalid related IDs
+            const content = (notification.content || '').toLowerCase();
+            if (content.includes('exchange')) {
+                router.push('/courses/exchange');
+            } else {
+                router.push('/(tabs)/campus');
+            }
         }
     };
 
