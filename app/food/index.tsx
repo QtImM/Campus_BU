@@ -155,7 +155,7 @@ const DINING_OUTLETS = [
         id: 'o11',
         title: 'Café@CVA Commons',
         location: 'G/F, CVA Building, BUR Campus',
-        image: require('../../assets/images/food/Café@CVA-Commons.png'),
+        image: require('../../assets/images/food/Cafe-CVA-Commons.png'),
         hours: 'Closed until further notice',
         category: 'Cafe/Tea',
         status: 'Closed'
