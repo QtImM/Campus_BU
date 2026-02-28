@@ -40,6 +40,9 @@ const HKBU_CENTER = {
     lng: 114.181895256042
 };
 
+// Keep edit button code path for future use, but hide it in current builds.
+const SHOW_BUILDING_EDIT_BUTTON = false;
+
 type FilterType = 'newest' | 'hottest' | 'viewed' | 'mine';
 
 const FILTERS: { id: FilterType; label: string; color: string; bg: string }[] = [
@@ -1118,7 +1121,7 @@ export default function MapScreen() {
                     <Text style={styles.iconButtonText}>{t('map.overlay.find_classroom')}</Text>
                 </TouchableOpacity>
 
-                {showBuildingMap && (
+                {showBuildingMap && SHOW_BUILDING_EDIT_BUTTON && (
                     <TouchableOpacity
                         style={[styles.iconButton, editMode && { backgroundColor: '#FFD700' }]}
                         onPress={() => {
