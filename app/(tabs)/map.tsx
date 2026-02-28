@@ -3,7 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Building, Crosshair, Heart, Image as ImageIcon, MapPin, MessageCircle, Utensils, X } from 'lucide-react-native';
+import { Building, ChevronRight, Crosshair, Heart, Image as ImageIcon, MapPin, MessageCircle, Utensils, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -42,6 +42,12 @@ const HKBU_CENTER = {
 
 // Keep edit button code path for future use, but hide it in current builds.
 const SHOW_BUILDING_EDIT_BUTTON = false;
+
+const FOOD_ORDER_OPTIONS = [
+    { key: 'main-canteen', name: 'Main Canteen', orderUrl: 'https://csd2.order.place/store/112867/mode/prekiosk' },
+    { key: 'chapter-coffee', name: 'Chapter Coffee', orderUrl: 'https://app.eats365pos.com/hk/tc/chaptercoffee_kowloontong/menu' },
+    { key: 'harmony-cafeteria', name: 'Harmony Cafeteria', orderUrl: 'https://food.order.place/home/store/5768631610769408?mode=prekiosk' },
+];
 
 type FilterType = 'newest' | 'hottest' | 'viewed' | 'mine';
 
@@ -538,6 +544,8 @@ export default function MapScreen() {
     const [editMode, setEditMode] = useState(false);
     const [buildingsData, setBuildingsData] = useState(CAMPUS_BUILDINGS);
     const [isCommentModalVisible, setIsCommentModalVisible] = useState(false);
+    const [isFoodOrderModalVisible, setIsFoodOrderModalVisible] = useState(false);
+    const [foodOrderWebUrl, setFoodOrderWebUrl] = useState<string | null>(null);
     const [commentText, setCommentText] = useState('');
     const [commentImage, setCommentImage] = useState<string | null>(null);
 
@@ -890,7 +898,17 @@ export default function MapScreen() {
     };
 
     const handleFindFood = () => {
-        router.push('/food/index' as any);
+        setIsFoodOrderModalVisible(true);
+    };
+
+    const handleFoodOrderPress = async (orderUrl: string) => {
+        try {
+            setIsFoodOrderModalVisible(false);
+            setFoodOrderWebUrl(orderUrl);
+        } catch (error) {
+            console.error('Failed to open order online link', error);
+            Alert.alert(t('common.error'), t('common.retry'));
+        }
     };
 
     const handleWebViewMessage = (event: any) => {
@@ -1357,6 +1375,78 @@ export default function MapScreen() {
                     )}
                 </KeyboardAvoidingView>
             </Modal>
+
+            <Modal
+                visible={isFoodOrderModalVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setIsFoodOrderModalVisible(false)}
+            >
+                <View style={styles.foodOrderModalOverlay}>
+                    <TouchableOpacity
+                        style={styles.foodOrderModalBackdrop}
+                        activeOpacity={1}
+                        onPress={() => setIsFoodOrderModalVisible(false)}
+                    />
+                    <View style={styles.foodOrderModalCard}>
+                        <View style={styles.foodOrderModalHeader}>
+                            <View style={styles.foodOrderModalIcon}>
+                                <Utensils size={16} color="#E65100" />
+                            </View>
+                            <View style={styles.foodOrderModalHeaderText}>
+                                <Text style={styles.foodOrderModalTitle}>{t('map.overlay.order_food')}</Text>
+                                <Text style={styles.foodOrderModalSubtitle}>{t('map.overlay.food')}</Text>
+                            </View>
+                        </View>
+                        {FOOD_ORDER_OPTIONS.map(option => (
+                            <TouchableOpacity
+                                key={option.key}
+                                style={styles.foodOrderOptionButton}
+                                onPress={() => handleFoodOrderPress(option.orderUrl)}
+                                activeOpacity={0.85}
+                            >
+                                <View style={styles.foodOrderOptionLeft}>
+                                    <View style={styles.foodOrderOptionDot} />
+                                    <Text style={styles.foodOrderOptionText}>{option.name}</Text>
+                                </View>
+                                <ChevronRight size={18} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity
+                            style={styles.foodOrderCancelButton}
+                            onPress={() => setIsFoodOrderModalVisible(false)}
+                        >
+                            <Text style={styles.foodOrderCancelText}>{t('common.cancel')}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                visible={!!foodOrderWebUrl}
+                animationType="slide"
+                transparent={false}
+                onRequestClose={() => setFoodOrderWebUrl(null)}
+            >
+                <View style={styles.foodOrderWebContainer}>
+                    <View style={styles.foodOrderWebHeader}>
+                        <Text style={styles.foodOrderWebTitle}>{t('map.overlay.order_food')}</Text>
+                        <TouchableOpacity
+                            style={styles.foodOrderWebCloseButton}
+                            onPress={() => setFoodOrderWebUrl(null)}
+                        >
+                            <X size={20} color="#333" />
+                        </TouchableOpacity>
+                    </View>
+                    {foodOrderWebUrl && (
+                        <WebView
+                            source={{ uri: foodOrderWebUrl }}
+                            startInLoadingState
+                            style={styles.foodOrderWebView}
+                        />
+                    )}
+                </View>
+            </Modal>
         </View >
     );
 }
@@ -1819,5 +1909,126 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 1000,
+    },
+    foodOrderModalOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+    },
+    foodOrderModalBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    foodOrderModalCard: {
+        width: '100%',
+        maxWidth: 340,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 16,
+        gap: 10,
+        zIndex: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    foodOrderModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    foodOrderModalIcon: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#FFF7ED',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
+    },
+    foodOrderModalHeaderText: {
+        flex: 1,
+    },
+    foodOrderModalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#111',
+    },
+    foodOrderModalSubtitle: {
+        marginTop: 2,
+        fontSize: 12,
+        color: '#666',
+    },
+    foodOrderOptionButton: {
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        backgroundColor: '#FFFFFF',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    foodOrderOptionLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    foodOrderOptionDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#E65100',
+    },
+    foodOrderOptionText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#1F2937',
+    },
+    foodOrderCancelButton: {
+        marginTop: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 11,
+        borderRadius: 12,
+        backgroundColor: '#F3F4F6',
+    },
+    foodOrderCancelText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#4B5563',
+    },
+    foodOrderWebContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
+    foodOrderWebHeader: {
+        paddingTop: 56,
+        paddingBottom: 12,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    foodOrderWebTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#111',
+    },
+    foodOrderWebCloseButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F3F4F6',
+    },
+    foodOrderWebView: {
+        flex: 1,
     },
 });
