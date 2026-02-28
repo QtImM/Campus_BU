@@ -1060,7 +1060,11 @@ export default function MapScreen() {
                             styles.foodMapBadge,
                             showFoodMap ? styles.foodMapBadgeActive : styles.foodMapBadgeInactive
                         ]}
-                        onPress={() => setShowFoodMap(!showFoodMap)}
+                        onPress={() => {
+                            const next = !showFoodMap;
+                            setShowFoodMap(next);
+                            if (next) setShowBuildingMap(false);
+                        }}
                     >
                         <Utensils size={18} color={showFoodMap ? "#fff" : "#FF6B6B"} />
                         <Text style={[styles.foodMapBadgeText, showFoodMap && { color: '#fff' }]}>
@@ -1074,7 +1078,11 @@ export default function MapScreen() {
                             { marginLeft: 8 },
                             showBuildingMap ? { backgroundColor: '#4B0082', borderColor: '#4B0082' } : styles.foodMapBadgeInactive
                         ]}
-                        onPress={() => setShowBuildingMap(!showBuildingMap)}
+                        onPress={() => {
+                            const next = !showBuildingMap;
+                            setShowBuildingMap(next);
+                            if (next) setShowFoodMap(false);
+                        }}
                     >
                         <Building size={16} color={showBuildingMap ? "#fff" : "#4B0082"} />
                         <Text style={[styles.foodMapBadgeText, showBuildingMap && { color: '#fff' }]}>
