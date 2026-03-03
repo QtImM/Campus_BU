@@ -10,7 +10,7 @@ SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 TABLE_NAME = 'teachers'
 
 def import_with_curl():
-    csv_file = 'hkbu_teachers_master_v3.csv'
+    csv_file = 'data/faculty/hkbu_teachers_master_v3.csv'
     url = f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}"
     
     # 1. Clear old data to prevent duplicates

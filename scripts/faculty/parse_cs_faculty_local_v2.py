@@ -5,7 +5,7 @@ import re
 
 def parse_local_html():
     try:
-        with open('hkbu_cs_faculty.html', 'r', encoding='utf-8') as f:
+        with open('data/faculty/cs_faculty.html', 'r', encoding='utf-8') as f:
             content = f.read()
     except Exception as e:
         print(f"Error reading file: {e}")
@@ -50,7 +50,7 @@ def parse_local_html():
     return teachers
 
 data = parse_local_html()
-with open('hkbu_cs_faculty_parsed_v2.csv', 'w', newline='', encoding='utf-8') as f:
+with open('data/faculty/hkbu_cs_faculty_parsed_v2.csv', 'w', newline='', encoding='utf-8') as f:
     fieldnames = ['Faculty', 'Department', 'Name', 'Title', 'ImageURL', 'Email', 'SourceURL']
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()

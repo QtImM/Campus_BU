@@ -3,8 +3,8 @@ import os
 import re
 
 # File paths
-output_json = r'd:\HKCampus\data\courses_sem2.json'
-output_sql = r'd:\HKCampus\data\courses_sem2.sql'
+output_json = r'data/courses/courses_sem2.json'
+output_sql = r'data/courses/courses_sem2.sql'
 
 def get_department(code):
     prefix = re.match(r'^([A-Z. ]+)', code)

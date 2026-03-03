@@ -8,12 +8,12 @@ def consolidate():
 
     # 定义数据文件及其所属
     files_to_load = [
-        ('Science', 'Physics', 'physics_final_v2.csv'),
-        ('Science', 'Physics', 'physics_research_data.csv'),
-        ('Science', 'Physics', 'physics_support_data.csv'),
-        ('Science', 'Mathematics', 'math_final_v2.csv'),
-        ('Science', 'Computer Science', 'hkbu_cs_faculty_parsed_v2.csv'),
-        ('Communication', 'Communication Studies', 'hkbu_comm_faculty_parsed_v2.csv')
+        ('Science', 'Physics', 'data/faculty/physics_final_v2.csv'),
+        ('Science', 'Physics', 'data/faculty/physics_research_data.csv'),
+        ('Science', 'Physics', 'data/faculty/physics_support_data.csv'),
+        ('Science', 'Mathematics', 'data/faculty/math_final_v2.csv'),
+        ('Science', 'Computer Science', 'data/faculty/hkbu_cs_faculty_parsed_v2.csv'),
+        ('Communication', 'Communication Studies', 'data/faculty/hkbu_comm_faculty_parsed_v2.csv')
     ]
 
     for faculty, dept, filename in files_to_load:
@@ -51,7 +51,7 @@ def consolidate():
             seen_names.add(row[2])
 
     # 写入最终文件
-    output_file = 'hkbu_teachers_final_exhaustive.csv'
+    output_file = 'data/faculty/hkbu_teachers_final_exhaustive.csv'
     with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(header)

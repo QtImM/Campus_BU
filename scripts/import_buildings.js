@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const CSV_PATH = path.join(__dirname, '../data/building_overrides_rows.csv');
+const CSV_PATH = path.join(__dirname, '../data/buildings/building_overrides_rows.csv');
 const BUILDINGS_TS_PATH = path.join(__dirname, '../data/buildings.ts');
-const OUTPUT_SQL_PATH = path.join(__dirname, '../data/buildings_import.sql');
+const OUTPUT_SQL_PATH = path.join(__dirname, '../data/buildings/buildings_import.sql');
 
 async function generateImportSQL() {
     console.log('--- Generating Building Import SQL ---');

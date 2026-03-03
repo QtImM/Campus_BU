@@ -70,13 +70,13 @@ def parse_staff_page(filename, faculty, department, base_url):
     return teachers
 
 # Parse Biol
-biol_data = parse_staff_page('hkbu_biol_faculty.html', 'Science', 'Biology', 'https://biol.hkbu.edu.hk')
+biol_data = parse_staff_page('data/faculty/biol_faculty.html', 'Science', 'Biology', 'https://biol.hkbu.edu.hk')
 # Parse Chem
-chem_data = parse_staff_page('hkbu_chem_faculty.html', 'Science', 'Chemistry', 'https://chem.hkbu.edu.hk')
+chem_data = parse_staff_page('data/faculty/chem_faculty.html', 'Science', 'Chemistry', 'https://chem.hkbu.edu.hk')
 
 all_data = biol_data + chem_data
 
-with open('hkbu_sci_faculty_parsed_v2.csv', 'w', newline='', encoding='utf-8') as f:
+with open('data/faculty/hkbu_sci_faculty_parsed_v2.csv', 'w', newline='', encoding='utf-8') as f:
     fieldnames = ['Faculty', 'Department', 'Name', 'Title', 'ImageURL', 'Email', 'SourceURL']
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
