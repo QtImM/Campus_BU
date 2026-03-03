@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -9,6 +8,18 @@ import { supabase } from './supabase';
 const DEMO_MODE_KEY = 'hkcampus_demo_mode';
 const BIOMETRIC_KEY = 'hkcampus_biometric_enabled';
 const BIOMETRIC_CRED_KEY = 'hkcampus_user_credentials';
+
+// Only import AsyncStorage when needed and when window is available
+const getAsyncStorage = () => {
+    if (typeof window !== 'undefined') {
+        return require('@react-native-async-storage/async-storage').default;
+    }
+    return {
+        getItem: async () => null,
+        setItem: async () => {},
+        removeItem: async () => {},
+    };
+};
 
 // Global flag to skip auth redirects during password reset flow
 let skipAuthRedirect = false;
@@ -25,6 +36,7 @@ export const isDemoMode = async () => {
     if (!APP_CONFIG.useDemoAuth) return false;
 
     // Priority 2: Check local persistence (for switching modes inside app)
+    const AsyncStorage = getAsyncStorage();
     const value = await AsyncStorage.getItem(DEMO_MODE_KEY);
     return value === 'true';
 };
@@ -125,6 +137,7 @@ export const signIn = async (email: string, password: string) => {
             isDemo: true
         };
         // Persist demo mode
+        const AsyncStorage = getAsyncStorage();
         await AsyncStorage.setItem(DEMO_MODE_KEY, 'true');
         return demoUser;
     }
@@ -136,6 +149,7 @@ export const signIn = async (email: string, password: string) => {
     if (error) throw error;
 
     // Clear demo mode if logging into a real account
+    const AsyncStorage = getAsyncStorage();
     await AsyncStorage.removeItem(DEMO_MODE_KEY);
 
     return data.user ? { ...data.user, uid: data.user.id } : null;
@@ -144,6 +158,7 @@ export const signIn = async (email: string, password: string) => {
 // Sign out
 export const signOut = async () => {
     await supabase.auth.signOut();
+    const AsyncStorage = getAsyncStorage();
     await AsyncStorage.removeItem(DEMO_MODE_KEY);
 };
 

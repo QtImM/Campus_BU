@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -13,7 +12,19 @@ const resources = {
     'zh-Hant': { translation: zhHant },
 };
 
+// Only import AsyncStorage when needed and when window is available
+const getAsyncStorage = () => {
+    if (typeof window !== 'undefined') {
+        return require('@react-native-async-storage/async-storage').default;
+    }
+    return {
+        getItem: async () => null,
+        setItem: async () => {},
+    };
+};
+
 const initI18n = async () => {
+    const AsyncStorage = getAsyncStorage();
     let savedLanguage = await AsyncStorage.getItem('language');
 
     if (!savedLanguage) {
@@ -47,13 +58,17 @@ const initI18n = async () => {
     });
 };
 
-initI18n();
+// Only initialize when window is available (client-side)
+if (typeof window !== 'undefined') {
+    initI18n();
+}
 
 /**
  * Switch language and persist the choice
  */
 export const changeLanguage = async (lang: string) => {
     await i18n.changeLanguage(lang);
+    const AsyncStorage = getAsyncStorage();
     await AsyncStorage.setItem('language', lang);
 };
 
