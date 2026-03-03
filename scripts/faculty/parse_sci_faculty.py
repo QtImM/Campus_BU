@@ -5,7 +5,7 @@ import re
 
 def parse_science_faculty():
     try:
-        with open('hkbu_sci_faculty.html', 'r', encoding='utf-8') as f:
+        with open('data/faculty/sci_faculty.html', 'r', encoding='utf-8') as f:
             content = f.read()
     except Exception as e:
         print(f"Error reading file: {e}")
@@ -95,7 +95,7 @@ def parse_science_faculty():
     return teachers
 
 data = parse_science_faculty()
-with open('hkbu_sci_faculty_parsed.csv', 'w', newline='', encoding='utf-8') as f:
+with open('data/faculty/hkbu_sci_data/faculty/hkbu_comm_faculty_parsed.csv', 'w', newline='', encoding='utf-8') as f:
     fieldnames = ['Faculty', 'Department', 'Name', 'Title', 'ImageURL', 'Email', 'SourceURL']
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()

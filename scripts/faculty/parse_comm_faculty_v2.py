@@ -5,7 +5,7 @@ import re
 
 def parse_comm_faculty():
     try:
-        with open('hkbu_comm_faculty.html', 'r', encoding='utf-8') as f:
+        with open('data/faculty/hkbu_comm_faculty.html', 'r', encoding='utf-8') as f:
             content = f.read()
     except Exception as e:
         print(f"Error reading file: {e}")
@@ -14,18 +14,14 @@ def parse_comm_faculty():
     soup = BeautifulSoup(content, 'html.parser')
     teachers = []
     
-    # In HKBU Comm faculty page, looking at the grep/Get-Content output:
-    # <div class="staff-profile-block">
-    # <div class="staff-profile-avatar circle">
-    # <a href="...">
-    
     seen_names = set()
     
-    for block in soup.select('.staff-profile-block, .staff-item, .views-row'):
-        name_tag = block.find(['h3', 'h4', 'div', 'a'], class_=re.compile(r'name|title'))
-        # If not found by class, try any bold/header text
+    # Target specific classes found in AEM structure
+    # Based on the classes list: 'staff-profile-block', 'staff-profile-name', 'staff-profile-avatar'
+    for block in soup.select('.staff-profile-block'):
+        name_tag = block.select_one('.staff-profile-name')
         if not name_tag:
-             name_tag = block.find(['h3', 'h4', 'strong'])
+            name_tag = block.find(['h3', 'h4', 'div', 'p'])
         
         if not name_tag: continue
         
@@ -36,9 +32,16 @@ def parse_comm_faculty():
         
         # Title
         title = "Staff Member"
-        title_tag = block.find(['p', 'span', 'div'], class_=re.compile(r'position|title|designation'))
+        title_tag = block.select_one('.staff-profile-title, .staff-profile-position')
         if title_tag:
             title = title_tag.get_text(strip=True)
+        else:
+            # Maybe it's just the next sibling or another div
+            for p in block.find_all('p'):
+                t = p.get_text(strip=True)
+                if t and t != name:
+                    title = t
+                    break
         
         # Image
         img_url = ""
@@ -48,7 +51,7 @@ def parse_comm_faculty():
             if src.startswith('http'):
                 img_url = src
             else:
-                img_url = "https://comm.hkbu.edu.hk" + src
+                img_url = "https://www.hkbu.edu.hk" + src # AEM assets are often relative to main domain
         
         # Email
         email = ""
@@ -64,14 +67,9 @@ def parse_comm_faculty():
             if not profile_url.startswith('http'):
                 profile_url = "https://comm.hkbu.edu.hk" + profile_url
 
-        # Department
-        department = "Communication"
-        # Often there's a header or section context
-        # But this is already the "people" page for the school.
-        
         teachers.append({
             'Faculty': 'Communication',
-            'Department': department,
+            'Department': 'Communication',
             'Name': name,
             'Title': title,
             'ImageURL': img_url,
@@ -82,7 +80,7 @@ def parse_comm_faculty():
     return teachers
 
 data = parse_comm_faculty()
-with open('hkbu_comm_faculty_parsed.csv', 'w', newline='', encoding='utf-8') as f:
+with open('data/faculty/hkbu_comm_faculty_parsed_v2.csv', 'w', newline='', encoding='utf-8') as f:
     fieldnames = ['Faculty', 'Department', 'Name', 'Title', 'ImageURL', 'Email', 'SourceURL']
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
