@@ -5,7 +5,7 @@ import re
 
 def parse_local_html():
     try:
-        with open('hkbu_cs_faculty.html', 'r', encoding='utf-8') as f:
+        with open('data/faculty/cs_faculty.html', 'r', encoding='utf-8') as f:
             content = f.read()
     except Exception as e:
         print(f"Error reading file: {e}")
@@ -78,7 +78,7 @@ print(f"Found {len(data)} teachers.")
 # Append to or Create CSV
 # We will overwrite the CS section of our main CSV later, 
 # for now let's save to a temp file to verify.
-with open('hkbu_cs_faculty_parsed.csv', 'w', newline='', encoding='utf-8') as f:
+with open('data/faculty/hkbu_cs_data/faculty/hkbu_comm_faculty_parsed.csv', 'w', newline='', encoding='utf-8') as f:
     fieldnames = ['Faculty', 'Department', 'Name', 'Title', 'ImageURL', 'SourceURL']
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
