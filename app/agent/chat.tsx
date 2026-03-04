@@ -27,7 +27,8 @@ export default function AgentChatScreen() {
         role: 'user' | 'assistant',
         content: string,
         steps?: AgentStep[],
-        quickReplies?: string[]
+        quickReplies?: string[],
+        id?: string
     }[]>([]);
     const [loading, setLoading] = useState(false);
     const [showWebView, setShowWebView] = useState(false);
@@ -104,25 +105,47 @@ export default function AgentChatScreen() {
         setLoading(true);
 
         try {
-            let response;
+            let response: any;
             if (useLangGraph) {
                 console.log('[Agent] Using LangGraph Pilot...');
-                // Dynamically ensure LangGraphExecutor is loaded
                 if (!langGraphAgentRef.current) {
                     const { LangGraphExecutor } = await import('../../services/agent/langgraph_executor');
                     langGraphAgentRef.current = new LangGraphExecutor('demo-user');
                 }
                 response = await langGraphAgentRef.current.process(userMsg);
+
+                setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: response.finalAnswer || '',
+                    steps: response.steps,
+                    quickReplies: response.quickReplies
+                }]);
             } else {
-                response = await agentRef.current.process(userMsg);
+                const streamId = Date.now().toString();
+                // Insert a placeholder message that will be updated in real-time
+                setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: '', // Start empty
+                    id: streamId
+                }]);
+
+                const onUpdate = (text: string) => {
+                    setMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: text || '...' } : m));
+                    // Auto-scroll slightly while typing
+                    scrollViewRef.current?.scrollToEnd({ animated: false });
+                };
+
+                response = await agentRef.current.process(userMsg, onUpdate);
+
+                // Finalize the message with any quick replies or step metadata if needed
+                setMessages(prev => prev.map(m => m.id === streamId ? {
+                    ...m,
+                    content: response.finalAnswer || m.content,
+                    steps: response.steps,
+                    quickReplies: response.quickReplies
+                } : m));
             }
 
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: response.finalAnswer || '',
-                steps: response.steps,
-                quickReplies: response.quickReplies
-            }]);
         } catch (error: any) {
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -215,12 +238,17 @@ export default function AgentChatScreen() {
                                 styles.bubble,
                                 msg.role === 'user' ? styles.userBubble : styles.botBubble
                             ]}>
-                                <Text style={[
-                                    styles.messageText,
-                                    msg.role === 'user' ? styles.userText : styles.botText
-                                ]}>
-                                    {renderFormattedText(msg.content)}
-                                </Text>
+                                <View style={styles.messageContentWrapper}>
+                                    {msg.role === 'assistant' ? (
+                                        msg.content === '' ? (
+                                            <ActivityIndicator size="small" color="#1E3A8A" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
+                                        ) : (
+                                            renderFormattedText(msg.content, false)
+                                        )
+                                    ) : (
+                                        renderFormattedText(msg.content, true)
+                                    )}
+                                </View>
                             </View>
 
                             {msg.quickReplies && msg.quickReplies.length > 0 && (
@@ -237,44 +265,10 @@ export default function AgentChatScreen() {
                                 </View>
                             )}
 
-                            {/* Agent Thinking Steps (Visualization for Interview) */}
-                            {APP_CONFIG.shouldShowDebug(currentUser?.uid) && msg.steps && msg.steps.length > 0 && (
-                                <View style={styles.stepsContainer}>
-                                    {msg.steps.filter(s => s.action).map((step, idx) => (
-                                        <View key={idx} style={styles.stepItem}>
-                                            <View style={styles.stepIndicator} />
-                                            <View>
-                                                <Text style={styles.stepAction}>行为: {step.action?.tool}</Text>
-                                                {step.observation && (
-                                                    <Text style={styles.stepThought} numberOfLines={1}>结果: {step.observation}</Text>
-                                                )}
-                                                {step.action?.tool === 'book_library_seat' && (
-                                                    <TouchableOpacity
-                                                        style={styles.confirmBookingButton}
-                                                        onPress={() => handleSend('确认预定')}
-                                                    >
-                                                        <Text style={styles.confirmBookingText}>确认预定并提交</Text>
-                                                    </TouchableOpacity>
-                                                )}
-                                            </View>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
                         </View>
                     </View>
                 ))}
 
-                {loading && (
-                    <View style={styles.botWrapper}>
-                        <View style={[styles.avatar, { backgroundColor: '#1E3A8A' }]}>
-                            <Bot size={16} color="#fff" />
-                        </View>
-                        <View style={styles.loadingBubble}>
-                            <ActivityIndicator size="small" color="#1E3A8A" />
-                        </View>
-                    </View>
-                )}
             </ScrollView>
 
             <View style={styles.inputArea}>
@@ -466,6 +460,10 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
+    messageContentWrapper: {
+        minHeight: 24,
+        justifyContent: 'center',
+    },
     messageText: {
         fontSize: 15,
         lineHeight: 22,
@@ -650,16 +648,18 @@ const styles = StyleSheet.create({
 /**
  * Helper to render basic Markdown
  */
-function renderFormattedText(text: string) {
+function renderFormattedText(text: string, isUser: boolean = false) {
     if (!text) return null;
     const lines = text.split('\n');
+    const textColor = isUser ? '#fff' : '#1F2937';
+
     return lines.map((line, i) => {
         // Bullet points
         if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
             return (
                 <View key={i} style={{ flexDirection: 'row', paddingLeft: 8, marginBottom: 4 }}>
-                    <Text style={{ fontSize: 13, marginRight: 6 }}>•</Text>
-                    <Text style={{ fontSize: 15, color: '#1F2937', flex: 1 }}>{line.trim().substring(2)}</Text>
+                    <Text style={{ fontSize: 13, marginRight: 6, color: textColor }}>•</Text>
+                    <Text style={{ fontSize: 15, color: textColor, flex: 1 }}>{line.trim().substring(2)}</Text>
                 </View>
             );
         }
@@ -672,7 +672,7 @@ function renderFormattedText(text: string) {
             if (match.index > lastIndex) {
                 parts.push(line.substring(lastIndex, match.index));
             }
-            parts.push(<Text key={match.index} style={{ fontWeight: 'bold' }}>{match[1]}</Text>);
+            parts.push(<Text key={match.index} style={{ fontWeight: 'bold', color: textColor }}>{match[1]}</Text>);
             lastIndex = boldRegex.lastIndex;
         }
         if (lastIndex < line.length) {
@@ -680,9 +680,10 @@ function renderFormattedText(text: string) {
         }
 
         return (
-            <Text key={i} style={{ fontSize: 15, color: '#1F2937', marginBottom: 4 }}>
+            <Text key={i} style={{ fontSize: 15, color: textColor, marginBottom: 4 }}>
                 {parts.length > 0 ? parts : line}
             </Text>
         );
     });
 }
+
