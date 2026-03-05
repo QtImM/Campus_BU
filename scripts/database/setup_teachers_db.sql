@@ -71,6 +71,8 @@ $$ language plpgsql security definer;
 create or replace function public.decrement_teacher_review_likes(rid uuid)
 returns void as $$
 begin
+  update public.teacher_reviews
+  set likes = likes - 1
   where id = rid;
 end;
 $$ language plpgsql security definer;

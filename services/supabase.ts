@@ -1,13 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 import storage from '../lib/storage';
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.error('Supabase credentials missing in environment variables!');
-}
+// 这里只需要切换 true / false 即可
+const IS_PROD = true; // 开发时 false，打包正式/TestFlight 改成 true
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+const DEV_CONFIG = {
+    url: 'https://baihmybeajpfitionsbv.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhaWhteWJlYWpwZml0aW9uc2J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1Mzc4MjksImV4cCI6MjA4NjExMzgyOX0.wS-XzFRyZAJhaxl21rT32Ij2dCbWLDdCGl1hObk9OOo'
+};
+
+const PROD_CONFIG = {
+    url: 'https://fcbsekidlijtidqzkddx.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjYnNla2lkbGlqdGlkcXprZGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2NzgzMDAsImV4cCI6MjA4ODI1NDMwMH0.nOSFfSYw0_xAF9zt4S1qpppsCX3cD7BzRJoJI33Kxoo'
+};
+
+const config = IS_PROD ? PROD_CONFIG : DEV_CONFIG;
+
+console.log('🔧 Supabase Config:', IS_PROD ? 'PRODUCTION' : 'DEVELOPMENT');
+console.log('🔗 Connecting to:', config.url);
+
+export const supabase = createClient(config.url, config.key, {
     auth: {
         storage: storage,
         autoRefreshToken: true,
