@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Skeleton } from '../../components/common/Skeleton';
 import { getCurrentUser } from '../../services/auth';
-import { getLocalCourses } from '../../services/courses';
+import { enrichCoursesWithReviewStats, getLocalCourses } from '../../services/courses';
 import {
     loadCourseFavorites,
     saveCourseFavoritesLocal,
@@ -68,6 +68,8 @@ export default function CoursesScreen() {
             setLoading(true);
         }
         try {
+            const normalizeCode = (value?: string) => (value || '').toUpperCase().replace(/\s+/g, '');
+
             // 1. Fetch from Supabase (may fail if table missing)
             const { data: dbData, error: dbError } = await supabase
                 .from('courses')
@@ -91,39 +93,62 @@ export default function CoursesScreen() {
             // 2. Fetch from Local Storage
             const localCourses = await getLocalCourses();
 
-            // 3. Merge All (Local > DB > Mock) - deduplicate by id
+            // 3. Merge by course code first (preferred), fallback to id.
+            // This avoids duplicate local/db entries for the same course.
             const courseMap = new Map<string, Course>();
-            
-            // Add local courses first (highest priority)
-            localCourses.forEach(c => courseMap.set(c.id, c));
-            
-            // Add DB courses (won't overwrite local)
+            const keyOf = (c: Course) => normalizeCode(c.code) || c.id;
+
+            localCourses.forEach(c => courseMap.set(keyOf(c), c));
+
             dbCourses.forEach(c => {
-                if (!courseMap.has(c.id)) {
-                    courseMap.set(c.id, c);
+                const key = keyOf(c);
+                const existing = courseMap.get(key);
+                if (!existing) {
+                    courseMap.set(key, c);
+                    return;
                 }
+                // Prefer DB ID when available so downstream queries align with canonical rows.
+                const merged: Course = {
+                    ...existing,
+                    ...c,
+                    id: c.id || existing.id,
+                    code: existing.code || c.code,
+                    name: existing.name || c.name,
+                    instructor: existing.instructor || c.instructor,
+                    department: existing.department || c.department,
+                    credits: existing.credits || c.credits,
+                    reviewCount: Math.max(existing.reviewCount || 0, c.reviewCount || 0),
+                    rating: (c.reviewCount || 0) > 0 ? c.rating : existing.rating,
+                };
+                courseMap.set(key, merged);
             });
 
-            // Add mock courses (lowest priority)
             MOCK_COURSES.forEach(mock => {
-                if (!courseMap.has(mock.id) && ![...courseMap.values()].find(c => c.code === mock.code)) {
-                    courseMap.set(mock.id, mock);
+                const key = keyOf(mock);
+                if (!courseMap.has(key)) {
+                    courseMap.set(key, mock);
                 }
             });
 
-            setCourses(Array.from(courseMap.values()));
+            const mergedCourses = Array.from(courseMap.values());
+            const coursesWithStats = await enrichCoursesWithReviewStats(mergedCourses);
+            setCourses(coursesWithStats);
         } catch (err) {
             console.log('Fetch courses silent error (expected if table missing):', err);
             // Fallback to local + mock if everything fails
             const localOnly = await getLocalCourses();
+            const normalizeCode = (value?: string) => (value || '').toUpperCase().replace(/\s+/g, '');
             const fallbackMap = new Map<string, Course>();
-            localOnly.forEach(c => fallbackMap.set(c.id, c));
+            localOnly.forEach(c => fallbackMap.set(normalizeCode(c.code) || c.id, c));
             MOCK_COURSES.forEach(mock => {
-                if (!fallbackMap.has(mock.id) && ![...fallbackMap.values()].find(c => c.code === mock.code)) {
-                    fallbackMap.set(mock.id, mock);
+                const key = normalizeCode(mock.code) || mock.id;
+                if (!fallbackMap.has(key)) {
+                    fallbackMap.set(key, mock);
                 }
             });
-            setCourses(Array.from(fallbackMap.values()));
+            const mergedFallback = Array.from(fallbackMap.values());
+            const fallbackWithStats = await enrichCoursesWithReviewStats(mergedFallback);
+            setCourses(fallbackWithStats);
         } finally {
             setLoading(false);
             setRefreshing(false);

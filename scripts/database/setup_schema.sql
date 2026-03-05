@@ -338,9 +338,13 @@ alter table public.course_teaming enable row level security;
 -- 删除旧策略（如果存在）
 DROP POLICY IF EXISTS "Teaming requests are viewable by everyone." ON public.course_teaming;
 DROP POLICY IF EXISTS "Anyone can insert teaming requests." ON public.course_teaming;
+DROP POLICY IF EXISTS "Anyone can update teaming requests." ON public.course_teaming;
+DROP POLICY IF EXISTS "Anyone can delete teaming requests." ON public.course_teaming;
 
 create policy "Teaming requests are viewable by everyone." on public.course_teaming for select using ( true );
 create policy "Anyone can insert teaming requests." on public.course_teaming for insert with check ( true );
+create policy "Anyone can update teaming requests." on public.course_teaming for update using ( true ) with check ( true );
+create policy "Anyone can delete teaming requests." on public.course_teaming for delete using ( true );
 
 -- 14. 组队评论表 (Teaming Comments)
 create table if not exists public.teaming_comments (
@@ -358,9 +362,11 @@ alter table public.teaming_comments enable row level security;
 -- 删除旧策略（如果存在）
 DROP POLICY IF EXISTS "Teaming comments are viewable by everyone." ON public.teaming_comments;
 DROP POLICY IF EXISTS "Anyone can insert teaming comments." ON public.teaming_comments;
+DROP POLICY IF EXISTS "Anyone can delete teaming comments." ON public.teaming_comments;
 
 create policy "Teaming comments are viewable by everyone." on public.teaming_comments for select using ( true );
 create policy "Anyone can insert teaming comments." on public.teaming_comments for insert with check ( true );
+create policy "Anyone can delete teaming comments." on public.teaming_comments for delete using ( true );
 
 -- 15. 组队评论数自增函数
 create or replace function public.increment_teaming_comment_count(row_id uuid)

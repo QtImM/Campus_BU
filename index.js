@@ -3,6 +3,16 @@ import { TextDecoder, TextEncoder } from 'fast-text-encoding';
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 
+// Silence i18next promotional info logs in development output.
+const originalConsoleInfo = console.info;
+console.info = (...args) => {
+    const first = args?.[0];
+    if (typeof first === 'string' && first.includes('i18next is maintained with support from Locize')) {
+        return;
+    }
+    originalConsoleInfo(...args);
+};
+
 // Ensure global Web APIs are available
 if (typeof global.TextEncoder === 'undefined') {
     global.TextEncoder = TextEncoder;

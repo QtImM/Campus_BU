@@ -16,9 +16,6 @@ const PROD_CONFIG = {
 
 const config = IS_PROD ? PROD_CONFIG : DEV_CONFIG;
 
-console.log('🔧 Supabase Config:', IS_PROD ? 'PRODUCTION' : 'DEVELOPMENT');
-console.log('🔗 Connecting to:', config.url);
-
 export const supabase = createClient(config.url, config.key, {
     auth: {
         storage: storage,

@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, Tag, ThumbsUp, UserPlus, Users, X } from 'lucide-react-native';
+import { ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, Tag, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -21,9 +21,9 @@ import {
 import { EduBadge } from '../../components/common/EduBadge';
 import storage from '../../lib/storage';
 import { getCurrentUser } from '../../services/auth';
-import { addReview, getCourseById, getReviews, hasUserReviewed, likeReview } from '../../services/courses';
+import { addReview, deleteReview, getCourseById, getReviews, hasUserReviewed, likeReview } from '../../services/courses';
 import { supabase } from '../../services/supabase';
-import { fetchTeamingComments, fetchTeamingRequests, postTeamingComment, postTeamingRequest, toggleTeamingLike } from '../../services/teaming';
+import { deleteTeamingRequest, fetchTeamingComments, fetchTeamingRequests, postTeamingComment, postTeamingRequest, toggleTeamingLike } from '../../services/teaming';
 import { ContactMethod, Course, CourseTeaming, Review, TeamingComment } from '../../types';
 import { isHKBUEmail } from '../../utils/userUtils';
 // Helper function to check if string is a URL
@@ -131,22 +131,19 @@ export default function CourseDetailScreen() {
 
         if (data) setMessages(data);
 
-        // Load reviews only if ID is a valid UUID or local_
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        // Always attempt to load reviews for non-demo courses.
+        // Course IDs in this project are not guaranteed to be UUIDs.
         const isMockId = id === '1';
-        const isLocalId = (id as string).startsWith('local_');
-        const isDbId = uuidRegex.test(id as string);
-
-        if (isDbId || isLocalId) {
-            const reviewsData = await getReviews(id as string);
+        if (isMockId) {
+            setReviews(MOCK_REVIEWS);
+        } else {
+            const reviewsData = await getReviews(id as string, courseData?.code);
             setReviews(reviewsData);
 
             if (currentUser) {
-                const reviewed = await hasUserReviewed(id as string, currentUser.uid);
+                const reviewed = await hasUserReviewed(id as string, currentUser.uid, courseData?.code);
                 setHasReviewed(reviewed);
             }
-        } else if (isMockId) {
-            setReviews(MOCK_REVIEWS);
         }
 
         loadTeaming();
@@ -320,6 +317,51 @@ export default function CourseDetailScreen() {
         if (error) {
             console.error('Like error:', error);
         }
+    };
+
+    const handleDeleteReview = (review: Review) => {
+        if (!user || review.authorId !== user.uid) return;
+
+        Alert.alert('Delete Review', 'Are you sure you want to delete this review?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    const { error } = await deleteReview(review.id, user.uid, id as string);
+                    if (error) {
+                        Alert.alert('Error', `Failed to delete review: ${error.message || 'Unknown error'}`);
+                        return;
+                    }
+
+                    setReviews(prev => prev.filter(r => r.id !== review.id));
+                    setHasReviewed(false);
+                    loadData();
+                }
+            }
+        ]);
+    };
+
+    const handleDeleteTeaming = (teaming: CourseTeaming) => {
+        if (!user || teaming.userId !== user.uid) return;
+
+        Alert.alert('Delete Teaming Post', 'Are you sure you want to delete this teaming post?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    const { success, error } = await deleteTeamingRequest(teaming.id, user.uid);
+                    if (!success) {
+                        Alert.alert('Error', error || 'Failed to delete teaming post.');
+                        return;
+                    }
+
+                    setTeamingRequests(prev => prev.filter(item => item.id !== teaming.id));
+                    await loadTeaming();
+                }
+            }
+        ]);
     };
 
     const handlePostTeaming = async () => {
@@ -498,22 +540,30 @@ export default function CourseDetailScreen() {
 
             <View style={styles.reviewFooter}>
                 <Text style={styles.date}>{item.createdAt.toLocaleDateString()}</Text>
-                <TouchableOpacity
-                    style={styles.likeButton}
-                    onPress={() => handleLike(item.id)}
-                >
-                    <ThumbsUp
-                        size={14}
-                        color={likedReviewIds.includes(item.id) ? "#4B0082" : "#6B7280"}
-                        fill={likedReviewIds.includes(item.id) ? "#4B0082" : "transparent"}
-                    />
-                    <Text style={[
-                        styles.likeCount,
-                        likedReviewIds.includes(item.id) && { color: '#4B0082', fontWeight: 'bold' }
-                    ]}>
-                        {item.likes}
-                    </Text>
-                </TouchableOpacity>
+                <View style={styles.reviewActions}>
+                    <TouchableOpacity
+                        style={styles.likeButton}
+                        onPress={() => handleLike(item.id)}
+                    >
+                        <ThumbsUp
+                            size={14}
+                            color={likedReviewIds.includes(item.id) ? "#4B0082" : "#6B7280"}
+                            fill={likedReviewIds.includes(item.id) ? "#4B0082" : "transparent"}
+                        />
+                        <Text style={[
+                            styles.likeCount,
+                            likedReviewIds.includes(item.id) && { color: '#4B0082', fontWeight: 'bold' }
+                        ]}>
+                            {item.likes}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {item.authorId === user?.uid && (
+                        <TouchableOpacity style={styles.deleteTag} onPress={() => handleDeleteReview(item)}>
+                            <Trash2 size={12} color="#B91C1C" />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
         </View>
     );
@@ -581,13 +631,21 @@ export default function CourseDetailScreen() {
                         <Text style={styles.teamingStatText}>{item.commentCount}</Text>
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                    style={styles.contactIconBtn}
-                    onPress={() => setSelectedTeamingContact(item)}
-                >
-                    <Send size={14} color="#fff" />
-                    <Text style={styles.contactIconBtnText}>Contact</Text>
-                </TouchableOpacity>
+                <View style={styles.teamingRightActions}>
+                    {item.userId === user?.uid && (
+                        <TouchableOpacity style={styles.deleteTag} onPress={() => handleDeleteTeaming(item)}>
+                            <Trash2 size={12} color="#B91C1C" />
+                        </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                        style={styles.contactIconBtn}
+                        onPress={() => setSelectedTeamingContact(item)}
+                    >
+                        <Send size={14} color="#fff" />
+                        <Text style={styles.contactIconBtnText}>Contact</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
@@ -1404,8 +1462,19 @@ const styles = StyleSheet.create({
         paddingTop: 12,
     },
     date: { fontSize: 11, color: '#9CA3AF' },
+    reviewActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     likeButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     likeCount: { fontSize: 12, color: '#6B7280' },
+    deleteTag: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FCA5A5',
+        backgroundColor: '#FEF2F2',
+    },
 
     // Sorting
     sortContainer: { flexDirection: 'row', gap: 12, marginBottom: 16, paddingHorizontal: 20 },
@@ -1615,6 +1684,11 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 12,
         fontWeight: '700',
+    },
+    teamingRightActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
     },
     teamingContainer: {
         flex: 1,

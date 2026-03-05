@@ -114,6 +114,87 @@ export const getLocalCourses = async (): Promise<Course[]> => {
     }
 };
 
+/**
+ * Recompute review stats for a course list using code-based matching.
+ * This handles mixed course_id formats across old/new databases.
+ */
+export const enrichCoursesWithReviewStats = async (courseList: Course[]): Promise<Course[]> => {
+    try {
+        if (!courseList || courseList.length === 0) return courseList;
+
+        const normalize = (value: string) => (value || '').toUpperCase().replace(/\s+/g, '');
+
+        const { data: dbCourses } = await supabase
+            .from('courses')
+            .select('id, code');
+
+        const codeToDbIds = new Map<string, Set<string>>();
+        (dbCourses || []).forEach((row: any) => {
+            const code = normalize(row.code);
+            if (!code) return;
+            if (!codeToDbIds.has(code)) codeToDbIds.set(code, new Set<string>());
+            codeToDbIds.get(code)!.add(row.id);
+        });
+
+        const { data: reviewRows, error: reviewError } = await supabase
+            .from('course_reviews')
+            .select('course_id, rating')
+            .not('course_id', 'is', null);
+
+        if (reviewError || !reviewRows) {
+            return courseList;
+        }
+
+        const statsByCourseId = new Map<string, { count: number; sum: number }>();
+        reviewRows.forEach((row: any) => {
+            const id = String(row.course_id || '');
+            if (!id) return;
+            const prev = statsByCourseId.get(id) || { count: 0, sum: 0 };
+            prev.count += 1;
+            prev.sum += row.rating || 0;
+            statsByCourseId.set(id, prev);
+        });
+
+        return courseList.map(course => {
+            const candidates = new Set<string>();
+            candidates.add(course.id);
+
+            const code = normalize(course.code);
+            if (code) {
+                candidates.add(code);
+                candidates.add(`local_${code}`);
+                const matchedIds = codeToDbIds.get(code);
+                if (matchedIds) {
+                    matchedIds.forEach(id => candidates.add(id));
+                }
+            }
+
+            let totalCount = 0;
+            let totalSum = 0;
+            candidates.forEach(id => {
+                const stat = statsByCourseId.get(id);
+                if (!stat) return;
+                totalCount += stat.count;
+                totalSum += stat.sum;
+            });
+
+            if (totalCount === 0) {
+                // Keep existing values when cross-ID aggregation cannot find matches.
+                return course;
+            }
+
+            return {
+                ...course,
+                reviewCount: totalCount,
+                rating: parseFloat((totalSum / totalCount).toFixed(1)),
+            };
+        });
+    } catch (e) {
+        console.error('Error enriching course review stats:', e);
+        return courseList;
+    }
+};
+
 export const addLocalCourse = async (course: Partial<Course>): Promise<{ data: any; error: any }> => {
     try {
         const existing = await getLocalCourses();
@@ -219,14 +300,14 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
     };
 };
 
-export const getReviews = async (courseId: string): Promise<Review[]> => {
-    const resolvedCourseId = await resolveCourseIdForReviewQueries(courseId);
+export const getReviews = async (courseId: string, courseCode?: string): Promise<Review[]> => {
+    const candidateCourseIds = await buildReviewCourseIdCandidates(courseId, courseCode);
 
     // Query Supabase for all courses (including local_ ones)
     const { data, error } = await supabase
         .from('course_reviews')
         .select('*, author:users!author_id(email, display_name, avatar_url)')
-        .eq('course_id', resolvedCourseId)
+        .in('course_id', candidateCourseIds)
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -254,15 +335,15 @@ export const getReviews = async (courseId: string): Promise<Review[]> => {
     });
 };
 
-export const hasUserReviewed = async (courseId: string, userId: string): Promise<boolean> => {
-    const resolvedCourseId = await resolveCourseIdForReviewQueries(courseId);
+export const hasUserReviewed = async (courseId: string, userId: string, courseCode?: string): Promise<boolean> => {
+    const candidateCourseIds = await buildReviewCourseIdCandidates(courseId, courseCode);
 
     // Check in database for all courses (including local_ ones)
 
     const { count, error } = await supabase
         .from('course_reviews')
         .select('*', { count: 'exact', head: true })
-        .eq('course_id', resolvedCourseId)
+        .in('course_id', candidateCourseIds)
         .eq('author_id', userId)
         .not('rating', 'is', null);
 
@@ -295,14 +376,111 @@ const resolveCourseIdForReviewQueries = async (courseId: string): Promise<string
     return existingByCode?.id || courseId;
 };
 
+const normalizeCourseCode = (value: string): string =>
+    (value || '').toUpperCase().replace(/\s+/g, '');
+
+const buildReviewCourseIdCandidates = async (courseId: string, seedCourseCode?: string): Promise<string[]> => {
+    const candidates = new Set<string>();
+    if (!courseId) return [];
+
+    candidates.add(courseId);
+    const normalizedInput = normalizeCourseCode(courseId);
+    if (normalizedInput) {
+        candidates.add(normalizedInput);
+    }
+
+    const resolved = await resolveCourseIdForReviewQueries(courseId);
+    if (resolved) {
+        candidates.add(resolved);
+    }
+
+    const normalizedSeedCode = normalizeCourseCode(seedCourseCode || '');
+    if (normalizedSeedCode) {
+        candidates.add(normalizedSeedCode);
+        candidates.add(`local_${normalizedSeedCode}`);
+
+        const { data: bySeedCode } = await supabase
+            .from('courses')
+            .select('id')
+            .eq('code', normalizedSeedCode)
+            .maybeSingle();
+        if (bySeedCode?.id) {
+            candidates.add(bySeedCode.id);
+        }
+    }
+
+    if (courseId.startsWith('local_')) {
+        const localCourses = await getLocalCourses();
+        const matchedCourse = localCourses.find(c => c.id === courseId);
+        const normalizedCode = normalizeCourseCode(matchedCourse?.code || courseId.replace(/^local_/, ''));
+
+        if (normalizedCode) {
+            candidates.add(normalizedCode);
+            candidates.add(`local_${normalizedCode}`);
+
+            const { data: byCode } = await supabase
+                .from('courses')
+                .select('id')
+                .eq('code', normalizedCode)
+                .maybeSingle();
+            if (byCode?.id) {
+                candidates.add(byCode.id);
+            }
+        }
+    } else {
+        // 1) Try to get course by ID first (if input is an ID)
+        let normalizedCode = normalizedInput;
+        const { data: byId } = await supabase
+            .from('courses')
+            .select('id, code')
+            .eq('id', courseId)
+            .maybeSingle();
+
+        if (byId?.code) {
+            normalizedCode = normalizeCourseCode(byId.code);
+        } else {
+            // 2) If input is not a valid ID, assume it might be a course code
+            // Try to find course by code
+            const { data: byCourseCode } = await supabase
+                .from('courses')
+                .select('id, code')
+                .eq('code', normalizedInput)
+                .maybeSingle();
+            
+            if (byCourseCode) {
+                candidates.add(byCourseCode.id);
+                normalizedCode = normalizeCourseCode(byCourseCode.code);
+            }
+        }
+
+        if (normalizedCode) {
+            candidates.add(normalizedCode);
+            candidates.add(`local_${normalizedCode}`);
+            
+            // Also search by code to ensure we get the DB ID
+            const { data: byCode } = await supabase
+                .from('courses')
+                .select('id')
+                .eq('code', normalizedCode)
+                .maybeSingle();
+            if (byCode?.id) {
+                candidates.add(byCode.id);
+            }
+        }
+    }
+
+    return Array.from(candidates).filter(Boolean);
+};
+
 const ensureCourseExistsForReview = async (courseId?: string): Promise<{ resolvedCourseId?: string; error: any }> => {
     if (!courseId) {
         return { resolvedCourseId: undefined, error: { message: 'MISSING_COURSE_ID' } };
     }
 
+    // 1) Try to find course by ID
     const { data: existingCourse, error: checkError } = await supabase
         .from('courses')
-        .select('id')
+        .select('id, code')
         .eq('id', courseId)
         .maybeSingle();
 
@@ -314,6 +492,21 @@ const ensureCourseExistsForReview = async (courseId?: string): Promise<{ resolve
         return { resolvedCourseId: existingCourse.id, error: null };
     }
 
+    // 2) If not found by ID, try to find by course code (input might be a code like "ACCT1006")
+    const normalizedInputCode = normalizeCourseCode(courseId);
+    if (normalizedInputCode) {
+        const { data: existingByCode, error: codeCheckError } = await supabase
+            .from('courses')
+            .select('id, code')
+            .eq('code', normalizedInputCode)
+            .maybeSingle();
+
+        if (!codeCheckError && existingByCode) {
+            return { resolvedCourseId: existingByCode.id, error: null };
+        }
+    }
+
+    // 3) If still not found, try local courses
     const localCourses = await getLocalCourses();
     const matchedCourse = localCourses.find(c => c.id === courseId);
 
@@ -352,6 +545,7 @@ export const addReview = async (reviewData: Partial<Review>): Promise<{ error: a
     const requestedCourseId = reviewData.courseId;
 
     const { resolvedCourseId, error: ensureCourseError } = await ensureCourseExistsForReview(requestedCourseId);
+    
     if (ensureCourseError) {
         console.error('addReview ensureCourseError:', ensureCourseError);
         if (requestedCourseId?.startsWith('local_')) {
@@ -384,30 +578,70 @@ export const addReview = async (reviewData: Partial<Review>): Promise<{ error: a
         return { error: insertError };
     }
 
-    // Recalculate average rating if stars were provided
-    if (reviewData.rating) {
-        const { data: allRatings } = await supabase
+    // Recalculate average rating and review count using all possible course_id candidates
+    // This handles cases where reviews might be stored with different ID formats (UUID, code, local_xxx)
+    if (requestedCourseId && courseId) {
+        await updateCourseStatsForAllCandidates(requestedCourseId, courseId);
+    }
+
+    return { error: null };
+};
+
+/**
+ * Update course rating and review_count by aggregating reviews from all possible course_id candidates
+ */
+const updateCourseStatsForAllCandidates = async (originalCourseId: string, resolvedCourseId: string) => {
+    try {
+        // Get all possible course_id values that might be in course_reviews table
+        const candidateIds = await buildReviewCourseIdCandidates(originalCourseId);
+
+        if (candidateIds.length === 0) {
+            return;
+        }
+
+        // Get all reviews with ratings for any of these candidate IDs
+        const { data: allRatings, error: fetchError } = await supabase
             .from('course_reviews')
-            .select('rating')
-            .eq('course_id', courseId)
+            .select('rating, course_id')
+            .in('course_id', candidateIds)
             .not('rating', 'is', null);
+
+        if (fetchError) {
+            console.error('[updateCourseStats] Error fetching ratings:', fetchError);
+            return;
+        }
 
         if (allRatings && allRatings.length > 0) {
             const sum = allRatings.reduce((acc, curr) => acc + (curr.rating || 0), 0);
             const avg = sum / allRatings.length;
 
-            await supabase
+            // Update the courses table using the resolved course ID
+            const { error: updateError } = await supabase
                 .from('courses')
                 .update({
                     rating: parseFloat(avg.toFixed(1)),
                     review_count: allRatings.length
                 })
-                .eq('id', courseId);
-        }
-    }
+                .eq('id', resolvedCourseId);
 
-    return { error: null };
+            if (updateError) {
+                console.error('[updateCourseStats] Error updating course stats:', updateError);
+            }
+        } else {
+            // No ratings found, reset to 0
+            await supabase
+                .from('courses')
+                .update({
+                    rating: 0,
+                    review_count: 0
+                })
+                .eq('id', resolvedCourseId);
+        }
+    } catch (error) {
+        console.error('[updateCourseStats] Exception:', error);
+    }
 };
+
 export const likeReview = async (reviewId: string, courseId: string, isUnlike: boolean = false): Promise<{ error: any }> => {
     // 1. Check for Local Review
     if (reviewId.startsWith('lrev_')) {
@@ -443,6 +677,53 @@ export const likeReview = async (reviewId: string, courseId: string, isUnlike: b
             .update({ likes: isUnlike ? Math.max(0, currentLikes - 1) : currentLikes + 1 })
             .eq('id', reviewId);
         return { error: updateError };
+    }
+
+    return { error: null };
+};
+
+export const deleteReview = async (
+    reviewId: string,
+    userId: string,
+    courseId?: string
+): Promise<{ error: any }> => {
+    // Local-only review deletion
+    if (reviewId.startsWith('lrev_')) {
+        try {
+            const jsonValue = await storage.getItem(LOCAL_REVIEWS_KEY);
+            const allReviews: Review[] = jsonValue != null ? JSON.parse(jsonValue) : [];
+            const target = allReviews.find(r => r.id === reviewId);
+
+            if (!target) {
+                return { error: { message: 'REVIEW_NOT_FOUND' } };
+            }
+
+            if (target.authorId !== userId) {
+                return { error: { message: 'PERMISSION_DENIED' } };
+            }
+
+            const updated = allReviews.filter(r => r.id !== reviewId);
+            await storage.setItem(LOCAL_REVIEWS_KEY, JSON.stringify(updated));
+            return { error: null };
+        } catch (e: any) {
+            return { error: e };
+        }
+    }
+
+    const { error } = await supabase
+        .from('course_reviews')
+        .delete()
+        .eq('id', reviewId)
+        .eq('author_id', userId);
+
+    if (error) {
+        return { error };
+    }
+
+    // Keep course stats consistent after deletion when course ID is available.
+    if (courseId) {
+        const resolvedCourseId = await resolveCourseIdForReviewQueries(courseId);
+        await updateCourseStatsForAllCandidates(courseId, resolvedCourseId);
     }
 
     return { error: null };
@@ -616,4 +897,52 @@ export const cancelCourseSubmission = async (submissionId: string): Promise<{ er
         .eq('status', 'pending');
 
     return { error };
+};
+
+/**
+ * Refresh review counts and ratings for all courses in the database
+ * This function can be used to fix inconsistent review_count values
+ * that might have occurred due to reviews being stored with different course_id formats
+ */
+export const refreshAllCourseStats = async (): Promise<{ 
+    processed: number; 
+    updated: number; 
+    errors: string[]; 
+}> => {
+    const errors: string[] = [];
+    let processed = 0;
+    let updated = 0;
+
+    try {
+        // Get all courses from database
+        const { data: allCourses, error: fetchError } = await supabase
+            .from('courses')
+            .select('id, code');
+
+        if (fetchError) {
+            console.error('[refreshAllCourseStats] Error fetching courses:', fetchError);
+            return { processed: 0, updated: 0, errors: [fetchError.message] };
+        }
+
+        if (!allCourses || allCourses.length === 0) return { processed: 0, updated: 0, errors: [] };
+
+        // Process each course
+        for (const course of allCourses) {
+            processed++;
+            try {
+                // Use the course code as the input to get all candidate IDs
+                const courseIdentifier = course.code || course.id;
+                await updateCourseStatsForAllCandidates(courseIdentifier, course.id);
+                updated++;
+            } catch (error: any) {
+                const errorMsg = `Error processing course ${course.code} (${course.id}): ${error?.message || 'Unknown error'}`;
+                console.error('[refreshAllCourseStats]', errorMsg);
+                errors.push(errorMsg);
+            }
+        }
+        return { processed, updated, errors };
+    } catch (error: any) {
+        console.error('[refreshAllCourseStats] Exception:', error);
+        return { processed, updated, errors: [error?.message || 'Unknown exception'] };
+    }
 };

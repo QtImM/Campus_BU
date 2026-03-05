@@ -1,11 +1,112 @@
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import { CourseTeaming, TeamingComment } from '../types';
+import { getLocalCourses } from './courses';
 import { supabase } from './supabase';
 
 const TEAMING_TABLE = 'course_teaming';
 const TEAMING_COMMENTS_TABLE = 'teaming_comments';
 const TEAMING_STORAGE_BUCKET = 'teaming-avatars';
+
+const normalizeCourseCode = (value: string): string => value.toUpperCase().replace(/\s+/g, '');
+
+const resolveCourseIdForTeamingQueries = async (courseId?: string): Promise<string> => {
+    if (!courseId) return '';
+
+    // Direct ID match
+    const { data: existingById } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('id', courseId)
+        .maybeSingle();
+    if (existingById?.id) return existingById.id;
+
+    // Fallback: input might be a course code
+    const normalized = normalizeCourseCode(courseId);
+    const { data: existingByCode } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('code', normalized)
+        .maybeSingle();
+    if (existingByCode?.id) return existingByCode.id;
+
+    // Local course IDs can often be mapped by code to an existing DB row
+    if (courseId.startsWith('local_')) {
+        const localCourses = await getLocalCourses();
+        const matchedLocal = localCourses.find(c => c.id === courseId);
+        if (matchedLocal?.code) {
+            const normalizedCode = normalizeCourseCode(matchedLocal.code);
+            const { data: mappedByCode } = await supabase
+                .from('courses')
+                .select('id')
+                .eq('code', normalizedCode)
+                .maybeSingle();
+            if (mappedByCode?.id) return mappedByCode.id;
+        }
+    }
+
+    return courseId;
+};
+
+const ensureCourseExistsForTeaming = async (courseId?: string): Promise<{ resolvedCourseId?: string; error?: string }> => {
+    if (!courseId) {
+        return { error: 'Missing course ID.' };
+    }
+
+    const resolvedId = await resolveCourseIdForTeamingQueries(courseId);
+
+    const { data: existing } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('id', resolvedId)
+        .maybeSingle();
+    if (existing?.id) {
+        return { resolvedCourseId: existing.id };
+    }
+
+    // Demo course doesn't exist in DB and should not be posted to FK-backed tables.
+    if (courseId === '1') {
+        return { error: 'Demo course does not support teaming posts. Please choose a real course.' };
+    }
+
+    // Auto-create for local courses so FK remains valid.
+    if (courseId.startsWith('local_')) {
+        const localCourses = await getLocalCourses();
+        const local = localCourses.find(c => c.id === courseId);
+        if (!local) {
+            return { error: `Course ${courseId} is not available.` };
+        }
+
+        const normalizedCode = normalizeCourseCode(local.code || courseId.replace(/^local_/, ''));
+        const { data: existingByCode } = await supabase
+            .from('courses')
+            .select('id')
+            .eq('code', normalizedCode)
+            .maybeSingle();
+        if (existingByCode?.id) {
+            return { resolvedCourseId: existingByCode.id };
+        }
+
+        const { error: createError } = await supabase
+            .from('courses')
+            .insert({
+                id: courseId,
+                code: normalizedCode,
+                name: local.name || normalizedCode,
+                instructor: local.instructor || 'TBD',
+                department: local.department || 'General',
+                credits: local.credits || 3,
+            });
+
+        if (createError) {
+            return { error: createError.message || 'Failed to create local course in database.' };
+        }
+
+        return { resolvedCourseId: courseId };
+    }
+
+    return { error: `Course ${courseId} was not found in database.` };
+};
 
 /**
  * Check if a string is a local file path (not a URL)
@@ -62,10 +163,12 @@ const uploadTeamingAvatar = async (uri: string, prefix: string): Promise<string>
  */
 export const fetchTeamingRequests = async (courseId: string): Promise<CourseTeaming[]> => {
     try {
+        const resolvedCourseId = await resolveCourseIdForTeamingQueries(courseId);
+
         const { data, error } = await supabase
             .from(TEAMING_TABLE)
             .select('*, author:users!user_id(*)')
-            .eq('course_id', courseId)
+            .eq('course_id', resolvedCourseId)
             .eq('status', 'open')
             .order('created_at', { ascending: false });
 
@@ -86,6 +189,14 @@ export const fetchTeamingRequests = async (courseId: string): Promise<CourseTeam
  */
 export const postTeamingRequest = async (request: Partial<CourseTeaming>): Promise<{ success: boolean; data?: CourseTeaming; error?: string }> => {
     try {
+        const { resolvedCourseId, error: courseError } = await ensureCourseExistsForTeaming(request.courseId);
+        if (courseError || !resolvedCourseId) {
+            return {
+                success: false,
+                error: courseError || 'Invalid course.',
+            };
+        }
+
         // Upload avatar if it's a local file path
         let avatarUrl = request.userAvatar || '👤';
         if (isLocalFilePath(avatarUrl)) {
@@ -93,7 +204,7 @@ export const postTeamingRequest = async (request: Partial<CourseTeaming>): Promi
         }
 
         const teamingData = {
-            course_id: request.courseId,
+            course_id: resolvedCourseId,
             user_id: request.userId,
             user_name: request.userName,
             user_avatar: avatarUrl,
@@ -225,6 +336,97 @@ export const postTeamingComment = async (teamingId: string, author: any, content
         return { success: true };
     } catch (e: any) {
         console.error('Error posting teaming comment:', e);
+        return { success: false, error: e?.message || 'Unknown error' };
+    }
+};
+
+/**
+ * Delete a teaming request posted by current user.
+ */
+export const deleteTeamingRequest = async (teamingId: string, userId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+        // Read target row first so we can return a precise error instead of a generic "0 rows" message.
+        const { data: existingRow, error: existingError } = await supabase
+            .from(TEAMING_TABLE)
+            .select('id, user_id, status')
+            .eq('id', teamingId)
+            .maybeSingle();
+
+        if (existingError) {
+            return { success: false, error: existingError.message };
+        }
+
+        // If the row is already gone, treat delete as idempotent success.
+        if (!existingRow) {
+            return { success: true };
+        }
+
+        if (existingRow.user_id !== userId) {
+            return { success: false, error: 'You can only delete your own teaming post.' };
+        }
+
+        // Clean up comments first to avoid FK constraints in environments without cascade.
+        const { error: commentDeleteError } = await supabase
+            .from(TEAMING_COMMENTS_TABLE)
+            .delete()
+            .eq('teaming_id', teamingId);
+
+        if (commentDeleteError) {
+            console.warn('Comment cleanup before teaming delete failed:', commentDeleteError);
+        }
+
+        const { error: deleteError } = await supabase
+            .from(TEAMING_TABLE)
+            .delete()
+            .eq('id', teamingId);
+
+        if (deleteError) {
+            return { success: false, error: deleteError.message };
+        }
+
+        // Verify delete result explicitly (helps when RLS silently blocks mutation).
+        const { data: rowAfterDelete, error: rowAfterDeleteError } = await supabase
+            .from(TEAMING_TABLE)
+            .select('id, status')
+            .eq('id', teamingId)
+            .maybeSingle();
+
+        if (rowAfterDeleteError) {
+            return { success: false, error: rowAfterDeleteError.message };
+        }
+
+        if (!rowAfterDelete) {
+            return { success: true };
+        }
+
+        // Fallback: if hard delete did not affect any rows, try soft-close so it won't be fetched by status='open'.
+        const { error: closeError } = await supabase
+            .from(TEAMING_TABLE)
+            .update({ status: 'closed' })
+            .eq('id', teamingId)
+            .eq('user_id', userId);
+
+        if (closeError) {
+            return { success: false, error: closeError.message };
+        }
+
+        const { data: rowAfterClose, error: rowAfterCloseError } = await supabase
+            .from(TEAMING_TABLE)
+            .select('id, status')
+            .eq('id', teamingId)
+            .maybeSingle();
+
+        if (rowAfterCloseError) {
+            return { success: false, error: rowAfterCloseError.message };
+        }
+
+        if (!rowAfterClose || rowAfterClose.status === 'closed') {
+            return { success: true };
+        }
+
+        return { success: false, error: 'Delete was blocked by database policy. Please apply the latest RLS migration.' };
+    } catch (e: any) {
+        console.error('Error deleting teaming request:', e);
         return { success: false, error: e?.message || 'Unknown error' };
     }
 };
