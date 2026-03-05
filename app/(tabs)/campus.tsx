@@ -1,3 +1,5 @@
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { Image as ExpoImageLib } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Check, X as CloseIcon, Globe, Plus, Search } from 'lucide-react-native';
@@ -18,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { ActionModal } from '../../components/campus/ActionModal';
 import MasonryGrid from '../../components/campus/MasonryGrid';
 import { MasonryPostCard } from '../../components/campus/MasonryPostCard';
@@ -33,6 +36,37 @@ import { ForumCategory, ForumPost, ForumSort, Post, PostCategory } from '../../t
 import { changeLanguage } from '../i18n/i18n';
 
 type MainTab = 'discover' | 'forum';
+
+const ScaleButton = ({ children, onPress, style }: { children: React.ReactNode, onPress?: () => void, style?: any }) => {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.92, { damping: 12, stiffness: 200 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 12, stiffness: 200 });
+  };
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress?.();
+  };
+
+  return (
+    <Pressable
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={handlePress}
+      style={({ pressed }) => [style, { opacity: pressed ? 0.9 : 1 }]}
+    >
+      <Reanimated.View style={animatedStyle}>{children}</Reanimated.View>
+    </Pressable>
+  );
+};
 
 export default function CampusScreen() {
   const { t, i18n } = useTranslation();
@@ -271,74 +305,79 @@ export default function CampusScreen() {
   return (
     <View style={styles.container}>
 
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <Text style={styles.logo}>HKCampus</Text>
+      {/* ── Floating Glassmorphism Header ── */}
+      <View style={styles.headerWrapper}>
+        <BlurView intensity={95} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={styles.header}>
+          {/* Row 1: Logo and Actions */}
+          <View style={styles.headerTop}>
+            <Text style={styles.logo}>HKCampus</Text>
+            <View style={styles.headerRight}>
+              <ScaleButton style={styles.iconBtn}>
+                <Search size={24} color="#1E3A8A" />
+              </ScaleButton>
+              <ScaleButton style={styles.iconBtn} onPress={() => setLangModalVisible(true)}>
+                <Globe size={24} color="#1E3A8A" />
+              </ScaleButton>
+            </View>
+          </View>
 
-        {/* Discover / Forum tabs – animated sliding pill */}
-        <View
-          style={styles.tabPillContainer}
-          onLayout={e => setPillContainerW(e.nativeEvent.layout.width)}
-        >
-          {/* Sliding background pill */}
-          <Animated.View
-            style={[
-              styles.tabPillSlider,
-              {
-                transform: [{
-                  translateX: scrollX.interpolate({
-                    inputRange: [0, SCREEN_W],
-                    outputRange: [0, pillContainerW / 2],   // exact measured half
-                    extrapolate: 'clamp',
-                  }),
-                }],
-              },
-            ]}
-          />
-          <TouchableOpacity style={styles.tabPill} onPress={() => scrollToTab('discover')}>
-            <Animated.Text
-              style={[
-                styles.tabPillText,
-                {
-                  color: scrollX.interpolate({
-                    inputRange: [0, SCREEN_W],
-                    outputRange: ['#fff', '#6B7280'],
-                    extrapolate: 'clamp',
-                  }),
-                  fontWeight: '600',
-                },
-              ]}
+          {/* Row 2: Discover / Forum tabs */}
+          <View style={styles.tabsRow}>
+            <View
+              style={styles.tabPillContainer}
+              onLayout={e => setPillContainerW(e.nativeEvent.layout.width)}
             >
-              {t('campus.tabs.discover')}
-            </Animated.Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabPill} onPress={() => scrollToTab('forum')}>
-            <Animated.Text
-              style={[
-                styles.tabPillText,
-                {
-                  color: scrollX.interpolate({
-                    inputRange: [0, SCREEN_W],
-                    outputRange: ['#6B7280', '#fff'],
-                    extrapolate: 'clamp',
-                  }),
-                  fontWeight: '600',
-                },
-              ]}
-            >
-              {t('campus.tabs.forum')}
-            </Animated.Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Right actions */}
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Search size={20} color="#1E3A8A" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setLangModalVisible(true)}>
-            <Globe size={20} color="#1E3A8A" />
-          </TouchableOpacity>
+              <Animated.View
+                style={[
+                  styles.tabPillSlider,
+                  {
+                    transform: [{
+                      translateX: scrollX.interpolate({
+                        inputRange: [0, SCREEN_W],
+                        outputRange: [0, pillContainerW / 2],
+                        extrapolate: 'clamp',
+                      }),
+                    }],
+                  },
+                ]}
+              />
+              <ScaleButton style={styles.tabPill} onPress={() => scrollToTab('discover')}>
+                <Animated.Text
+                  style={[
+                    styles.tabPillText,
+                    styles.tabPillLabel,
+                    {
+                      color: scrollX.interpolate({
+                        inputRange: [0, SCREEN_W],
+                        outputRange: ['#ffffff', '#64748B'],
+                        extrapolate: 'clamp',
+                      }),
+                    },
+                  ]}
+                >
+                  {t('campus.tabs.discover')}
+                </Animated.Text>
+              </ScaleButton>
+              <ScaleButton style={styles.tabPill} onPress={() => scrollToTab('forum')}>
+                <Animated.Text
+                  style={[
+                    styles.tabPillText,
+                    styles.tabPillLabel,
+                    {
+                      color: scrollX.interpolate({
+                        inputRange: [0, SCREEN_W],
+                        outputRange: ['#64748B', '#ffffff'],
+                        extrapolate: 'clamp',
+                      }),
+                    },
+                  ]}
+                >
+                  {t('campus.tabs.forum')}
+                </Animated.Text>
+              </ScaleButton>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -355,7 +394,7 @@ export default function CampusScreen() {
           { useNativeDriver: false },
         )}
         onMomentumScrollEnd={onPagerScroll}
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingTop: 160 }}
       >
         {/* ── Page 0: Discover ── */}
         <View style={{ width: SCREEN_W, flex: 1 }}>
@@ -367,7 +406,7 @@ export default function CampusScreen() {
               contentContainerStyle={styles.filterList}
             >
               {CATEGORIES.map(item => (
-                <TouchableOpacity
+                <ScaleButton
                   key={item.id}
                   style={[
                     styles.filterButton,
@@ -383,7 +422,7 @@ export default function CampusScreen() {
                   >
                     {item.label}
                   </Text>
-                </TouchableOpacity>
+                </ScaleButton>
               ))}
             </ScrollView>
           </View>
@@ -438,6 +477,7 @@ export default function CampusScreen() {
                   <MasonryPostCard
                     key={post.id}
                     post={post}
+                    index={index}
                     onPress={() => handlePostPress(post.id)}
                     onLike={() => handleLike(post.id)}
                     currentUserId={currentUser?.uid}
@@ -454,7 +494,7 @@ export default function CampusScreen() {
           <View style={styles.forumTabsRow}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {FORUM_TABS.map(tab => (
-                <TouchableOpacity
+                <ScaleButton
                   key={tab.id}
                   style={styles.forumTab}
                   onPress={() => setForumCategory(tab.id)}
@@ -466,29 +506,29 @@ export default function CampusScreen() {
                     {tab.label}
                   </Text>
                   {forumCategory === tab.id && <View style={styles.forumTabUnderline} />}
-                </TouchableOpacity>
+                </ScaleButton>
               ))}
             </ScrollView>
           </View>
 
           {/* Sort toggle bar - on second row */}
           <View style={styles.forumSortBar}>
-            <TouchableOpacity
+            <ScaleButton
               onPress={() => setForumSort('latest_reply')}
               style={[styles.forumSortBtn, forumSort === 'latest_reply' && styles.forumSortBtnActive]}
             >
               <Text style={[styles.forumSortText, forumSort === 'latest_reply' && styles.forumSortTextActive]}>
                 {t('forum.sort.latest_reply')}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </ScaleButton>
+            <ScaleButton
               onPress={() => setForumSort('latest_post')}
               style={[styles.forumSortBtn, forumSort === 'latest_post' && styles.forumSortBtnActive]}
             >
               <Text style={[styles.forumSortText, forumSort === 'latest_post' && styles.forumSortTextActive]}>
                 {t('forum.sort.latest_post')}
               </Text>
-            </TouchableOpacity>
+            </ScaleButton>
           </View>
 
           {/* Post list */}
@@ -532,9 +572,9 @@ export default function CampusScreen() {
       </Animated.ScrollView>
 
       {/* ── FAB ── */}
-      <TouchableOpacity testID="new-post-fab" style={styles.fab} onPress={handleCompose}>
+      <ScaleButton style={styles.fab} onPress={handleCompose}>
         <Plus size={28} color="#fff" />
-      </TouchableOpacity>
+      </ScaleButton>
 
       {/* ── Modals ── */}
       <ActionModal
@@ -615,75 +655,91 @@ const styles = StyleSheet.create({
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
+  headerWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
   header: {
-    paddingTop: 56,
-    paddingBottom: 14,
+    paddingTop: 54,
+    paddingBottom: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#fff',
+    gap: 16,
+  },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F2F8',
+  },
+  tabsRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logo: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 26,
+    fontWeight: '900',
     color: '#1E3A8A',
-    letterSpacing: -0.5,
+    letterSpacing: -1.2,
   },
   tabPillContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F0F2F8',
-    borderRadius: 20,
-    padding: 3,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 25,
+    padding: 4,
     position: 'relative',
     overflow: 'hidden',
+    width: '100%',
+    maxWidth: 240,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   tabPillSlider: {
     position: 'absolute',
-    top: 3,
-    left: 3,
-    bottom: 3,
-    width: '50%',
-    borderRadius: 17,
+    top: 4,
+    left: 4,
+    bottom: 4,
+    width: '48%',
+    borderRadius: 20,
     backgroundColor: '#1E3A8A',
-    shadowColor: '#1E3A8A',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   tabPill: {
-    paddingHorizontal: 18,
-    paddingVertical: 6,
-    borderRadius: 17,
-  },
-  tabPillActive: {
-    backgroundColor: '#1E3A8A',
-    shadowColor: '#1E3A8A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    flex: 1,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
   },
   tabPillText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
+    fontSize: 16, // Slightly smaller for cleaner fit
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   tabPillTextActive: {
     color: '#fff',
   },
+  tabPillLabel: {
+    textAlign: 'center',
+    width: '100%',
+  },
   headerRight: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 12,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#F0F2F8',
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(30, 58, 138, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -695,26 +751,29 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0F2F8',
   },
   filterList: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: '#F4F6FB',
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   filterButtonActive: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: 'rgba(30, 58, 138, 0.1)', // Subtle blue tint
+    borderColor: '#1E3A8A',
   },
   filterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4B5563',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1F2937',
   },
   filterTextActive: {
-    color: '#fff',
+    color: '#1E3A8A', // Blue font as requested
   },
 
   // ── Sort strip ────────────────────────────────────────────────────────────
@@ -728,21 +787,21 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0F2F8',
   },
   sortBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F4F6FB',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(30, 58, 138, 0.05)',
   },
   sortBtnActive: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: '#1E3A8A',
   },
   sortBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827', // Slate 900 for clear visibility
   },
   sortBtnTextActive: {
-    color: '#1E3A8A',
+    color: '#fff',
   },
 
   // ── Feed ──────────────────────────────────────────────────────────────────
@@ -804,10 +863,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F6FB',
   },
   forumTabsRow: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F2F8',
-    paddingLeft: 4,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    paddingLeft: 8,
   },
   forumTab: {
     paddingHorizontal: 14,
@@ -815,22 +874,22 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   forumTabText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
   },
   forumTabTextActive: {
-    color: '#111827',
-    fontWeight: '700',
+    color: '#1E3A8A',
+    fontWeight: '900',
   },
   forumTabUnderline: {
     position: 'absolute',
     bottom: 0,
     left: 14,
     right: 14,
-    height: 2,
-    backgroundColor: '#EF4444',
-    borderRadius: 1,
+    height: 3,
+    backgroundColor: '#1E3A8A',
+    borderRadius: 1.5,
   },
   forumSortBar: {
     flexDirection: 'row',
@@ -849,17 +908,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   forumSortBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
   forumSortBtnActive: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: 'rgba(30, 58, 138, 0.1)',
   },
   forumSortText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#9CA3AF',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   forumSortTextActive: {
     color: '#1E3A8A',
