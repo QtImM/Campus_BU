@@ -138,6 +138,11 @@
             "post_anyway": "直接發文",
             "data_exported": "數據已匯出",
             "export_msg": "建築數據已複製到剪貼板，請發送給我以更新文件。"
+        },
+        "region_restriction": {
+            "title": "地區限制",
+            "message": "該功能目前僅在香港地區可用",
+            "confirm": "確定"
         }
     },
     "campus": {

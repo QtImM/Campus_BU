@@ -138,6 +138,11 @@
             "post_anyway": "Post Anyway",
             "data_exported": "Data Exported",
             "export_msg": "The new building data has been copied to your clipboard. Please paste it to me so I can update the file."
+        },
+        "region_restriction": {
+            "title": "Region Unavailable",
+            "message": "This feature is currently only available in Hong Kong.",
+            "confirm": "OK"
         }
     },
     "campus": {

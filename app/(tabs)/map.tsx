@@ -32,6 +32,7 @@ import { fetchPosts } from '../../services/campus';
 import { CAMPUS_LOCATIONS } from '../../services/locations';
 import { CampusLocation } from '../../types';
 import { compressImage } from '../../utils/image';
+import { isInHongKong } from '../../utils/location';
 
 const { width, height } = Dimensions.get('window');
 
@@ -43,6 +44,10 @@ const HKBU_CENTER = {
 
 // Keep edit button code path for future use, but hide it in current builds.
 const SHOW_BUILDING_EDIT_BUTTON = false;
+
+// 🧪 TEST MODE: Set to true to test region restriction dialog (simulates being outside Hong Kong)
+// ⚠️ IMPORTANT: Set back to false before production deployment!
+const TEST_REGION_RESTRICTION = true;
 
 const FOOD_ORDER_OPTIONS = [
     { key: 'main-canteen', name: 'Main Canteen', orderUrl: 'https://csd2.order.place/store/112867/mode/prekiosk' },
@@ -554,6 +559,9 @@ export default function MapScreen() {
     const [navTarget, setNavTarget] = useState<{ lat: number, lng: number } | null>(null);
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
+    
+    // Region Restriction State
+    const [regionChecked, setRegionChecked] = useState(false);
 
     // Handle navigation params
     useEffect(() => {
@@ -646,14 +654,62 @@ export default function MapScreen() {
         loadPostsData();
     }, [loadPostsData]);
 
-    // Refresh data when screen is focused
+    // Check region restriction on component mount
+    const checkRegionRestriction = useCallback(async () => {
+        if (regionChecked) return; // Avoid duplicate checks
+        
+        try {
+            // 1. Request location permissions
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                // If user denies permission, assume they're in Hong Kong (allow access)
+                setRegionChecked(true);
+                return;
+            }
+
+            // 2. Get current location
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
+            const { latitude, longitude } = location.coords;
+
+            // 3. Check if in Hong Kong
+            const inHongKong = isInHongKong(latitude, longitude);
+            
+            // 🧪 TEST MODE: Reverse logic when testing (treat HK as non-HK)
+            const shouldRestrict = TEST_REGION_RESTRICTION ? inHongKong : !inHongKong;
+            
+            if (shouldRestrict) {
+                Alert.alert(
+                    t('map.region_restriction.title'),
+                    t('map.region_restriction.message'),
+                    [
+                        {
+                            text: t('map.region_restriction.confirm'),
+                            onPress: () => router.back(), // Go back to previous screen
+                        },
+                    ],
+                    { cancelable: false }
+                );
+            }
+            
+            setRegionChecked(true);
+        } catch (error) {
+            console.error('Region check failed:', error);
+            setRegionChecked(true); // Mark as checked to avoid blocking on error
+        }
+    }, [regionChecked, t, router]);
+
+    // Trigger region check when screen is focused
     useFocusEffect(
         useCallback(() => {
+            checkRegionRestriction();
+            
             const task = InteractionManager.runAfterInteractions(() => {
                 loadPostsData();
             });
             return () => task.cancel();
-        }, [loadPostsData])
+        }, [loadPostsData, checkRegionRestriction])
     );
 
     // Save to storage whenever buildingsData changes (debounced or on key events)

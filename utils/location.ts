@@ -41,3 +41,20 @@ export function getNearestBuilding(lat: number, lng: number, thresholdKm = 0.1) 
 
     return null;
 }
+
+/**
+ * Check if a location is within Hong Kong region
+ * @param lat User's latitude
+ * @param lng User's longitude
+ * @returns true if the location is in Hong Kong
+ */
+export function isInHongKong(lat: number, lng: number): boolean {
+    // Hong Kong center point coordinates (approximately Victoria Harbour)
+    const HK_CENTER = { lat: 22.3193, lng: 114.1694 };
+    
+    // Threshold: 50km (Hong Kong is approximately 25km N-S, 40km E-W)
+    const MAX_DISTANCE_KM = 50;
+    
+    const distance = getDistance(lat, lng, HK_CENTER.lat, HK_CENTER.lng);
+    return distance <= MAX_DISTANCE_KM;
+}
