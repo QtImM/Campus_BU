@@ -47,7 +47,7 @@ const SHOW_BUILDING_EDIT_BUTTON = false;
 
 // 🧪 TEST MODE: Set to true to test region restriction dialog (simulates being outside Hong Kong)
 // ⚠️ IMPORTANT: Set back to false before production deployment!
-const TEST_REGION_RESTRICTION = true;
+const TEST_REGION_RESTRICTION = false;
 
 const FOOD_ORDER_OPTIONS = [
     { key: 'main-canteen', name: 'Main Canteen', orderUrl: 'https://csd2.order.place/store/112867/mode/prekiosk' },

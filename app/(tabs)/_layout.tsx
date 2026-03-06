@@ -89,11 +89,7 @@ export default function TabLayout() {
                   focused: isFocused
                 })}
                 {route.name === 'profile' && unreadCount > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </Text>
-                  </View>
+                  <View style={styles.unreadDot} />
                 )}
                 <Text style={[styles.tabLabel, { color: isFocused ? '#1E3A8A' : '#8E8E93' }]}>
                   {label}
@@ -214,23 +210,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
   },
-  badge: {
+  unreadDot: {
     position: 'absolute',
-    top: 8,
-    right: '25%',
+    top: 10,
+    right: '28%',
     backgroundColor: '#EF4444',
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: 'bold',
+    borderRadius: 4,
+    width: 8,
+    height: 8,
   },
 });
