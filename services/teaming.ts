@@ -12,11 +12,11 @@ const TEAMING_STORAGE_BUCKET = 'teaming-avatars';
  */
 const isLocalFilePath = (uri: string): boolean => {
     if (!uri) return false;
-    return uri.startsWith('file://') || 
-           uri.startsWith('/var/') || 
-           uri.startsWith('/data/') ||
-           uri.includes('ImagePicker') ||
-           uri.includes('ExponentExperienceData');
+    return uri.startsWith('file://') ||
+        uri.startsWith('/var/') ||
+        uri.startsWith('/data/') ||
+        uri.includes('ImagePicker') ||
+        uri.includes('ExponentExperienceData');
 };
 
 /**
@@ -157,6 +157,25 @@ export const toggleTeamingLike = async (teamingId: string, userId: string): Prom
             .eq('id', teamingId);
 
         if (updateError) return { success: false };
+
+        // Trigger notification
+        const { data: teamingData } = await supabase.from(TEAMING_TABLE).select('user_id, course_id').eq('id', teamingId).single();
+        if (teamingData && teamingData.user_id !== userId) {
+            const { getCourseById } = await import('./courses');
+            const course = await getCourseById(teamingData.course_id);
+            const { createNotification } = await import('./notifications');
+            await createNotification({
+                user_id: teamingData.user_id,
+                type: 'like',
+                title: 'notifications.title_like',
+                content: JSON.stringify({
+                    key: 'notifications.teaming_like',
+                    params: { course: course?.code || 'course' }
+                }),
+                related_id: teamingId,
+            });
+        }
+
         return { success: true };
     } catch (e) {
         console.error('Error toggling like:', e);
@@ -190,7 +209,13 @@ export const fetchTeamingComments = async (teamingId: string): Promise<TeamingCo
 /**
  * Post a comment to a teaming request.
  */
-export const postTeamingComment = async (teamingId: string, author: any, content: string): Promise<{ success: boolean; error?: string }> => {
+export const postTeamingComment = async (
+    teamingId: string,
+    author: any,
+    content: string,
+    parentCommentId?: string,
+    replyToName?: string
+): Promise<{ success: boolean; error?: string }> => {
     try {
         // Support both naming conventions (uid/id, displayName/name, avatarUrl/avatar)
         const authorId = author.uid || author.id;
@@ -212,11 +237,31 @@ export const postTeamingComment = async (teamingId: string, author: any, content
                 author_name: authorName,
                 author_avatar: authorAvatar,
                 content,
+                parent_comment_id: parentCommentId,
+                reply_to_name: replyToName,
             });
 
         if (insertError) {
             console.error('Error inserting teaming comment:', insertError);
             return { success: false, error: insertError.message };
+        }
+
+        // Trigger notification
+        const { data: teaming } = await supabase.from(TEAMING_TABLE).select('user_id, course_id').eq('id', teamingId).single();
+        if (teaming && teaming.user_id !== authorId) {
+            const { getCourseById } = await import('./courses');
+            const course = await getCourseById(teaming.course_id);
+            const { createNotification } = await import('./notifications');
+            await createNotification({
+                user_id: teaming.user_id,
+                type: 'comment',
+                title: 'notifications.title_comment',
+                content: JSON.stringify({
+                    key: 'notifications.teaming_comment',
+                    params: { name: authorName, course: course?.code || 'course' }
+                }),
+                related_id: teamingId,
+            });
         }
 
         // Increment comment count
@@ -243,10 +288,10 @@ const isEmojiAvatar = (str: string): boolean => {
 
 const mapSupabaseToTeaming = (data: any): CourseTeaming => {
     const author = data.author;
-    
+
     // Priority: 1. Valid URL from user_avatar, 2. Valid URL from author.avatar_url, 3. Emoji fallback
     let avatarToUse = '👤';
-    
+
     if (isValidAvatarUrl(data.user_avatar)) {
         avatarToUse = data.user_avatar;
     } else if (author?.avatar_url && isValidAvatarUrl(author.avatar_url)) {
@@ -254,7 +299,7 @@ const mapSupabaseToTeaming = (data: any): CourseTeaming => {
     } else if (isEmojiAvatar(data.user_avatar)) {
         avatarToUse = data.user_avatar;
     }
-    
+
     return {
         id: data.id,
         courseId: data.course_id,
@@ -276,10 +321,10 @@ const mapSupabaseToTeaming = (data: any): CourseTeaming => {
 
 const mapSupabaseToTeamingComment = (data: any): TeamingComment => {
     const author = data.author;
-    
+
     // Priority: 1. Valid URL from author_avatar, 2. Valid URL from author.avatar_url, 3. Emoji fallback
     let avatarToUse = '👤';
-    
+
     if (isValidAvatarUrl(data.author_avatar)) {
         avatarToUse = data.author_avatar;
     } else if (author?.avatar_url && isValidAvatarUrl(author.avatar_url)) {
@@ -287,7 +332,7 @@ const mapSupabaseToTeamingComment = (data: any): TeamingComment => {
     } else if (isEmojiAvatar(data.author_avatar)) {
         avatarToUse = data.author_avatar;
     }
-    
+
     return {
         id: data.id,
         teamingId: data.teaming_id,
@@ -296,6 +341,8 @@ const mapSupabaseToTeamingComment = (data: any): TeamingComment => {
         authorEmail: author?.email,
         authorAvatar: avatarToUse,
         content: data.content,
+        parentCommentId: data.parent_comment_id,
+        replyToName: data.reply_to_name,
         createdAt: new Date(data.created_at),
     };
 };
