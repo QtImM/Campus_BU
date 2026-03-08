@@ -10,6 +10,7 @@ global.FormData = jest.fn(() => ({
 describe('AI OCR Service', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        process.env.EXPO_PUBLIC_OCR_API_URL = 'https://ocr.example.com';
     });
 
     it('should return extracted schedule data when fetch is successful', async () => {
@@ -89,5 +90,13 @@ describe('AI OCR Service', () => {
         await expect(scanScheduleFromImage('file://mock-image-path.jpg'))
             .rejects
             .toThrow('AI Backend Error: 500');
+    });
+
+    it('should throw a clear error when OCR backend URL is missing', async () => {
+        delete process.env.EXPO_PUBLIC_OCR_API_URL;
+
+        await expect(scanScheduleFromImage('file://mock-image-path.jpg'))
+            .rejects
+            .toThrow('OCR backend URL is not configured. Set EXPO_PUBLIC_OCR_API_URL in .env.');
     });
 });

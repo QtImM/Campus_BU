@@ -1,4 +1,10 @@
-const AI_BACKEND_URL = 'http://192.168.5.70:8000';
+const getAiBackendUrl = (): string => {
+    const configuredUrl = (process.env.EXPO_PUBLIC_OCR_API_URL || '').trim();
+    if (!configuredUrl) {
+        throw new Error('OCR backend URL is not configured. Set EXPO_PUBLIC_OCR_API_URL in .env.');
+    }
+    return configuredUrl.replace(/\/+$/, '');
+};
 
 export interface ExtractedSchedule {
     course: string;
@@ -252,6 +258,7 @@ export const getPrimaryExtractedSchedule = (result: ScheduleScanResult): Extract
 
 export const scanScheduleFromImage = async (imageUri: string): Promise<ScheduleScanResult> => {
     try {
+        const aiBackendUrl = getAiBackendUrl();
         const formData = new FormData();
         // @ts-ignore
         formData.append('file', {
@@ -260,7 +267,7 @@ export const scanScheduleFromImage = async (imageUri: string): Promise<ScheduleS
             type: 'image/jpeg',
         });
 
-        const response = await fetch(`${AI_BACKEND_URL}/extract/schedule`, {
+        const response = await fetch(`${aiBackendUrl}/extract/schedule`, {
             method: 'POST',
             body: formData,
             headers: {

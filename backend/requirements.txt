@@ -5,3 +5,6 @@ transformers
 pillow
 python-multipart
 pydantic
+pytesseract
+paddleocr
+paddlepaddle

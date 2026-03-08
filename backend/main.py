@@ -1,6 +1,13 @@
+import os
+
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+
+from runtime_config import configure_runtime_environment
+from template_v1 import detect_schedule_blocks
+
+configure_runtime_environment()
 
 app = FastAPI(title="HKCampus AI OCR Service")
 
@@ -15,42 +22,70 @@ app.add_middleware(
 
 @app.post("/extract/schedule")
 async def extract_schedule(file: UploadFile = File(...)):
-    """
-    Temporary manual-review fallback.
-    We accept the uploaded screenshot, but do not call any external vision model.
-    The frontend will continue with manual search + manual time/room completion.
-    """
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
     try:
         file_bytes = await file.read()
+        blocks = detect_schedule_blocks(file_bytes)
+
+        if not blocks:
+            return {
+                "status": "success",
+                "raw_response": {
+                    "mode": "template_v1_no_blocks",
+                    "filename": file.filename,
+                    "content_type": file.content_type,
+                    "file_size": len(file_bytes),
+                },
+                "items": [
+                    {
+                        "course_name": "",
+                        "course_code": "",
+                        "teacher": "",
+                        "room": "",
+                        "day_of_week": None,
+                        "start_time": "",
+                        "end_time": "",
+                        "start_period": None,
+                        "end_period": None,
+                        "week_text": "",
+                        "source_block": "未匹配到课表模板中的课程块。请上传完整的标准课表截图，或改用手动确认导入。",
+                        "confidence": 0.0,
+                        "needs_review": True,
+                    }
+                ],
+                "engine": "template-v1-unmatched",
+            }
+
         return {
             "status": "success",
             "raw_response": {
-                "mode": "manual_review_fallback",
+                "mode": "template_v1_geometry",
                 "filename": file.filename,
                 "content_type": file.content_type,
                 "file_size": len(file_bytes),
+                "detected_blocks": len(blocks),
             },
             "items": [
                 {
                     "course_name": "",
-                    "course_code": "",
+                    "course_code": block.course_code,
                     "teacher": "",
-                    "room": "",
-                    "day_of_week": None,
-                    "start_time": "",
-                    "end_time": "",
+                    "room": block.room,
+                    "day_of_week": block.day_of_week,
+                    "start_time": block.start_time,
+                    "end_time": block.end_time,
                     "start_period": None,
                     "end_period": None,
                     "week_text": "",
-                    "source_block": "当前版本改为人工确认导入。请先搜索课程，再手动补充星期、时间和教室。",
-                    "confidence": 0.0,
-                    "needs_review": True,
+                    "source_block": block.source_text or f"Detected block on {block.day_label} {block.start_time}-{block.end_time}",
+                    "confidence": block.confidence,
+                    "needs_review": block.needs_review,
                 }
+                for block in blocks
             ],
-            "engine": "manual-review-fallback",
+            "engine": "template-v1-geometry",
         }
     except Exception as e:
         print(f"Extraction error: {e}")
@@ -59,8 +94,12 @@ async def extract_schedule(file: UploadFile = File(...)):
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "model": "manual-review-fallback"}
+    return {
+        "status": "healthy",
+        "model": "template-v1-geometry",
+        "ocr_text_engine": os.environ.get("OCR_TEXT_ENGINE", "disabled"),
+    }
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))

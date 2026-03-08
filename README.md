@@ -34,6 +34,7 @@ npm run start
 ```env
 EXPO_PUBLIC_SUPABASE_URL=...
 EXPO_PUBLIC_SUPABASE_ANON_KEY=...
+EXPO_PUBLIC_OCR_API_URL=https://your-ocr-api.example.com
 EXPO_PUBLIC_DEEPSEEK_API_KEY=...
 EXPO_PUBLIC_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 ```
@@ -59,16 +60,20 @@ npm run test:e2e
 - `migrate_messages.sql`
 - `add_user_schedules.sql`
 
-如需启用课表 OCR 后端（FastAPI + DeepSeek），参考 `backend/`：
+如需启用课表 OCR 后端，参考 `backend/`：
 1. 安装依赖并运行服务
 ```bash
 cd backend
 python -m venv .venv
 pip install -r requirements.txt
-# 设置 DEEPSEEK_API_KEY 环境变量
 uvicorn main:app --reload --port 8000
 ```
-2. 按需修改 `services/ai-ocr.ts` 中的 `AI_BACKEND_URL` 为你的本机地址
+2. 在 `.env` 中配置 OCR 服务地址
+```env
+EXPO_PUBLIC_OCR_API_URL=https://your-ocr-api.example.com
+```
+3. 开发环境可指向本机或局域网服务；上架版本必须指向公网可访问的 HTTPS 地址，不能依赖本地 `main.py`
+4. 如需按需付费部署，优先考虑 Cloud Run。部署说明见 [docs/cloud_run_ocr.md](/c:/Users/Tim/Documents/GitHub/CampusCopy/docs/cloud_run_ocr.md)
 
 **目录结构**
 - `app/`：Expo Router 页面与路由
