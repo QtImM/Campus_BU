@@ -262,7 +262,8 @@ def _ocr_block_text_paddle(image: Image.Image, bbox: tuple[int, int, int, int]) 
     try:
         ocr = _get_paddle_ocr()
         result = ocr.predict(np.array(prepared))
-    except Exception:
+    except Exception as exc:
+        print(f"Paddle OCR failed for bbox={bbox}: {exc}")
         return ""
 
     texts: list[str] = []
