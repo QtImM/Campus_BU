@@ -23,6 +23,7 @@
     },
     "teachers": {
         "title": "教师列表",
+        "search_placeholder": "输入教师名字...",
         "prof": "点评",
         "rate": "点评",
         "swap": "换课",
@@ -160,6 +161,15 @@
         "sort": {
             "latest_post": "🕐 最新发布",
             "most_liked": "🔥 最多点赞"
+        },
+        "search": {
+            "header": "搜索",
+            "placeholder": "搜索内容、作者...",
+            "no_results": "未找到相关结果",
+            "tabs": {
+                "discover": "发现",
+                "forum": "论坛"
+            }
         },
         "categories": {
             "all": "全部",

@@ -723,7 +723,7 @@ export default function MapScreen() {
     const [navTarget, setNavTarget] = useState<{ lat: number, lng: number } | null>(null);
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [isNavigating, setIsNavigating] = useState(false);
-    
+
     // Region Restriction State
     const [regionChecked, setRegionChecked] = useState(false);
 
@@ -821,7 +821,7 @@ export default function MapScreen() {
     // Check region restriction on component mount
     const checkRegionRestriction = useCallback(async () => {
         if (regionChecked) return; // Avoid duplicate checks
-        
+
         try {
             // 1. Request location permissions
             const { status } = await Location.requestForegroundPermissionsAsync();
@@ -839,10 +839,10 @@ export default function MapScreen() {
 
             // 3. Check if in Hong Kong
             const inHongKong = isInHongKong(latitude, longitude);
-            
+
             // 🧪 TEST MODE: Reverse logic when testing (treat HK as non-HK)
             const shouldRestrict = TEST_REGION_RESTRICTION ? inHongKong : !inHongKong;
-            
+
             if (shouldRestrict) {
                 Alert.alert(
                     t('map.region_restriction.title'),
@@ -856,7 +856,7 @@ export default function MapScreen() {
                     { cancelable: false }
                 );
             }
-            
+
             setRegionChecked(true);
         } catch (error) {
             console.error('Region check failed:', error);
@@ -868,7 +868,7 @@ export default function MapScreen() {
     useFocusEffect(
         useCallback(() => {
             checkRegionRestriction();
-            
+
             const task = InteractionManager.runAfterInteractions(() => {
                 loadPostsData();
             });
@@ -1872,7 +1872,10 @@ export default function MapScreen() {
                 transparent={true}
                 onRequestClose={closeClassroomSheet}
             >
-                <View style={styles.classroomSheetOverlay}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.classroomSheetOverlay}
+                >
                     <TouchableOpacity
                         style={styles.classroomSheetBackdrop}
                         activeOpacity={1}
@@ -1953,7 +1956,7 @@ export default function MapScreen() {
                             }
                         />
                     </Animated.View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             <Modal

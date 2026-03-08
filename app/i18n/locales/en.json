@@ -23,6 +23,7 @@
     },
     "teachers": {
         "title": "Instructors",
+        "search_placeholder": "Search instructor...",
         "prof": "PROF",
         "rate": "RATE",
         "swap": "SWAP",
@@ -160,6 +161,15 @@
         "sort": {
             "latest_post": "🕐 Latest Post",
             "most_liked": "🔥 Most Liked"
+        },
+        "search": {
+            "header": "Search",
+            "placeholder": "Search content or author...",
+            "no_results": "No results found",
+            "tabs": {
+                "discover": "Discover",
+                "forum": "Forum"
+            }
         },
         "categories": {
             "all": "All",

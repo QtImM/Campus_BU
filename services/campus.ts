@@ -113,6 +113,55 @@ export const fetchPosts = async (category: PostCategory = 'All', currentUserId?:
 };
 
 /**
+ * Search posts by query
+ */
+export const searchPosts = async (queryText: string, currentUserId?: string): Promise<Post[]> => {
+    // using user-defined ilike search here. To make it more robust we can search by content or author name
+    let query = supabase.from(POSTS_TABLE).select('*, author:users!author_id(*)');
+
+    if (queryText && queryText.trim().length > 0) {
+        query = query.or(`content.ilike.%${queryText}%,author_name.ilike.%${queryText}%`);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(20);
+
+    if (error) {
+        console.error('Error searching posts:', error);
+        throw error;
+    }
+
+    let posts = (data || []).map(mapSupabaseToPost);
+
+    // Filter out posts from blocked users
+    if (currentUserId) {
+        const blockedIds = await getBlockedUserIds(currentUserId);
+        if (blockedIds.length > 0) {
+            const blockedSet = new Set(blockedIds);
+            posts = posts.filter(p => !blockedSet.has(p.authorId));
+        }
+    }
+
+    // If userId is provided, check which posts the user has liked
+    if (currentUserId && posts.length > 0) {
+        const postIds = posts.map(p => p.id);
+        const { data: likes } = await supabase
+            .from(LIKES_TABLE)
+            .select('post_id')
+            .eq('user_id', currentUserId)
+            .in('post_id', postIds);
+
+        if (likes) {
+            const likedPostIds = new Set(likes.map(l => l.post_id));
+            posts.forEach(p => {
+                p.isLiked = likedPostIds.has(p.id);
+            });
+        }
+    }
+
+    return posts;
+};
+
+/**
  * Fetch a single post by ID
  */
 export const fetchPostById = async (postId: string, currentUserId?: string): Promise<Post | null> => {

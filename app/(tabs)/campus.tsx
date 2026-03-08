@@ -374,7 +374,10 @@ export default function CampusScreen() {
 
         {/* Right actions */}
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconBtn}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push('/campus/search')}
+          >
             <Search size={20} color="#1E3A8A" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={() => setLangModalVisible(true)}>

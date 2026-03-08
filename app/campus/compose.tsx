@@ -53,22 +53,21 @@ export default function ComposeScreen() {
     };
 
     const pickImage = async () => {
-        if (images.length >= 3) {
-            showToast('You can only upload up to 3 images', 'error');
+        if (images.length >= 6) {
+            showToast('You can only upload up to 6 images', 'error');
             return;
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 3],
+            allowsMultipleSelection: true,
             quality: 0.5,
-            selectionLimit: 3 - images.length,
+            selectionLimit: 6 - images.length,
         });
 
         if (!result.canceled) {
             const newImages = result.assets.map(asset => asset.uri);
-            setImages(prev => [...prev, ...newImages].slice(0, 3));
+            setImages(prev => [...prev, ...newImages].slice(0, 6));
         }
     };
 
@@ -204,7 +203,7 @@ export default function ComposeScreen() {
                                 </TouchableOpacity>
                             </View>
                         ))}
-                        {images.length < 3 && (
+                        {images.length < 6 && (
                             <TouchableOpacity style={styles.addImageMini} onPress={pickImage}>
                                 <ImageIcon size={24} color="#9CA3AF" />
                             </TouchableOpacity>
@@ -215,13 +214,13 @@ export default function ComposeScreen() {
                 {/* Footer Options */}
                 <View style={styles.footerOptions}>
                     <TouchableOpacity
-                        style={[styles.optionButton, images.length >= 3 && styles.optionButtonDisabled]}
+                        style={[styles.optionButton, images.length >= 6 && styles.optionButtonDisabled]}
                         onPress={pickImage}
-                        disabled={images.length >= 3}
+                        disabled={images.length >= 6}
                     >
-                        <ImageIcon size={24} color={images.length >= 3 ? "#E5E7EB" : "#1E3A8A"} />
-                        <Text style={[styles.optionText, images.length >= 3 && styles.optionTextDisabled]}>
-                            {t('map.modal.add_image')} ({images.length}/3)
+                        <ImageIcon size={24} color={images.length >= 6 ? "#E5E7EB" : "#1E3A8A"} />
+                        <Text style={[styles.optionText, images.length >= 6 && styles.optionTextDisabled]}>
+                            {t('map.modal.add_image')} ({images.length}/6)
                         </Text>
                     </TouchableOpacity>
 

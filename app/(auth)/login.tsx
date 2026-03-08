@@ -227,15 +227,7 @@ export default function LoginScreen() {
                         <Text style={styles.guestButtonText}>{t('auth.guest_login')}</Text>
                     </TouchableOpacity>
 
-                    {/* Developer Shortcut to Setup Screen */}
-                    {__DEV__ && (
-                        <TouchableOpacity
-                            onPress={() => router.push('/(auth)/setup')}
-                            style={{ marginTop: 10, alignSelf: 'center', opacity: 0.3 }}
-                        >
-                            <Text style={{ fontSize: 10, color: '#9CA3AF' }}>Dev: Skip to Setup UI</Text>
-                        </TouchableOpacity>
-                    )}
+
 
                     <View style={styles.footer}>
                         <Text style={styles.footerText}>{t('auth.agreement_prefix', '登录即代表同意 ')}</Text>

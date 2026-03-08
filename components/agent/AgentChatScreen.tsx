@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Bot, Send, Sparkles, User } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Keyboard,
@@ -21,6 +22,7 @@ import { AgentExecutor } from '../../services/agent/executor';
 import { getCookieInjectionScript } from '../../services/agent/session';
 import { AgentStep } from '../../services/agent/types';
 import { getCurrentUser } from '../../services/auth';
+import { GuestLoginModal } from '../common/GuestLoginModal';
 
 interface AgentChatScreenProps {
     showBackButton?: boolean;
@@ -42,6 +44,9 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     const [showWebView, setShowWebView] = useState(false);
     const [useLangGraph, setUseLangGraph] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
+    const [loadingSession, setLoadingSession] = useState(true);
+    const [showGuestModal, setShowGuestModal] = useState(false);
+    const { t } = useTranslation();
     const scrollViewRef = useRef<ScrollView>(null);
     const webViewRef = useRef<WebView>(null);
     const agentRef = useRef<AgentExecutor>(new AgentExecutor('demo-user'));
@@ -59,10 +64,12 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
     useEffect(() => {
         async function loadSession() {
+            setLoadingSession(true);
             const user = await getCurrentUser();
             setCurrentUser(user);
             const script = await getCookieInjectionScript();
             setCookieScript(script);
+            setLoadingSession(false);
         }
         loadSession();
     }, []);
@@ -120,6 +127,11 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     }, [useLangGraph]);
 
     const handleSend = async (overrideText?: string) => {
+        if (!loadingSession && !currentUser) {
+            setShowGuestModal(true);
+            return;
+        }
+
         const textToSend = overrideText || input;
         if (!textToSend.trim() || loading) return;
 
@@ -245,14 +257,14 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                     <Sparkles size={32} color="#1E3A8A" />
                     <Text style={styles.welcomeTitle}>你好！我是创新实验室校园生活 Agent</Text>
                     <Text style={styles.welcomeText}>
-                        我可以帮你查图书馆位子、搜食堂美食，还可以记住你的偏好。你可以试着问我：
+                        我可以帮你查关于HKBU的任何问题，尽管来问我吧！你可以试着问我：
                     </Text>
                     <View style={styles.suggestions}>
                         <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('推荐一下附近好吃的')}>
-                            <Text style={styles.suggestionText}>“推荐一下附近好吃的”</Text>
+                            <Text style={styles.suggestionText}>“期末考试的A、B、C分别对应多少绩点？”</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('图书馆还有位子吗？')}>
-                            <Text style={styles.suggestionText}>“图书馆还有位子吗？”</Text>
+                            <Text style={styles.suggestionText}>“学校的图书馆在哪里？”</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -361,7 +373,12 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                     }}
                 />
             </View>
-        </KeyboardAvoidingView>
+
+            <GuestLoginModal
+                visible={showGuestModal}
+                onClose={() => setShowGuestModal(false)}
+            />
+        </KeyboardAvoidingView >
     );
 }
 

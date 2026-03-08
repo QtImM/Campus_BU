@@ -18,7 +18,7 @@ export const EduBadge: React.FC<EduBadgeProps> = ({ shouldShow = true, size = 's
 
     return (
         <View style={styles.badge}>
-            <Text style={styles.badgeText}>Edu</Text>
+            <Text style={styles.badgeText}>BU_Edu</Text>
         </View>
     );
 };

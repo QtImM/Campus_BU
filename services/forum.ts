@@ -68,6 +68,39 @@ export const fetchForumPosts = async (
     return posts;
 };
 
+// ── Search list ────────────────────────────────────────────────────────────────
+export const searchForumPosts = async (
+    queryText: string,
+    currentUserId?: string,
+): Promise<ForumPost[]> => {
+    let query = supabase.from(FORUM_POSTS).select('*');
+
+    if (queryText && queryText.trim().length > 0) {
+        query = query.or(`title.ilike.%${queryText}%,content.ilike.%${queryText}%,author_name.ilike.%${queryText}%`);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(20);
+    if (error) throw error;
+
+    const posts = (data || []).map(mapRow);
+
+    if (currentUserId && posts.length > 0) {
+        const ids = posts.map(p => p.id);
+        const { data: upvotes } = await supabase
+            .from(FORUM_UPVOTES)
+            .select('post_id')
+            .eq('user_id', currentUserId)
+            .in('post_id', ids);
+
+        if (upvotes) {
+            const set = new Set(upvotes.map((u: any) => u.post_id));
+            posts.forEach(p => { p.isUpvoted = set.has(p.id); });
+        }
+    }
+
+    return posts;
+};
+
 // ── Fetch single post ─────────────────────────────────────────────────────────
 export const fetchForumPostById = async (
     postId: string,

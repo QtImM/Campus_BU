@@ -23,6 +23,7 @@
     },
     "teachers": {
         "title": "教師列表",
+        "search_placeholder": "輸入講師名字...",
         "prof": "點評",
         "rate": "點評",
         "swap": "換課",
@@ -160,6 +161,15 @@
         "sort": {
             "latest_post": "🕐 最新發佈",
             "most_liked": "🔥 最多點讚"
+        },
+        "search": {
+            "header": "搜尋",
+            "placeholder": "搜尋内容、作者...",
+            "no_results": "未找到相關結果",
+            "tabs": {
+                "discover": "發現",
+                "forum": "論壇"
+            }
         },
         "categories": {
             "all": "全部",

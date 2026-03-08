@@ -131,7 +131,13 @@ export default function TeacherListScreen() {
 
             {/* Custom Header */}
             <View style={styles.customHeader}>
-                <TouchableOpacity onPress={() => router.replace('/(tabs)/course')} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => {
+                    if (router.canGoBack()) {
+                        router.back();
+                    } else {
+                        router.replace('/(tabs)/course');
+                    }
+                }} style={styles.backBtn}>
                     <ArrowLeft size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle} numberOfLines={1}>{t('teachers.title')}</Text>
@@ -144,7 +150,7 @@ export default function TeacherListScreen() {
                     <Search size={20} color="#9CA3AF" />
                     <TextInput
                         style={styles.searchInput}
-                        placeholder="輸入講師名字..."
+                        placeholder={t('teachers.search_placeholder')}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         clearButtonMode="while-editing"
