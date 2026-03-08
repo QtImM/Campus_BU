@@ -21,4 +21,8 @@ def configure_runtime_environment() -> None:
     os.environ.setdefault("PADDLE_HOME", str(base_dir / "paddle"))
     os.environ.setdefault("PADDLE_DATA_HOME", str(dataset_dir))
     os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
-
+    os.environ.setdefault("FLAGS_enable_pir_api", "0")
+    os.environ.setdefault("FLAGS_use_mkldnn", "0")
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("CPU_NUM", "1")

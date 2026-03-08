@@ -1,9 +1,10 @@
 import unittest
+import os
 
 from PIL import Image, ImageDraw
 
 import template_v1
-from template_v1 import _parse_course_code, _parse_room, detect_schedule_blocks
+from template_v1 import _get_paddle_ocr_config, _parse_course_code, _parse_room, detect_schedule_blocks
 
 
 def _draw_synthetic_template() -> bytes:
@@ -68,6 +69,30 @@ class TemplateV1Tests(unittest.TestCase):
 
     def tearDown(self):
         template_v1.pytesseract = self.original_ocr
+
+    def test_paddle_ocr_defaults_to_lightweight_mobile_models(self):
+        original_values = {
+            "OCR_PADDLE_DET_MODEL": os.environ.get("OCR_PADDLE_DET_MODEL"),
+            "OCR_PADDLE_REC_MODEL": os.environ.get("OCR_PADDLE_REC_MODEL"),
+            "OCR_PADDLE_DET_LIMIT_SIDE_LEN": os.environ.get("OCR_PADDLE_DET_LIMIT_SIDE_LEN"),
+            "OCR_PADDLE_REC_BATCH_SIZE": os.environ.get("OCR_PADDLE_REC_BATCH_SIZE"),
+        }
+        for key in original_values:
+            os.environ.pop(key, None)
+
+        try:
+            config = _get_paddle_ocr_config()
+        finally:
+            for key, value in original_values.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+        self.assertEqual(config["text_detection_model_name"], "PP-OCRv4_mobile_det")
+        self.assertEqual(config["text_recognition_model_name"], "en_PP-OCRv4_mobile_rec")
+        self.assertEqual(config["text_det_limit_side_len"], 512)
+        self.assertEqual(config["text_recognition_batch_size"], 1)
 
     def test_detect_schedule_blocks_returns_expected_geometry(self):
         image_bytes = _draw_synthetic_template()

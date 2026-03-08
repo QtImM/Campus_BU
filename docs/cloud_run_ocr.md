@@ -112,6 +112,19 @@ Current engine switch:
 - `OCR_TEXT_ENGINE=tesseract`: fallback local option
 - `OCR_TEXT_ENGINE=paddle`: preferred Linux production target
 
+Recommended Paddle defaults for block OCR:
+
+- `OCR_PADDLE_DET_MODEL=PP-OCRv4_mobile_det`
+- `OCR_PADDLE_REC_MODEL=en_PP-OCRv4_mobile_rec`
+- `OCR_PADDLE_DET_LIMIT_SIDE_LEN=512`
+- `OCR_PADDLE_REC_BATCH_SIZE=1`
+
+Reason:
+
+- PaddleOCR 3.x will otherwise default to a heavier `PP-OCRv5_server_det` path
+- timetable block OCR is already working on small cropped regions, so mobile det/rec is a better fit
+- this keeps memory and cold start pressure lower on CPU-only Cloud Run
+
 ## What Still Needs To Be Done
 
 - wire PaddleOCR into the production OCR path on Linux

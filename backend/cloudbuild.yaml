@@ -8,6 +8,10 @@ substitutions:
   _TIMEOUT: "60"
   _CONCURRENCY: "1"
   _OCR_TEXT_ENGINE: paddle
+  _OCR_PADDLE_DET_MODEL: PP-OCRv4_mobile_det
+  _OCR_PADDLE_REC_MODEL: en_PP-OCRv4_mobile_rec
+  _OCR_PADDLE_DET_LIMIT_SIDE_LEN: "512"
+  _OCR_PADDLE_REC_BATCH_SIZE: "1"
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -18,6 +22,16 @@ steps:
       - -t
       - gcr.io/$PROJECT_ID/${_SERVICE}:latest
       - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/${_SERVICE}:$COMMIT_SHA
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/${_SERVICE}:latest
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -45,7 +59,7 @@ steps:
       - --max-instances
       - ${_MAX_INSTANCES}
       - --set-env-vars
-      - OCR_RUNTIME_HOME=/tmp/hkcampus-ocr,OCR_TEXT_ENGINE=${_OCR_TEXT_ENGINE}
+      - OCR_RUNTIME_HOME=/tmp/hkcampus-ocr,OCR_TEXT_ENGINE=${_OCR_TEXT_ENGINE},OCR_PADDLE_DET_MODEL=${_OCR_PADDLE_DET_MODEL},OCR_PADDLE_REC_MODEL=${_OCR_PADDLE_REC_MODEL},OCR_PADDLE_DET_LIMIT_SIDE_LEN=${_OCR_PADDLE_DET_LIMIT_SIDE_LEN},OCR_PADDLE_REC_BATCH_SIZE=${_OCR_PADDLE_REC_BATCH_SIZE}
 
 images:
   - gcr.io/$PROJECT_ID/${_SERVICE}:$COMMIT_SHA

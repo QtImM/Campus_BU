@@ -211,6 +211,32 @@ def _normalize_ocr_lines(text: str) -> str:
     return "\n".join(lines)
 
 
+def _getenv_int(name: str, default: int) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    try:
+        return int(raw_value)
+    except ValueError:
+        return default
+
+
+def _get_paddle_ocr_config() -> dict[str, object]:
+    # Timetable block OCR is a small English-only crop, so default to the
+    # lighter mobile models instead of PaddleOCR 3.x's heavier server det model.
+    return {
+        "use_doc_orientation_classify": False,
+        "use_doc_unwarping": False,
+        "use_textline_orientation": False,
+        "text_detection_model_name": os.environ.get("OCR_PADDLE_DET_MODEL", "PP-OCRv4_mobile_det"),
+        "text_recognition_model_name": os.environ.get("OCR_PADDLE_REC_MODEL", "en_PP-OCRv4_mobile_rec"),
+        "text_det_limit_side_len": _getenv_int("OCR_PADDLE_DET_LIMIT_SIDE_LEN", 512),
+        "text_recognition_batch_size": _getenv_int("OCR_PADDLE_REC_BATCH_SIZE", 1),
+        "lang": os.environ.get("OCR_PADDLE_LANG", "en"),
+        "device": os.environ.get("OCR_PADDLE_DEVICE", "cpu"),
+    }
+
+
 def _ocr_block_text_tesseract(image: Image.Image, bbox: tuple[int, int, int, int]) -> str:
     if pytesseract is None:
         return ""
@@ -225,13 +251,7 @@ def _ocr_block_text_tesseract(image: Image.Image, bbox: tuple[int, int, int, int
 def _get_paddle_ocr():
     from paddleocr import PaddleOCR
 
-    return PaddleOCR(
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-        use_textline_orientation=False,
-        lang=os.environ.get("OCR_PADDLE_LANG", "en"),
-        device=os.environ.get("OCR_PADDLE_DEVICE", "cpu"),
-    )
+    return PaddleOCR(**_get_paddle_ocr_config())
 
 
 def _ocr_block_text_paddle(image: Image.Image, bbox: tuple[int, int, int, int]) -> str:
