@@ -167,6 +167,7 @@ export interface Review {
     likes: number;
     createdAt: Date;
     semester: string; // e.g., "2025 Fall"
+    isAnonymous?: boolean; // Whether the review is posted anonymously
 }
 
 // Course Exchange Types

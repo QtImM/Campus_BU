@@ -37,7 +37,8 @@ export const addLocalReview = async (review: Partial<Review>): Promise<{ error: 
             tags: [],
             likes: 0,
             createdAt: new Date(),
-            semester: review.semester || '2025 Spring'
+            semester: review.semester || '2025 Spring',
+            isAnonymous: review.isAnonymous || false
         };
 
         const updated = [newReview, ...allReviews];
@@ -375,7 +376,8 @@ export const getReviews = async (courseId: string, courseCode?: string): Promise
             tags: [],
             likes: r.likes || 0,
             createdAt: new Date(r.created_at),
-            semester: r.semester || 'Current'
+            semester: r.semester || 'Current',
+            isAnonymous: r.is_anonymous || false
         };
     });
 };
@@ -435,7 +437,8 @@ export const getReviewsAndHasReviewed = async (
             tags: [],
             likes: r.likes || 0,
             createdAt: new Date(r.created_at),
-            semester: r.semester || 'Current'
+            semester: r.semester || 'Current',
+            isAnonymous: r.is_anonymous || false
         };
     });
 
@@ -661,7 +664,8 @@ export const addReview = async (reviewData: Partial<Review>): Promise<{ error: a
             rating: reviewData.rating,
             difficulty: reviewData.difficulty,
             content: reviewData.content,
-            semester: reviewData.semester
+            semester: reviewData.semester,
+            is_anonymous: reviewData.isAnonymous || false
         });
 
     if (insertError) {

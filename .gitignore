@@ -46,4 +46,3 @@ yarn-error.*
 # OCR backend local runtime artifacts
 backend/.paddlex_cache/
 backend/__pycache__/
-backend/samples/

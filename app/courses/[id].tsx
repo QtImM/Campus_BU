@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, Tag, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
+import { Check, ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, Tag, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -81,6 +81,7 @@ export default function CourseDetailScreen() {
     const [rating, setRating] = useState(0);
     const [difficulty, setDifficulty] = useState(0);
     const [reviewContent, setReviewContent] = useState('');
+    const [isAnonymous, setIsAnonymous] = useState(false);
 
     // Teaming Form State
     const [teamingSection, setTeamingSection] = useState('');
@@ -267,12 +268,13 @@ export default function CourseDetailScreen() {
         const reviewData: Partial<Review> = {
             courseId: id as string,
             authorId: user.uid,
-            authorName: user.displayName || 'Anonymous',
-            authorAvatar: user.avatarUrl || '👤',
+            authorName: isAnonymous ? '匿名同学' : (user.displayName || 'Anonymous'),
+            authorAvatar: isAnonymous ? '👤' : (user.avatarUrl || '👤'),
             rating: rating > 0 ? rating : undefined,
             difficulty: difficulty > 0 ? difficulty : 3,
             content: reviewContent.trim(),
-            semester: '2025 Spring'
+            semester: '2025 Spring',
+            isAnonymous: isAnonymous
         };
 
         const { error } = await addReview(reviewData);
@@ -303,6 +305,7 @@ export default function CourseDetailScreen() {
             setRating(0);
             setDifficulty(0);
             setReviewContent('');
+            setIsAnonymous(false);
             Alert.alert('Success', 'Evaluation posted successfully!');
 
             // Silent background refresh to replace temp entry with real DB row
@@ -999,6 +1002,23 @@ export default function CourseDetailScreen() {
                                         onChangeText={setReviewContent}
                                         textAlignVertical="top"
                                     />
+
+                                    {/* Anonymous Option */}
+                                    <TouchableOpacity 
+                                        style={styles.anonymousToggle}
+                                        onPress={() => setIsAnonymous(!isAnonymous)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={[
+                                            styles.checkbox,
+                                            isAnonymous && styles.checkboxActive
+                                        ]}>
+                                            {isAnonymous && (
+                                                <Check size={16} color="#fff" />
+                                            )}
+                                        </View>
+                                        <Text style={styles.anonymousText}>Post anonymously</Text>
+                                    </TouchableOpacity>
 
                                     <TouchableOpacity style={styles.submitButton} onPress={handleAddReview}>
                                         <Text style={styles.submitText}>{hasReviewed ? 'Post Update' : 'Submit Review'}</Text>
@@ -1733,6 +1753,33 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     submitText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+    // Anonymous Option
+    anonymousToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 24,
+        paddingVertical: 8,
+    },
+    checkbox: {
+        width: 24,
+        height: 24,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: '#D1D5DB',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    checkboxActive: {
+        backgroundColor: '#4B0082',
+        borderColor: '#4B0082',
+    },
+    anonymousText: {
+        fontSize: 15,
+        fontWeight: '500',
+        color: '#374151',
+    },
 
     // Teaming Styles
     teamingCard: {
