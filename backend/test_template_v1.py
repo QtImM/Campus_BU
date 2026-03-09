@@ -1,5 +1,6 @@
 import unittest
 import os
+import io
 
 from PIL import Image, ImageDraw
 
@@ -8,11 +9,13 @@ from template_v1 import (
     _extract_ocr_space_text,
     _parse_course_code,
     _parse_room,
+    _select_regular_boundaries,
+    detect_schedule_blocks_with_layout,
     detect_schedule_blocks,
 )
 
 
-def _draw_synthetic_template() -> bytes:
+def _draw_synthetic_template(skip_vertical_indices: set[int] | None = None) -> bytes:
     width, height = 960, 845
     image = Image.new("RGB", (width, height), (240, 240, 240))
     draw = ImageDraw.Draw(image)
@@ -27,7 +30,10 @@ def _draw_synthetic_template() -> bytes:
 
     verticals = [0, left_col] + [left_col + day_width * i for i in range(1, 7)]
     verticals.append(width - 1)
-    for x in verticals:
+    skipped = skip_vertical_indices or set()
+    for index, x in enumerate(verticals):
+        if index in skipped:
+            continue
         draw.line((x, 0, x, height - 1), fill=(90, 90, 90), width=1)
 
     horizontals = [0, header_bottom] + [header_bottom + row_height * i for i in range(1, 15)]
@@ -59,8 +65,6 @@ def _draw_synthetic_template() -> bytes:
     add_block(4, 7, 10)  # Fri 15:30-18:30
     add_block(3, 10, 13) # Thu 18:30-21:30
     add_block(4, 10, 13) # Fri 18:30-21:30
-
-    import io
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
@@ -128,8 +132,6 @@ def _draw_wrapped_template() -> bytes:
 
     image.paste(table, (table_left, table_top))
 
-    import io
-
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
@@ -155,6 +157,27 @@ class TemplateV1Tests(unittest.TestCase):
             ],
         )
 
+    def test_detect_schedule_blocks_reports_standard_layout(self):
+        image_bytes = _draw_synthetic_template()
+        result = detect_schedule_blocks_with_layout(image_bytes)
+
+        self.assertEqual(result.layout_mode, "standard")
+        self.assertEqual(len(result.blocks), 6)
+
+    def test_select_regular_boundaries_can_infer_missing_vertical_lines(self):
+        inferred = _select_regular_boundaries(
+            [0, 86, 374, 662, 950],
+            expected_count=8,
+            min_span=320,
+            min_mean_gap=55,
+            allow_infer_missing=True,
+        )
+
+        self.assertEqual(
+            inferred,
+            [0, 86, 230, 374, 518, 662, 806, 950],
+        )
+
     def test_detect_schedule_blocks_on_wrapped_page_template(self):
         image_bytes = _draw_wrapped_template()
         blocks = detect_schedule_blocks(image_bytes)
@@ -172,6 +195,13 @@ class TemplateV1Tests(unittest.TestCase):
                 (6, "13:30", "16:30"),
             ],
         )
+
+    def test_detect_schedule_blocks_reports_embedded_layout(self):
+        image_bytes = _draw_wrapped_template()
+        result = detect_schedule_blocks_with_layout(image_bytes)
+
+        self.assertEqual(result.layout_mode, "embedded")
+        self.assertEqual(len(result.blocks), 6)
 
     def test_parse_course_code_and_room_from_ocr_text(self):
         source_text = "COMP7650 (00001)\nFSC801C, FSC801D,\nRRS638, WLB103"

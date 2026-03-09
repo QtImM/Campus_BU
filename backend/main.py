@@ -5,7 +5,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from runtime_config import configure_runtime_environment
-from template_v1 import detect_schedule_blocks
+from template_v1 import detect_schedule_blocks_with_layout
 
 configure_runtime_environment()
 
@@ -27,13 +27,15 @@ async def extract_schedule(file: UploadFile = File(...)):
 
     try:
         file_bytes = await file.read()
-        blocks = detect_schedule_blocks(file_bytes)
+        detection = detect_schedule_blocks_with_layout(file_bytes)
+        blocks = detection.blocks
 
         if not blocks:
             return {
                 "status": "success",
                 "raw_response": {
-                    "mode": "template_v1_no_blocks",
+                    "mode": f"template_v1_{detection.layout_mode}_no_blocks",
+                    "layout_mode": detection.layout_mode,
                     "filename": file.filename,
                     "content_type": file.content_type,
                     "file_size": len(file_bytes),
@@ -61,7 +63,8 @@ async def extract_schedule(file: UploadFile = File(...)):
         return {
             "status": "success",
             "raw_response": {
-                "mode": "template_v1_geometry",
+                "mode": f"template_v1_{detection.layout_mode}_geometry",
+                "layout_mode": detection.layout_mode,
                 "filename": file.filename,
                 "content_type": file.content_type,
                 "file_size": len(file_bytes),
@@ -85,7 +88,7 @@ async def extract_schedule(file: UploadFile = File(...)):
                 }
                 for block in blocks
             ],
-            "engine": "template-v1-geometry",
+            "engine": f"template-v1-{detection.layout_mode}-geometry",
         }
     except Exception as e:
         print(f"Extraction error: {e}")

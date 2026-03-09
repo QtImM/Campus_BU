@@ -59,6 +59,12 @@ class DetectedBlock:
     needs_review: bool
 
 
+@dataclass
+class ScheduleDetectionResult:
+    layout_mode: str
+    blocks: list[DetectedBlock]
+
+
 def _cluster_positions(positions: Iterable[int], max_gap: int = 2) -> list[tuple[int, int]]:
     sorted_positions = sorted(set(positions))
     if not sorted_positions:
@@ -78,6 +84,104 @@ def _cluster_positions(positions: Iterable[int], max_gap: int = 2) -> list[tuple
 
 def _group_centers(groups: list[tuple[int, int]]) -> list[int]:
     return [int((start + end) / 2) for start, end in groups]
+
+
+def _build_regular_grid(anchor: float, step: float, count: int) -> list[int]:
+    return [int(round(anchor + step * index)) for index in range(count)]
+
+
+def _infer_regular_boundaries(
+    boundaries: list[int],
+    expected_count: int,
+    min_span: int,
+    min_mean_gap: int,
+) -> list[int] | None:
+    if len(boundaries) < 3:
+        return None
+
+    span = boundaries[-1] - boundaries[0]
+    if span < min_span:
+        return None
+
+    if expected_count == 8:
+        candidate_day_widths: set[int] = set()
+        for start_index in range(len(boundaries)):
+            for end_index in range(start_index + 1, len(boundaries)):
+                distance = boundaries[end_index] - boundaries[start_index]
+                step_count = end_index - start_index
+                for divisor in range(step_count, 7):
+                    day_width = distance / divisor
+                    rounded = int(round(day_width))
+                    if rounded >= min_mean_gap:
+                        candidate_day_widths.add(rounded)
+
+        best_grid: list[int] | None = None
+        best_score: float | None = None
+
+        for day_width in sorted(candidate_day_widths):
+            tolerance = max(8.0, day_width * 0.18)
+            for time_ratio in (0.5, 0.55, 0.6, 0.65, 0.7, 0.75):
+                time_width = day_width * time_ratio
+                offsets = [0.0, time_width] + [time_width + day_width * index for index in range(1, 7)]
+
+                for observed in boundaries:
+                    for grid_index, offset in enumerate(offsets):
+                        anchor = observed - offset
+                        grid = [int(round(anchor + current_offset)) for current_offset in offsets]
+
+                        distances: list[float] = []
+                        for candidate in boundaries:
+                            nearest = min(abs(candidate - expected) for expected in grid)
+                            if nearest > tolerance:
+                                distances = []
+                                break
+                            distances.append(nearest)
+
+                        if not distances:
+                            continue
+
+                        mean_gap = sum(grid[idx + 1] - grid[idx] for idx in range(len(grid) - 1)) / (len(grid) - 1)
+                        if mean_gap < min_mean_gap:
+                            continue
+
+                        score = sum(distances) + abs(grid[0] - boundaries[0]) * 0.15 + abs(grid[-1] - boundaries[-1]) * 0.15
+                        score += abs((grid[1] - grid[0]) / day_width - 0.6) * 10
+                        if best_score is None or score < best_score:
+                            best_score = score
+                            best_grid = grid
+
+        return best_grid
+
+    mean_gap = span / max(expected_count - 1, 1)
+    if mean_gap < min_mean_gap:
+        return None
+
+    tolerance = max(8.0, mean_gap * 0.18)
+    best_grid: list[int] | None = None
+    best_score: float | None = None
+
+    for observed in boundaries:
+        for grid_index in range(expected_count):
+            anchor = observed - mean_gap * grid_index
+            grid = _build_regular_grid(anchor, mean_gap, expected_count)
+
+            distances: list[float] = []
+            for candidate in boundaries:
+                nearest = min(abs(candidate - expected) for expected in grid)
+                if nearest > tolerance:
+                    distances = []
+                    break
+                distances.append(nearest)
+
+            if not distances:
+                continue
+
+            score = sum(distances) + abs(grid[0] - boundaries[0]) * 0.15 + abs(grid[-1] - boundaries[-1]) * 0.15
+            if best_score is None or score < best_score:
+                best_score = score
+                best_grid = grid
+
+    return best_grid
 
 
 def _find_vertical_boundaries(image: Image.Image) -> list[int]:
@@ -190,6 +294,7 @@ def _infer_grid(image: Image.Image) -> tuple[list[int], list[int]]:
         expected_count=8,
         min_span=max(int(image.size[0] * 0.55), 320),
         min_mean_gap=max(int(image.size[0] * 0.07), 55),
+        allow_infer_missing=True,
     )
     horizontal_boundaries = _normalize_horizontal_grid_boundaries(
         horizontal_boundaries,
@@ -205,8 +310,18 @@ def _select_regular_boundaries(
     min_span: int,
     min_mean_gap: int,
     start_bias_weight: float = 0.0,
+    allow_infer_missing: bool = False,
 ) -> list[int]:
     if len(boundaries) < expected_count:
+        if allow_infer_missing:
+            inferred = _infer_regular_boundaries(
+                boundaries,
+                expected_count=expected_count,
+                min_span=min_span,
+                min_mean_gap=min_mean_gap,
+            )
+            if inferred is not None:
+                return inferred
         raise ValueError(f"Expected at least {expected_count} boundaries, got {len(boundaries)}")
     if len(boundaries) == expected_count:
         return boundaries
@@ -322,6 +437,33 @@ def _crop_to_grid_region(
     cropped_verticals = [value - left for value in vertical_boundaries]
     cropped_horizontals = [value - top for value in horizontal_boundaries]
     return cropped, left, top, cropped_verticals, cropped_horizontals
+
+
+def _is_standard_schedule_layout(
+    image: Image.Image,
+    vertical_boundaries: list[int],
+    horizontal_boundaries: list[int],
+) -> bool:
+    width, height = image.size
+    grid_width = vertical_boundaries[-1] - vertical_boundaries[0]
+    grid_height = horizontal_boundaries[-1] - horizontal_boundaries[0]
+
+    left_margin = vertical_boundaries[0]
+    right_margin = max(width - 1 - vertical_boundaries[-1], 0)
+    top_margin = horizontal_boundaries[0]
+    bottom_margin = max(height - 1 - horizontal_boundaries[-1], 0)
+
+    width_ratio = grid_width / max(width, 1)
+    height_ratio = grid_height / max(height, 1)
+    horizontal_margin_ratio = (left_margin + right_margin) / max(width, 1)
+    vertical_margin_ratio = (top_margin + bottom_margin) / max(height, 1)
+
+    return (
+        width_ratio >= 0.88
+        and height_ratio >= 0.68
+        and horizontal_margin_ratio <= 0.12
+        and vertical_margin_ratio <= 0.18
+    )
 
 
 def _normalize_confidence(block_width: int, block_height: int, column_width: int, row_height: int) -> float:
@@ -510,9 +652,11 @@ def _needs_review(course_code: str, room: str, source_text: str) -> bool:
     return not course_code or not room or not source_text
 
 
-def detect_schedule_blocks(image_bytes: bytes) -> list[DetectedBlock]:
-    image = Image.open(BytesIO(image_bytes)).convert("RGB")
-    vertical_boundaries, horizontal_boundaries = _infer_grid(image)
+def _detect_schedule_blocks_in_grid(
+    image: Image.Image,
+    vertical_boundaries: list[int],
+    horizontal_boundaries: list[int],
+) -> list[DetectedBlock]:
     image, offset_x, offset_y, vertical_boundaries, horizontal_boundaries = _crop_to_grid_region(
         image,
         vertical_boundaries,
@@ -580,3 +724,29 @@ def detect_schedule_blocks(image_bytes: bytes) -> list[DetectedBlock]:
 
     detected.sort(key=lambda item: (item.day_of_week, item.start_time, item.bbox[1]))
     return detected
+
+
+def detect_standard_schedule_blocks(image_bytes: bytes) -> list[DetectedBlock]:
+    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    vertical_boundaries, horizontal_boundaries = _infer_grid(image)
+    if not _is_standard_schedule_layout(image, vertical_boundaries, horizontal_boundaries):
+        raise ValueError("Image does not match the standard full-screen schedule layout")
+    return _detect_schedule_blocks_in_grid(image, vertical_boundaries, horizontal_boundaries)
+
+
+def detect_embedded_schedule_blocks(image_bytes: bytes) -> list[DetectedBlock]:
+    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    vertical_boundaries, horizontal_boundaries = _infer_grid(image)
+    return _detect_schedule_blocks_in_grid(image, vertical_boundaries, horizontal_boundaries)
+
+
+def detect_schedule_blocks_with_layout(image_bytes: bytes) -> ScheduleDetectionResult:
+    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    vertical_boundaries, horizontal_boundaries = _infer_grid(image)
+    layout_mode = "standard" if _is_standard_schedule_layout(image, vertical_boundaries, horizontal_boundaries) else "embedded"
+    blocks = _detect_schedule_blocks_in_grid(image, vertical_boundaries, horizontal_boundaries)
+    return ScheduleDetectionResult(layout_mode=layout_mode, blocks=blocks)
+
+
+def detect_schedule_blocks(image_bytes: bytes) -> list[DetectedBlock]:
+    return detect_schedule_blocks_with_layout(image_bytes).blocks

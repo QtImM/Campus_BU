@@ -554,7 +554,6 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                 <View style={styles.stateBox}>
                     <CalendarDays size={24} color="#94A3B8" />
                     <Text style={styles.stateTitle}>这一天还没有课程</Text>
-                    <Text style={styles.stateText}>导入统一规格截图后，已确认的课程会显示在这里。</Text>
                 </View>
             ) : (
                 <View style={styles.entryList}>
