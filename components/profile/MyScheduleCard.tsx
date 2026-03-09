@@ -2,8 +2,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, ImageUp, MapPin, Pencil, Search, Trash2, X } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
     Alert,
     Image,
     Modal,
@@ -30,16 +30,6 @@ import { Course } from '../../types';
 
 const PLACEHOLDER_COLOR = '#9CA3AF';
 const SAMPLE_SCHEDULE_IMAGE = require('../../backend/samples/schedule_real_01.png');
-
-const DAY_OPTIONS = [
-    { key: 1, label: '周一' },
-    { key: 2, label: '周二' },
-    { key: 3, label: '周三' },
-    { key: 4, label: '周四' },
-    { key: 5, label: '周五' },
-    { key: 6, label: '周六' },
-    { key: 7, label: '周日' },
-];
 
 const getDefaultDay = () => {
     const day = new Date().getDay();
@@ -93,6 +83,11 @@ const getImportItemTitle = (item: ScheduleImportItemRecord) => {
 
 export default function MyScheduleCard({ userId }: { userId: string | null }) {
     const router = useRouter();
+    const { t } = useTranslation();
+    const scheduleT = (path: string, fallback: string) => {
+        const patchedValue = t(`schedule_profile_patch.schedule.${path}`, fallback);
+        return t(`profile.schedule.${path}`, patchedValue);
+    };
     const [entries, setEntries] = useState<UserScheduleEntry[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
     const [selectedDay, setSelectedDay] = useState(getDefaultDay());
@@ -126,6 +121,15 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [showManualEntryEditor, setShowManualEntryEditor] = useState(false);
     const [showSampleExample, setShowSampleExample] = useState(false);
+    const dayOptions = [
+        { key: 1, label: scheduleT('days.mon', '周一') },
+        { key: 2, label: scheduleT('days.tue', '周二') },
+        { key: 3, label: scheduleT('days.wed', '周三') },
+        { key: 4, label: scheduleT('days.thu', '周四') },
+        { key: 5, label: scheduleT('days.fri', '周五') },
+        { key: 6, label: scheduleT('days.sat', '周六') },
+        { key: 7, label: scheduleT('days.sun', '周日') },
+    ];
 
     const closeSearchModal = () => {
         setShowSearchModal(false);
@@ -188,13 +192,13 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
 
     const pickImage = async () => {
         if (!userId) {
-            Alert.alert('请先登录', '登录后才能导入个人课表。');
+            Alert.alert(scheduleT('alerts.login_title', '请先登录'), scheduleT('alerts.login_message', '登录后才能导入个人课表。'));
             return;
         }
 
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert('需要相册权限', '请允许访问相册以选择课表截图。');
+            Alert.alert(scheduleT('alerts.permission_title', '需要相册权限'), scheduleT('alerts.permission_message', '请允许访问相册以选择课表截图。'));
             return;
         }
 
@@ -218,11 +222,11 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             const { items } = await importScheduleScreenshot(userId, selectedImage);
             setImportItems(items);
             if (items.length === 0) {
-                Alert.alert('暂时无法生成导入任务', '这张截图里暂时没有生成可人工确认的导入任务。');
+                Alert.alert(scheduleT('alerts.empty_import_title', '暂时无法生成导入任务'), scheduleT('alerts.empty_import_message', '这张截图里暂时没有生成可人工确认的导入任务。'));
             }
         } catch (error: any) {
             console.error('Failed to import schedule screenshot:', error);
-            Alert.alert('导入失败', error?.message || '截图识别失败，请检查 OCR 服务是否可用。');
+            Alert.alert(scheduleT('alerts.import_failed_title', '导入失败'), error?.message || scheduleT('alerts.import_failed_message', '截图识别失败，请检查 OCR 服务是否可用。'));
         } finally {
             setScanning(false);
         }
@@ -525,12 +529,12 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             ) : null}
             <View style={styles.header}>
                 <View style={styles.headerText}>
-                    <Text style={styles.title}>我的课表</Text>
-                    <Text style={styles.subtitle}>支持截图导入、OCR 识别和手动搜课补录。</Text>
+                    <Text style={styles.title}>{scheduleT('title', '我的课表')}</Text>
+                    <Text style={styles.subtitle}>{scheduleT('subtitle', '支持截图导入、OCR 识别和手动搜课补录。')}</Text>
                 </View>
                 <TouchableOpacity style={styles.primaryCta} onPress={() => setShowImportModal(true)}>
                     <ImageUp size={16} color="#fff" />
-                    <Text style={styles.primaryCtaText}>编辑课表</Text>
+                    <Text style={styles.primaryCtaText}>{scheduleT('edit', '编辑课表')}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -579,7 +583,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             <Modal visible={showImportModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowImportModal(false)}>
                 <View style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>编辑课表</Text>
+                        <Text style={styles.modalTitle}>{scheduleT('edit', '编辑课表')}</Text>
                         <TouchableOpacity onPress={() => setShowImportModal(false)}>
                             <X size={22} color="#1F2937" />
                         </TouchableOpacity>
@@ -589,9 +593,13 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                         <View style={styles.tipCard}>
                             <AlertTriangle size={18} color="#B45309" />
                             <View style={styles.tipContent}>
-                                <Text style={styles.tipText}>上传完整、清晰、统一规格的课表截图，系统会识别课程时间和教室，再由你确认加入。</Text>
+                                <Text style={styles.tipText}>{scheduleT('tip', '上传完整、清晰、统一规格的课表截图，系统会识别课程时间和教室，再由你确认加入。')}</Text>
                                 <TouchableOpacity onPress={() => setShowSampleExample(prev => !prev)}>
-                                    <Text style={styles.tipLink}>{showSampleExample ? '收起规范课表示例' : '规范课表示例'}</Text>
+                                    <Text style={styles.tipLink}>
+                                        {showSampleExample
+                                            ? scheduleT('hide_sample', '收起规范课表示例')
+                                            : scheduleT('show_sample', '规范课表示例')}
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -619,12 +627,14 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                             onPress={handleScan}
                             disabled={!selectedImage || scanning}
                         >
-                            {scanning ? <ActivityIndicator color="#fff" /> : <Text style={styles.scanButtonText}>开始识别</Text>}
+                            <Text style={styles.scanButtonText}>
+                                {scanning ? scheduleT('recognizing', '识别中') : scheduleT('start_recognition', '开始识别')}
+                            </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.manualCreateCard} onPress={openManualEntryEditor}>
-                            <Text style={styles.addCourseTitle}>手动新增课程</Text>
-                            <Text style={styles.addCourseText}>不走识别，直接手动填写课程名、时间和教室。</Text>
+                            <Text style={styles.addCourseTitle}>{scheduleT('manual_add_title', '手动新增课程')}</Text>
+                            <Text style={styles.addCourseText}>{scheduleT('manual_add_text', '不走识别，直接手动填写课程名、时间和教室。')}</Text>
                         </TouchableOpacity>
 
                         {importItems.length > 0 ? (
@@ -679,11 +689,11 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                         ) : null}
 
                         <View style={styles.reviewSection}>
-                            <Text style={styles.sectionTitle}>现有课程</Text>
+                            <Text style={styles.sectionTitle}>{scheduleT('current_courses', '现有课程')}</Text>
                             {entries.length === 0 ? (
                                 <View style={styles.stateBox}>
-                                    <Text style={styles.stateTitle}>还没有已加入课程</Text>
-                                    <Text style={styles.stateText}>识别后加入的课程，和手动补充的课程，都会显示在这里供你修改或删除。</Text>
+                                    <Text style={styles.stateTitle}>{scheduleT('empty_title', '还没有已加入课程')}</Text>
+                                    <Text style={styles.stateText}>{scheduleT('empty_text', '识别后加入的课程，和手动补充的课程，都会显示在这里供你修改或删除。')}</Text>
                                 </View>
                             ) : (
                                 entries.map(entry => (
@@ -906,7 +916,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
-                                {DAY_OPTIONS.map(day => (
+                                {dayOptions.map(day => (
                                     <TouchableOpacity
                                         key={`edit-${day.key}`}
                                         style={[styles.dayTab, editingDayOfWeek === day.key && styles.dayTabActive]}
@@ -942,7 +952,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             <Modal visible={showManualEntryEditor} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeManualEntryEditor}>
                 <View style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>手动新增课程</Text>
+                        <Text style={styles.modalTitle}>{scheduleT('manual_add_title', '手动新增课程')}</Text>
                         <TouchableOpacity onPress={closeManualEntryEditor}>
                             <X size={22} color="#1F2937" />
                         </TouchableOpacity>
@@ -995,7 +1005,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
-                                {DAY_OPTIONS.map(day => (
+                                {dayOptions.map(day => (
                                     <TouchableOpacity
                                         key={`create-${day.key}`}
                                         style={[styles.dayTab, editingDayOfWeek === day.key && styles.dayTabActive]}

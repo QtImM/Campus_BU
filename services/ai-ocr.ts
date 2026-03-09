@@ -1,7 +1,16 @@
+import Constants from 'expo-constants';
+
+type ExpoExtraConfig = {
+    ocrApiUrl?: string;
+};
+
 const getAiBackendUrl = (): string => {
-    const configuredUrl = (process.env.EXPO_PUBLIC_OCR_API_URL || '').trim();
+    const expoConfigUrl = ((Constants.expoConfig?.extra as ExpoExtraConfig | undefined)?.ocrApiUrl || '').trim();
+    const easConfigUrl = ((Constants.easConfig as { ocrApiUrl?: string } | null | undefined)?.ocrApiUrl || '').trim();
+    const envUrl = (process.env.EXPO_PUBLIC_OCR_API_URL || '').trim();
+    const configuredUrl = expoConfigUrl || easConfigUrl || envUrl;
     if (!configuredUrl) {
-        throw new Error('OCR backend URL is not configured. Set EXPO_PUBLIC_OCR_API_URL in .env.');
+        throw new Error('OCR backend URL is not configured. Set EXPO_PUBLIC_OCR_API_URL for the build environment.');
     }
     return configuredUrl.replace(/\/+$/, '');
 };

@@ -78,7 +78,41 @@
         "no_notifications_yet": "暂无通知",
         "guest_name": "访客",
         "guest_major": "校园游客",
-        "login_signup": "登录 / 注册"
+        "login_signup": "登录 / 注册",
+        "schedule": {
+            "title": "我的课表",
+            "subtitle": "支持截图导入、OCR 识别和手动搜课补录。",
+            "edit": "编辑课表",
+            "tip": "上传完整、清晰、统一规格的课表截图，系统会识别课程时间和教室，再由你确认加入。",
+            "show_sample": "规范课表示例",
+            "hide_sample": "收起规范课表示例",
+            "start_recognition": "开始识别",
+            "recognizing": "识别中",
+            "manual_add_title": "手动新增课程",
+            "manual_add_text": "不走识别，直接手动填写课程名、时间和教室。",
+            "current_courses": "现有课程",
+            "empty_title": "还没有已加入课程",
+            "empty_text": "识别后加入的课程，和手动补充的课程，都会显示在这里供你修改或删除。",
+            "days": {
+                "mon": "周一",
+                "tue": "周二",
+                "wed": "周三",
+                "thu": "周四",
+                "fri": "周五",
+                "sat": "周六",
+                "sun": "周日"
+            },
+            "alerts": {
+                "login_title": "请先登录",
+                "login_message": "登录后才能导入个人课表。",
+                "permission_title": "需要相册权限",
+                "permission_message": "请允许访问相册以选择课表截图。",
+                "empty_import_title": "暂时无法生成导入任务",
+                "empty_import_message": "这张截图里暂时没有生成可人工确认的导入任务。",
+                "import_failed_title": "导入失败",
+                "import_failed_message": "截图识别失败，请检查 OCR 服务是否可用。"
+            }
+        }
     },
     "notifications": {
         "title_comment": "新评论",

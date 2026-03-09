@@ -260,10 +260,10 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                         我可以帮你查关于HKBU的任何问题，尽管来问我吧！你可以试着问我：
                     </Text>
                     <View style={styles.suggestions}>
-                        <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('推荐一下附近好吃的')}>
+                        <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('期末考试的A、B、C分别对应多少绩点？')}>
                             <Text style={styles.suggestionText}>“期末考试的A、B、C分别对应多少绩点？”</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('图书馆还有位子吗？')}>
+                        <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('学校的图书馆在哪里？')}>
                             <Text style={styles.suggestionText}>“学校的图书馆在哪里？”</Text>
                         </TouchableOpacity>
                     </View>

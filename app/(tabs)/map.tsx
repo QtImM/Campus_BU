@@ -868,12 +868,22 @@ export default function MapScreen() {
     useFocusEffect(
         useCallback(() => {
             checkRegionRestriction();
+            const openFoodMapParam = params.openFoodMap;
+            const shouldKeepFoodOverlay = (
+                Array.isArray(openFoodMapParam)
+                    ? openFoodMapParam.includes('true')
+                    : openFoodMapParam === 'true'
+            ) || Boolean(params.foodId);
+            if (!shouldKeepFoodOverlay) {
+                setShowFoodMap(false);
+                setHighlightedFoodId(null);
+            }
 
             const task = InteractionManager.runAfterInteractions(() => {
                 loadPostsData();
             });
             return () => task.cancel();
-        }, [loadPostsData, checkRegionRestriction])
+        }, [loadPostsData, checkRegionRestriction, params.foodId, params.openFoodMap])
     );
 
     // Save to storage whenever buildingsData changes (debounced or on key events)
