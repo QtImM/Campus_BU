@@ -1,13 +1,13 @@
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Camera, Check, ChevronRight, LogOut, Sparkles, User as UserIcon, Wand2 } from 'lucide-react-native';
+import { ArrowLeft, Camera, Check, ChevronRight, LogOut, Sparkles, User as UserIcon, Wand2 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { callDeepSeek } from '../../services/agent/llm';
-import { auth, createUserProfile, getUserProfile, signOut } from '../../services/auth';
+import { auth, createUserProfile, getUserProfile, signOut, uploadAndUpdateAvatar } from '../../services/auth';
 import { SOCIAL_TAGS } from '../../types';
 
 export default function SetupScreen() {
@@ -106,15 +106,58 @@ export default function SetupScreen() {
 
         setLoading(true);
         try {
-            await createUserProfile(user.id, finalDisplayName, selectedTags, finalMajor, avatar || '', user.email || '');
+            let finalAvatarUrl = '';
 
-            Alert.alert(
-                isEditMode ? t('common.success', 'Success') : t('setup.welcome_title', '欢迎加入!'),
-                isEditMode ? t('setup.update_success', '个人资料已更新') : t('setup.welcome_msg', { name: finalDisplayName }),
-                [{ text: isEditMode ? t('common.ok') : t('setup.welcome_action', '出发!'), onPress: () => router.replace('/(tabs)/profile') }]
-            );
+            // Upload avatar if one was selected
+            if (avatar && user) {
+                console.log('[Setup] Uploading avatar...');
+                try {
+                    finalAvatarUrl = await uploadAndUpdateAvatar(user.id, avatar);
+                    console.log('[Setup] Avatar uploaded:', finalAvatarUrl);
+                } catch (uploadError: any) {
+                    console.error('[Setup] Avatar upload failed:', uploadError);
+                    // Continue without avatar upload error, but log it
+                }
+            }
+
+            await createUserProfile(user.id, finalDisplayName, selectedTags, finalMajor, finalAvatarUrl, user.email || '');
+            console.log('[Setup] Profile saved successfully');
+
+            if (isEditMode) {
+                // For edit mode: show brief success message then navigate immediately
+                Alert.alert(
+                    t('common.success', 'Success'),
+                    t('setup.update_success', '个人资料已更新'),
+                    [{
+                        text: t('common.ok'),
+                        onPress: () => {
+                            console.log('[Setup] Navigating to profile...');
+                            // Use push instead of replace for web compatibility
+                            router.push('/(tabs)/profile');
+                        }
+                    }],
+                    { cancelable: false }
+                );
+                // Auto-navigate after short delay even if user doesn't click OK
+                setTimeout(() => {
+                    console.log('[Setup] Auto-navigating to profile...');
+                    router.push('/(tabs)/profile');
+                }, 1500);
+            } else {
+                // For new users: keep the welcome message
+                Alert.alert(
+                    t('setup.welcome_title', '欢迎加入!'),
+                    t('setup.welcome_msg', { name: finalDisplayName }),
+                    [{
+                        text: t('setup.welcome_action', '出发!'),
+                        onPress: () => {
+                            console.log('[Setup] Navigating to profile...');
+                            router.push('/(tabs)/profile');
+                        }
+                    }]
+                );
+            }
         } catch (error: any) {
-            Alert.alert(t('common.error', 'Error'), error.message);
         } finally {
             setLoading(false);
         }
@@ -173,6 +216,16 @@ export default function SetupScreen() {
                                 );
                             })}
                         </View>
+
+                        {/* Go Back Button */}
+                        {isEditMode && (
+                            <TouchableOpacity
+                                onPress={() => router.back()}
+                                style={styles.backButton}
+                            >
+                                <ArrowLeft size={20} color="#6B7280" />
+                            </TouchableOpacity>
+                        )}
 
                         <View style={styles.header}>
                             <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
@@ -366,6 +419,23 @@ const styles = StyleSheet.create({
     },
     logoutText: {
         fontSize: 12,
+        color: '#6B7280',
+        marginLeft: 4,
+        fontWeight: '600',
+    },
+    backButton: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.6)',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    backText: {
+        fontSize: 13,
         color: '#6B7280',
         marginLeft: 4,
         fontWeight: '600',
