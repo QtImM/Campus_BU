@@ -69,7 +69,7 @@ export default function ProfileScreen() {
                 }
             }
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('[Profile] Error loading data:', error);
         } finally {
             setLoadingNotifications(false);
             setLoadingProfile(false);
@@ -78,10 +78,14 @@ export default function ProfileScreen() {
 
     useFocusEffect(
         useCallback(() => {
+            console.log('[Profile] Screen focused, reloading data...');
             const task = InteractionManager.runAfterInteractions(() => {
                 loadData();
             });
-            return () => task.cancel();
+            return () => {
+                console.log('[Profile] Screen unfocused');
+                task.cancel();
+            };
         }, [])
     );
 
