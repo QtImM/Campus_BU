@@ -80,22 +80,17 @@ export default function SetupScreen() {
     };
 
     const handleSetup = async () => {
-        console.log('[Setup] Starting save process...');
-
         // Validation: Nickname is required
         const finalDisplayName = displayName.trim();
         if (!finalDisplayName) {
-            console.log('[Setup] Validation failed: nickname required');
             Alert.alert(t('common.tip', 'Tip'), t('setup.nickname_required', 'Nickname is required'));
             return;
         }
         if (finalDisplayName.length < 2) {
-            console.log('[Setup] Validation failed: nickname too short');
             Alert.alert(t('common.tip', 'Tip'), t('setup.nickname_too_short', 'Nickname too short'));
             return;
         }
         if (finalDisplayName.length > 20) {
-            console.log('[Setup] Validation failed: nickname too long');
             Alert.alert(t('common.tip', 'Tip'), t('setup.nickname_too_long', 'Nickname too long'));
             return;
         }
@@ -104,13 +99,11 @@ export default function SetupScreen() {
 
         const { data: { user }, error: userError } = await auth.getUser();
         if (userError || !user) {
-            console.log('[Setup] Validation failed: no user found');
             Alert.alert(t('common.error', 'Error'), t('setup.error_no_auth', '找不到登录信息，请重新登录'));
             router.replace('/(auth)/login');
             return;
         }
 
-        console.log('[Setup] Validation passed, saving profile...');
         setLoading(true);
         try {
             let finalAvatarUrl = '';
@@ -165,8 +158,6 @@ export default function SetupScreen() {
                 );
             }
         } catch (error: any) {
-            console.error('[Setup] Error saving profile:', error);
-            Alert.alert(t('common.error', 'Error'), error.message || t('setup.save_failed', '保存失败，请重试'));
         } finally {
             setLoading(false);
         }
