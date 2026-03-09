@@ -5,7 +5,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from runtime_config import configure_runtime_environment
-from template_v1 import detect_schedule_blocks_with_layout
+from schedule_ocr_ai import extract_schedule_from_image
 
 configure_runtime_environment()
 
@@ -27,80 +27,25 @@ async def extract_schedule(file: UploadFile = File(...)):
 
     try:
         file_bytes = await file.read()
-        detection = detect_schedule_blocks_with_layout(file_bytes)
-        blocks = detection.blocks
-
-        if not blocks:
-            return {
-                "status": "success",
-                "raw_response": {
-                    "mode": f"template_v1_{detection.layout_mode}_no_blocks",
-                    "layout_mode": detection.layout_mode,
-                    "filename": file.filename,
-                    "content_type": file.content_type,
-                    "file_size": len(file_bytes),
-                },
-                "items": [
-                    {
-                        "course_name": "",
-                        "course_code": "",
-                        "teacher": "",
-                        "room": "",
-                        "day_of_week": None,
-                        "start_time": "",
-                        "end_time": "",
-                        "start_period": None,
-                        "end_period": None,
-                        "week_text": "",
-                        "source_block": "未匹配到课表模板中的课程块。请上传完整的标准课表截图，或改用手动确认导入。",
-                        "confidence": 0.0,
-                        "needs_review": True,
-                    }
-                ],
-                "engine": "template-v1-unmatched",
-            }
-
-        return {
-            "status": "success",
-            "raw_response": {
-                "mode": f"template_v1_{detection.layout_mode}_geometry",
-                "layout_mode": detection.layout_mode,
-                "filename": file.filename,
-                "content_type": file.content_type,
-                "file_size": len(file_bytes),
-                "detected_blocks": len(blocks),
-            },
-            "items": [
-                {
-                    "course_name": "",
-                    "course_code": block.course_code,
-                    "teacher": "",
-                    "room": block.room,
-                    "day_of_week": block.day_of_week,
-                    "start_time": block.start_time,
-                    "end_time": block.end_time,
-                    "start_period": None,
-                    "end_period": None,
-                    "week_text": "",
-                    "source_block": block.source_text or f"Detected block on {block.day_label} {block.start_time}-{block.end_time}",
-                    "confidence": block.confidence,
-                    "needs_review": block.needs_review,
-                }
-                for block in blocks
-            ],
-            "engine": f"template-v1-{detection.layout_mode}-geometry",
-        }
-    except Exception as e:
-        print(f"Extraction error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        result = extract_schedule_from_image(file_bytes)
+        raw_response = result.get("raw_response")
+        if isinstance(raw_response, dict):
+            raw_response.setdefault("filename", file.filename)
+            raw_response.setdefault("content_type", file.content_type)
+            raw_response.setdefault("file_size", len(file_bytes))
+        return result
+    except Exception as exc:
+        print(f"Extraction error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/health")
 def health():
     return {
         "status": "healthy",
-        "model": "template-v1-geometry",
-        "ocr_text_engine": os.environ.get("OCR_TEXT_ENGINE", "disabled"),
+        "model": "ocr-space-deepseek",
+        "ocr_text_engine": os.environ.get("OCR_TEXT_ENGINE", "ocr_space"),
+        "deepseek_base_url": os.environ.get("DEEPSEEK_BASE_URL", os.environ.get("EXPO_PUBLIC_DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")),
     }
 
 
