@@ -64,6 +64,27 @@ Assuming:
 - project id: `YOUR_GCP_PROJECT`
 - region: `asia-east1` or another nearby region
 - service name: `hkcampus-ocr`
+- secret name: `OCR_SPACE_API_KEY`
+
+Create or update the secret first:
+
+```bash
+printf "YOUR_OCR_SPACE_KEY" | gcloud secrets create OCR_SPACE_API_KEY --data-file=-
+```
+
+If the secret already exists, add a new version instead:
+
+```bash
+printf "YOUR_OCR_SPACE_KEY" | gcloud secrets versions add OCR_SPACE_API_KEY --data-file=-
+```
+
+If your Cloud Run service uses the default compute service account, grant it access:
+
+```bash
+gcloud secrets add-iam-policy-binding OCR_SPACE_API_KEY \
+  --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
 
 Build and deploy:
 
@@ -73,7 +94,7 @@ python predeploy_check.py
 
 gcloud builds submit \
   --config cloudbuild.yaml \
-  --substitutions _SERVICE=hkcampus-ocr,_REGION=asia-east1,_OCR_SPACE_API_KEY=YOUR_OCR_SPACE_KEY
+  --substitutions _SERVICE=hkcampus-ocr,_REGION=asia-east1,_OCR_SPACE_API_KEY_SECRET=OCR_SPACE_API_KEY,_OCR_SPACE_API_KEY_VERSION=latest
 ```
 
 After deployment, copy the Cloud Run HTTPS URL into:
