@@ -395,6 +395,7 @@ def _normalize_horizontal_grid_boundaries(boundaries: list[int], image_height: i
         min_span=min_span,
         min_mean_gap=min_mean_gap,
         start_bias_weight=0.08,
+        allow_infer_missing=True,
     )
     return _ensure_top_grid_boundary(subset)
 

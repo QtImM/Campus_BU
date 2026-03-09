@@ -178,6 +178,21 @@ class TemplateV1Tests(unittest.TestCase):
             [0, 86, 230, 374, 518, 662, 806, 950],
         )
 
+    def test_select_regular_boundaries_can_infer_missing_horizontal_lines(self):
+        inferred = _select_regular_boundaries(
+            [24, 82, 140, 256, 314, 430, 488, 604, 662, 778],
+            expected_count=14,
+            min_span=420,
+            min_mean_gap=26,
+            start_bias_weight=0.08,
+            allow_infer_missing=True,
+        )
+
+        self.assertEqual(
+            inferred,
+            [24, 82, 140, 198, 256, 314, 372, 430, 488, 546, 604, 662, 720, 778],
+        )
+
     def test_detect_schedule_blocks_on_wrapped_page_template(self):
         image_bytes = _draw_wrapped_template()
         blocks = detect_schedule_blocks(image_bytes)
