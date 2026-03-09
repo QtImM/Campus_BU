@@ -3,12 +3,47 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional convenience dependency
+    load_dotenv = None
+
+
+def _load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = value.strip()
+
+
+def load_project_env() -> None:
+    backend_dir = Path(__file__).resolve().parent
+    project_root = backend_dir.parent
+
+    if load_dotenv is not None:
+        load_dotenv(project_root / ".env", override=False)
+        load_dotenv(backend_dir / ".env", override=False)
+        return
+
+    _load_env_file(project_root / ".env")
+    _load_env_file(backend_dir / ".env")
+
 
 def configure_runtime_environment() -> None:
     """
     Normalize writable cache/data directories for local dev and Cloud Run.
     Cloud Run containers should write transient model caches under /tmp.
     """
+    load_project_env()
+
     base_dir = Path(os.environ.get("OCR_RUNTIME_HOME", "/tmp/hkcampus-ocr")).resolve()
     base_dir.mkdir(parents=True, exist_ok=True)
 

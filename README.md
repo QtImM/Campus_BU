@@ -35,6 +35,11 @@ npm run start
 EXPO_PUBLIC_SUPABASE_URL=...
 EXPO_PUBLIC_SUPABASE_ANON_KEY=...
 EXPO_PUBLIC_OCR_API_URL=https://your-ocr-api.example.com
+OCR_TEXT_ENGINE=ocr_space
+OCR_SPACE_API_URL=https://api.ocr.space/parse/image
+OCR_SPACE_API_KEY=...
+OCR_SPACE_LANGUAGE=eng
+OCR_SPACE_ENGINE=2
 EXPO_PUBLIC_DEEPSEEK_API_KEY=...
 EXPO_PUBLIC_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 ```
@@ -71,9 +76,15 @@ uvicorn main:app --reload --port 8000
 2. 在 `.env` 中配置 OCR 服务地址
 ```env
 EXPO_PUBLIC_OCR_API_URL=https://your-ocr-api.example.com
+OCR_TEXT_ENGINE=ocr_space
+OCR_SPACE_API_URL=https://api.ocr.space/parse/image
+OCR_SPACE_API_KEY=your_ocr_space_api_key
+OCR_SPACE_LANGUAGE=eng
+OCR_SPACE_ENGINE=2
 ```
-3. 开发环境可指向本机或局域网服务；上架版本必须指向公网可访问的 HTTPS 地址，不能依赖本地 `main.py`
-4. 如需按需付费部署，优先考虑 Cloud Run。部署说明见 [docs/cloud_run_ocr.md](/c:/Users/Tim/Documents/GitHub/CampusCopy/docs/cloud_run_ocr.md)
+3. 后端会继续用模板规则定位课表块，块内文字识别走 OCR.Space API
+4. 开发环境可指向本机或局域网服务；上架版本必须指向公网可访问的 HTTPS 地址，不能依赖本地 `main.py`
+5. 如需按需付费部署，优先考虑 Cloud Run。部署说明见 [docs/cloud_run_ocr.md](/c:/Users/Tim/Documents/GitHub/CampusCopy/docs/cloud_run_ocr.md)
 
 **目录结构**
 - `app/`：Expo Router 页面与路由

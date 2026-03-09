@@ -3,8 +3,13 @@ import os
 
 from PIL import Image, ImageDraw
 
-import template_v1
-from template_v1 import _get_paddle_ocr_config, _parse_course_code, _parse_room, detect_schedule_blocks
+from template_v1 import (
+    _build_ocr_space_request_body,
+    _extract_ocr_space_text,
+    _parse_course_code,
+    _parse_room,
+    detect_schedule_blocks,
+)
 
 
 def _draw_synthetic_template() -> bytes:
@@ -63,37 +68,6 @@ def _draw_synthetic_template() -> bytes:
 
 
 class TemplateV1Tests(unittest.TestCase):
-    def setUp(self):
-        self.original_ocr = template_v1.pytesseract
-        template_v1.pytesseract = None
-
-    def tearDown(self):
-        template_v1.pytesseract = self.original_ocr
-
-    def test_paddle_ocr_defaults_to_lightweight_mobile_models(self):
-        original_values = {
-            "OCR_PADDLE_DET_MODEL": os.environ.get("OCR_PADDLE_DET_MODEL"),
-            "OCR_PADDLE_REC_MODEL": os.environ.get("OCR_PADDLE_REC_MODEL"),
-            "OCR_PADDLE_DET_LIMIT_SIDE_LEN": os.environ.get("OCR_PADDLE_DET_LIMIT_SIDE_LEN"),
-            "OCR_PADDLE_REC_BATCH_SIZE": os.environ.get("OCR_PADDLE_REC_BATCH_SIZE"),
-        }
-        for key in original_values:
-            os.environ.pop(key, None)
-
-        try:
-            config = _get_paddle_ocr_config()
-        finally:
-            for key, value in original_values.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
-
-        self.assertEqual(config["text_detection_model_name"], "PP-OCRv4_mobile_det")
-        self.assertEqual(config["text_recognition_model_name"], "en_PP-OCRv4_mobile_rec")
-        self.assertEqual(config["text_det_limit_side_len"], 512)
-        self.assertEqual(config["text_recognition_batch_size"], 1)
-
     def test_detect_schedule_blocks_returns_expected_geometry(self):
         image_bytes = _draw_synthetic_template()
         blocks = detect_schedule_blocks(image_bytes)
@@ -118,6 +92,41 @@ class TemplateV1Tests(unittest.TestCase):
 
         self.assertEqual(_parse_course_code(source_text), "COMP7650")
         self.assertEqual(_parse_room(source_text), "FSC801C, FSC801D, RRS638, WLB103")
+
+    def test_extract_ocr_space_text_from_api_payload(self):
+        payload = {
+            "ParsedResults": [
+                {
+                    "ParsedText": "COMP7530 (00001)\r\nSCT503"
+                }
+            ],
+            "IsErroredOnProcessing": False,
+        }
+
+        self.assertEqual(_extract_ocr_space_text(payload), "COMP7530 (00001)\nSCT503")
+
+    def test_build_ocr_space_request_body_contains_expected_fields(self):
+        original_language = os.environ.get("OCR_SPACE_LANGUAGE")
+        original_engine = os.environ.get("OCR_SPACE_ENGINE")
+        os.environ["OCR_SPACE_LANGUAGE"] = "eng"
+        os.environ["OCR_SPACE_ENGINE"] = "2"
+
+        try:
+            body = _build_ocr_space_request_body("data:image/png;base64,abc123").decode("utf-8")
+        finally:
+            if original_language is None:
+                os.environ.pop("OCR_SPACE_LANGUAGE", None)
+            else:
+                os.environ["OCR_SPACE_LANGUAGE"] = original_language
+            if original_engine is None:
+                os.environ.pop("OCR_SPACE_ENGINE", None)
+            else:
+                os.environ["OCR_SPACE_ENGINE"] = original_engine
+
+        self.assertIn("base64Image=data%3Aimage%2Fpng%3Bbase64%2Cabc123", body)
+        self.assertIn("language=eng", body)
+        self.assertIn("OCREngine=2", body)
+        self.assertIn("scale=true", body)
 
 
 if __name__ == "__main__":

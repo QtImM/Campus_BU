@@ -54,8 +54,8 @@ Cloud Run instance settings for low cost:
 Why:
 
 - `min-instances=0` avoids paying for idle time
-- `concurrency=1` is safer for OCR model memory use
-- `1Gi` is a realistic starting point for OCR workloads without overcommitting
+- `concurrency=1` keeps outbound OCR.Space requests simple and predictable
+- `1Gi` gives enough room for image handling without overcommitting
 
 ## Suggested Deployment Commands
 
@@ -73,7 +73,7 @@ python predeploy_check.py
 
 gcloud builds submit \
   --config cloudbuild.yaml \
-  --substitutions _SERVICE=hkcampus-ocr,_REGION=asia-east1,_OCR_TEXT_ENGINE=paddle
+  --substitutions _SERVICE=hkcampus-ocr,_REGION=asia-east1,_OCR_SPACE_API_KEY=YOUR_OCR_SPACE_KEY
 ```
 
 After deployment, copy the Cloud Run HTTPS URL into:
@@ -96,44 +96,26 @@ This avoids paying a fixed monthly server fee.
 
 ## OCR Engine Plan
 
-Recommended rollout:
+Production strategy:
 
-1. keep current template geometry detection
-2. run block OCR in Linux Cloud Run
-3. test PaddleOCR there, not on local Windows
-4. if cold starts become too slow, consider:
-   - smaller OCR model
-   - preloaded model image
-   - moving to a different usage-based inference platform
+1. keep current template geometry detection in the backend
+2. send cropped class blocks to OCR.Space
+3. parse returned text into `course_code` and `room`
+4. keep the app's manual review fallback for low-confidence cases
 
-Current engine switch:
+Runtime switch:
 
-- `OCR_TEXT_ENGINE=disabled`: geometry only, lowest cost and most stable
-- `OCR_TEXT_ENGINE=tesseract`: fallback local option
-- `OCR_TEXT_ENGINE=paddle`: preferred Linux production target
-
-Recommended Paddle defaults for block OCR:
-
-- `OCR_PADDLE_DET_MODEL=PP-OCRv4_mobile_det`
-- `OCR_PADDLE_REC_MODEL=en_PP-OCRv4_mobile_rec`
-- `OCR_PADDLE_DET_LIMIT_SIDE_LEN=512`
-- `OCR_PADDLE_REC_BATCH_SIZE=1`
-
-Reason:
-
-- PaddleOCR 3.x will otherwise default to a heavier `PP-OCRv5_server_det` path
-- timetable block OCR is already working on small cropped regions, so mobile det/rec is a better fit
-- this keeps memory and cold start pressure lower on CPU-only Cloud Run
+- `OCR_TEXT_ENGINE=ocr_space`: production target
+- `OCR_TEXT_ENGINE=disabled`: geometry-only fallback if needed for debugging
 
 ## What Still Needs To Be Done
 
-- wire PaddleOCR into the production OCR path on Linux
 - build and deploy the container
 - point the app `.env` to the Cloud Run URL
 - run end-to-end testing with real screenshots
 
 ## Practical Recommendation
 
-Do not spend more time trying to stabilize PaddleOCR on local Windows.
-Use local Windows for app development and geometry logic only.
-Use Linux container deployment for the actual OCR runtime.
+Do not put the OCR.Space key in the mobile app.
+Keep the app calling your Cloud Run backend over HTTPS.
+Let the backend own the external OCR provider integration.

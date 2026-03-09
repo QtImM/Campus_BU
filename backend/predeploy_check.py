@@ -12,12 +12,13 @@ def main() -> None:
         "cloudbuild_exists": (backend_dir / "cloudbuild.yaml").exists(),
         "requirements_exists": (backend_dir / "requirements.txt").exists(),
         "main_exists": (backend_dir / "main.py").exists(),
-        "ocr_text_engine": os.environ.get("OCR_TEXT_ENGINE", "disabled"),
+        "ocr_text_engine": os.environ.get("OCR_TEXT_ENGINE", "ocr_space"),
         "ocr_runtime_home": os.environ.get("OCR_RUNTIME_HOME", "/tmp/hkcampus-ocr"),
-        "ocr_paddle_det_model": os.environ.get("OCR_PADDLE_DET_MODEL", "PP-OCRv4_mobile_det"),
-        "ocr_paddle_rec_model": os.environ.get("OCR_PADDLE_REC_MODEL", "en_PP-OCRv4_mobile_rec"),
-        "ocr_paddle_det_limit_side_len": os.environ.get("OCR_PADDLE_DET_LIMIT_SIDE_LEN", "512"),
-        "ocr_paddle_rec_batch_size": os.environ.get("OCR_PADDLE_REC_BATCH_SIZE", "1"),
+        "ocr_space_api_url": os.environ.get("OCR_SPACE_API_URL", "https://api.ocr.space/parse/image"),
+        "ocr_space_language": os.environ.get("OCR_SPACE_LANGUAGE", "eng"),
+        "ocr_space_engine": os.environ.get("OCR_SPACE_ENGINE", "2"),
+        "ocr_space_timeout": os.environ.get("OCR_SPACE_TIMEOUT", "30"),
+        "ocr_space_api_key_present": bool(os.environ.get("OCR_SPACE_API_KEY")),
     }
     print(json.dumps(checks, indent=2))
 

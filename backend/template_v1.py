@@ -1,20 +1,22 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from functools import lru_cache
 from io import BytesIO
+import json
 import os
 import re
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 from collections.abc import Mapping
 from typing import Iterable
 
 from PIL import Image, ImageFilter, ImageOps
+from runtime_config import load_project_env
 
-try:
-    import pytesseract
-except ImportError:  # pragma: no cover - optional runtime dependency
-    pytesseract = None
+load_project_env()
 
 try:
     import numpy as np
@@ -197,16 +199,6 @@ def _normalize_confidence(block_width: int, block_height: int, column_width: int
     return round(min(confidence, 0.99), 4)
 
 
-def _prepare_block_for_ocr(image: Image.Image, bbox: tuple[int, int, int, int]) -> Image.Image:
-    min_x, min_y, max_x, max_y = bbox
-    crop = image.crop((min_x, min_y, max_x + 1, max_y + 1))
-    grayscale = ImageOps.grayscale(crop)
-    enlarged = grayscale.resize((grayscale.width * 3, grayscale.height * 3))
-    sharpened = enlarged.filter(ImageFilter.SHARPEN)
-    binary = sharpened.point(lambda value: 255 if value > 175 else 0)
-    return binary
-
-
 def _prepare_block_for_paddle_ocr(image: Image.Image, bbox: tuple[int, int, int, int]) -> Image.Image:
     min_x, min_y, max_x, max_y = bbox
     crop = image.crop((min_x, min_y, max_x + 1, max_y + 1)).convert("RGB")
@@ -231,78 +223,127 @@ def _getenv_int(name: str, default: int) -> int:
         return default
 
 
-def _get_paddle_ocr_config() -> dict[str, object]:
-    # Timetable block OCR is a small English-only crop, so default to the
-    # lighter mobile models instead of PaddleOCR 3.x's heavier server det model.
+def _get_ocr_space_config() -> dict[str, object]:
     return {
-        "use_doc_orientation_classify": False,
-        "use_doc_unwarping": False,
-        "use_textline_orientation": False,
-        "text_detection_model_name": os.environ.get("OCR_PADDLE_DET_MODEL", "PP-OCRv4_mobile_det"),
-        "text_recognition_model_name": os.environ.get("OCR_PADDLE_REC_MODEL", "en_PP-OCRv4_mobile_rec"),
-        "text_det_limit_side_len": _getenv_int("OCR_PADDLE_DET_LIMIT_SIDE_LEN", 512),
-        "text_recognition_batch_size": _getenv_int("OCR_PADDLE_REC_BATCH_SIZE", 1),
-        "lang": os.environ.get("OCR_PADDLE_LANG", "en"),
-        "device": os.environ.get("OCR_PADDLE_DEVICE", "cpu"),
+        "url": os.environ.get("OCR_SPACE_API_URL", "https://api.ocr.space/parse/image").strip(),
+        "api_key": os.environ.get("OCR_SPACE_API_KEY", "").strip(),
+        "language": os.environ.get("OCR_SPACE_LANGUAGE", "eng").strip() or "eng",
+        "engine": _getenv_int("OCR_SPACE_ENGINE", 2),
+        "timeout": _getenv_int("OCR_SPACE_TIMEOUT", 30),
+        "overlay_required": os.environ.get("OCR_SPACE_OVERLAY_REQUIRED", "false").strip().lower() == "true",
+        "debug": os.environ.get("OCR_DEBUG", "false").strip().lower() == "true",
     }
 
 
-def _ocr_block_text_tesseract(image: Image.Image, bbox: tuple[int, int, int, int]) -> str:
-    if pytesseract is None:
+def _image_to_data_url(image: Image.Image) -> str:
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def _build_ocr_space_request_body(data_url: str) -> bytes:
+    config = _get_ocr_space_config()
+    return urllib_parse.urlencode({
+        "base64Image": data_url,
+        "language": str(config["language"]),
+        "OCREngine": str(config["engine"]),
+        "isOverlayRequired": "true" if bool(config["overlay_required"]) else "false",
+        "scale": "true",
+        "isTable": "false",
+    }).encode("utf-8")
+
+
+def _extract_ocr_space_text(payload: object) -> str:
+    if isinstance(payload, Mapping):
+        is_error = payload.get("IsErroredOnProcessing")
+        if is_error:
+            return ""
+
+        parsed_results = payload.get("ParsedResults")
+        if isinstance(parsed_results, list):
+            parts: list[str] = []
+            for result in parsed_results:
+                if not isinstance(result, Mapping):
+                    continue
+                text = result.get("ParsedText")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text)
+            if parts:
+                return _normalize_ocr_lines("\n".join(parts))
+
+    return ""
+
+
+def _extract_ocr_space_error(payload: object) -> str:
+    if not isinstance(payload, Mapping):
         return ""
 
-    prepared = _prepare_block_for_ocr(image, bbox)
-    config = "--psm 6"
-    text = pytesseract.image_to_string(prepared, config=config)
-    return _normalize_ocr_lines(text)
+    messages: list[str] = []
+    for key in ("ErrorMessage", "ErrorDetails", "SearchablePDFURL"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            messages.append(value.strip())
+        elif isinstance(value, list):
+            messages.extend(str(item).strip() for item in value if str(item).strip())
+
+    return " | ".join(messages)
 
 
-@lru_cache(maxsize=1)
-def _get_paddle_ocr():
-    from paddleocr import PaddleOCR
-
-    return PaddleOCR(**_get_paddle_ocr_config())
-
-
-def _ocr_block_text_paddle(image: Image.Image, bbox: tuple[int, int, int, int]) -> str:
-    if np is None:
+def _ocr_block_text_ocr_space(image: Image.Image, bbox: tuple[int, int, int, int]) -> str:
+    config = _get_ocr_space_config()
+    url = str(config["url"])
+    api_key = str(config["api_key"])
+    debug = bool(config["debug"])
+    if not url or not api_key:
         return ""
 
     prepared = _prepare_block_for_paddle_ocr(image, bbox)
+    request_body = _build_ocr_space_request_body(_image_to_data_url(prepared))
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "apikey": api_key,
+    }
+
+    request = urllib_request.Request(url, data=request_body, headers=headers, method="POST")
+
     try:
-        ocr = _get_paddle_ocr()
-        result = ocr.predict(np.array(prepared))
+        with urllib_request.urlopen(request, timeout=int(config["timeout"])) as response:
+            response_body = response.read().decode("utf-8")
+    except urllib_error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="ignore")
+        print(f"OCR.Space OCR failed for bbox={bbox}: HTTP {exc.code} {details}")
+        return ""
     except Exception as exc:
-        print(f"Paddle OCR failed for bbox={bbox}: {exc}")
+        print(f"OCR.Space OCR failed for bbox={bbox}: {exc}")
         return ""
 
-    texts: list[str] = []
-    for page in result or []:
-        rec_texts = getattr(page, "rec_texts", None)
-        if rec_texts:
-            texts.extend(str(item).strip() for item in rec_texts if str(item).strip())
-            continue
+    try:
+        parsed = json.loads(response_body)
+    except json.JSONDecodeError:
+        if debug:
+            print(f"OCR.Space non-JSON response for bbox={bbox}: {response_body[:400]}")
+        return _normalize_ocr_lines(response_body)
 
-        if isinstance(page, Mapping):
-            values = page.get("rec_texts") or []
-            texts.extend(str(item).strip() for item in values if str(item).strip())
-            continue
+    text = _extract_ocr_space_text(parsed)
+    if text:
+        if debug:
+            print(f"OCR.Space text for bbox={bbox}: {text[:200]}")
+        return text
 
-        try:
-            values = page["rec_texts"] or []
-            texts.extend(str(item).strip() for item in values if str(item).strip())
-        except Exception:
-            continue
-
-    return _normalize_ocr_lines("\n".join(texts))
+    error_details = _extract_ocr_space_error(parsed)
+    if debug or error_details:
+        print(
+            f"OCR.Space empty text for bbox={bbox}: "
+            f"errors={error_details or 'none'} response={json.dumps(parsed, ensure_ascii=False)[:600]}"
+        )
+    return ""
 
 
 def _ocr_block_text(image: Image.Image, bbox: tuple[int, int, int, int]) -> str:
-    engine = os.environ.get("OCR_TEXT_ENGINE", "disabled").strip().lower()
-    if engine == "tesseract":
-        return _ocr_block_text_tesseract(image, bbox)
-    if engine == "paddle":
-        return _ocr_block_text_paddle(image, bbox)
+    engine = os.environ.get("OCR_TEXT_ENGINE", "ocr_space").strip().lower()
+    if engine == "ocr_space":
+        return _ocr_block_text_ocr_space(image, bbox)
     return ""
 
 

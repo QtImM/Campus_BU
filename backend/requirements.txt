@@ -1,10 +1,6 @@
 fastapi
 uvicorn
-torch
-transformers
 pillow
 python-multipart
 pydantic
-pytesseract
-paddleocr
-paddlepaddle
+python-dotenv
