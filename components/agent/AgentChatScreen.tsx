@@ -325,7 +325,16 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                                         msg.content === '' ? (
                                             <ActivityIndicator size="small" color="#1E3A8A" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
                                         ) : (
-                                            renderFormattedText(msg.content, false)
+                                            <TextInput
+                                                style={styles.assistantSelectableText}
+                                                value={msg.content}
+                                                multiline
+                                                editable={false}
+                                                scrollEnabled={false}
+                                                contextMenuHidden={false}
+                                                textAlignVertical="top"
+                                                selectionColor="#1E3A8A"
+                                            />
                                         )
                                     ) : (
                                         renderFormattedText(msg.content, true)
@@ -679,6 +688,14 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '500',
     },
+    assistantSelectableText: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: '#1F2937',
+        padding: 0,
+        margin: 0,
+        includeFontPadding: false,
+    },
 });
 
 function renderFormattedText(text: string, isUser: boolean = false) {
@@ -686,35 +703,41 @@ function renderFormattedText(text: string, isUser: boolean = false) {
     const lines = text.split('\n');
     const textColor = isUser ? '#fff' : '#1F2937';
 
-    return lines.map((line, i) => {
-        if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-            return (
-                <View key={i} style={{ flexDirection: 'row', paddingLeft: 8, marginBottom: 4 }}>
-                    <Text style={{ fontSize: 13, marginRight: 6, color: textColor }}>•</Text>
-                    <Text style={{ fontSize: 15, color: textColor, flex: 1 }}>{line.trim().substring(2)}</Text>
-                </View>
-            );
-        }
+    return (
+        <Text selectable style={{ fontSize: 15, color: textColor, lineHeight: 22 }}>
+            {lines.map((line, i) => {
+                const displayLine = line.trim().startsWith('- ') || line.trim().startsWith('* ')
+                    ? `• ${line.trim().substring(2)}`
+                    : line;
 
-        const boldRegex = /\*\*(.*?)\*\*/g;
-        const parts: (string | React.ReactNode)[] = [];
-        let lastIndex = 0;
-        let match;
-        while ((match = boldRegex.exec(line)) !== null) {
-            if (match.index > lastIndex) {
-                parts.push(line.substring(lastIndex, match.index));
-            }
-            parts.push(<Text key={match.index} style={{ fontWeight: 'bold', color: textColor }}>{match[1]}</Text>);
-            lastIndex = boldRegex.lastIndex;
-        }
-        if (lastIndex < line.length) {
-            parts.push(line.substring(lastIndex));
-        }
+                const boldRegex = /\*\*(.*?)\*\*/g;
+                const segments: React.ReactNode[] = [];
+                let lastIndex = 0;
+                let match;
 
-        return (
-            <Text key={i} style={{ fontSize: 15, color: textColor, marginBottom: 4 }}>
-                {parts.length > 0 ? parts : line}
-            </Text>
-        );
-    });
+                while ((match = boldRegex.exec(displayLine)) !== null) {
+                    if (match.index > lastIndex) {
+                        segments.push(displayLine.substring(lastIndex, match.index));
+                    }
+                    segments.push(
+                        <Text key={`${i}-${match.index}`} style={{ fontWeight: 'bold', color: textColor }}>
+                            {match[1]}
+                        </Text>
+                    );
+                    lastIndex = boldRegex.lastIndex;
+                }
+
+                if (lastIndex < displayLine.length) {
+                    segments.push(displayLine.substring(lastIndex));
+                }
+
+                return (
+                    <React.Fragment key={i}>
+                        {segments.length > 0 ? segments : displayLine}
+                        {i < lines.length - 1 ? '\n' : ''}
+                    </React.Fragment>
+                );
+            })}
+        </Text>
+    );
 }

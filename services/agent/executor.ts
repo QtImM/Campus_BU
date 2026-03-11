@@ -74,6 +74,12 @@ const getHongKongDayOfWeek = (offsetDays = 0): number => {
     return day === 0 ? 7 : day;
 };
 
+const isDateQuery = (query: string): boolean => {
+    return /今天.*周几|今天星期几|今天週幾|今天是星期幾|今天是周几|今日.*周几|today.*what day|what day is it today|明天.*周几|明天星期几|明天週幾|明天是星期幾|明天是周几|tomorrow.*what day/i.test(query);
+};
+
+const getDayLabel = (dayOfWeek: number): string => WEEKDAY_LABELS[dayOfWeek] || `周${dayOfWeek}`;
+
 const toMinutes = (value?: string): number | null => {
     if (!value) return null;
     const match = value.match(/^(\d{1,2}):(\d{2})$/);
@@ -266,6 +272,7 @@ const buildCourseCommunityIdCandidates = async (course: Course, query: string): 
  */
 export class AgentExecutor {
     private context: AgentContext;
+    private static readonly MAX_HISTORY_ITEMS = 16;
 
     constructor(userId: string) {
         this.context = {
@@ -280,14 +287,35 @@ export class AgentExecutor {
         this.context.deviceLocation = location;
     }
 
+    private pushHistory(role: 'user' | 'assistant' | 'tool', content: string) {
+        this.context.history.push({ role, content });
+        if (this.context.history.length > AgentExecutor.MAX_HISTORY_ITEMS) {
+            this.context.history = this.context.history.slice(-AgentExecutor.MAX_HISTORY_ITEMS);
+        }
+    }
+
+    private getRecentConversationContext(): string {
+        if (this.context.history.length === 0) {
+            return 'No prior conversation.';
+        }
+
+        return this.context.history
+            .slice(-12)
+            .map(item => `${item.role}: ${item.content}`)
+            .join('\n');
+    }
+
     /**
      * Main entry point for user prompts
      */
     async process(prompt: string, onUpdate?: (text: string) => void): Promise<AgentResponse> {
-        this.context.history.push({ role: 'user', content: prompt });
+        this.pushHistory('user', prompt);
 
         const routed = await this.tryLocalRoute(prompt);
         if (routed) {
+            if (routed.finalAnswer) {
+                this.pushHistory('assistant', routed.finalAnswer);
+            }
             return routed;
         }
 
@@ -308,17 +336,34 @@ export class AgentExecutor {
             // 2. Execute the Tool
             const observation = await this.executeTool(decision.action.tool, decision.action.input);
             decision.observation = observation;
+            this.pushHistory('tool', `${decision.action.tool}: ${observation}`);
 
             currentStep++;
         }
 
+        const finalAnswer = steps[steps.length - 1].reply || steps[steps.length - 1].thought;
+        if (finalAnswer) {
+            this.pushHistory('assistant', finalAnswer);
+        }
+
         return {
             steps,
-            finalAnswer: steps[steps.length - 1].reply || steps[steps.length - 1].thought
+            finalAnswer
         };
     }
 
     private async tryLocalRoute(prompt: string): Promise<AgentResponse | null> {
+        if (isDateQuery(prompt)) {
+            const observation = this.readCurrentDateInfo(prompt);
+            return {
+                steps: [{
+                    thought: '本地命中日期查询',
+                    reply: observation
+                }],
+                finalAnswer: observation
+            };
+        }
+
         if (isScheduleQuery(prompt)) {
             const observation = await this.readUserSchedule(prompt);
             return {
@@ -516,6 +561,22 @@ export class AgentExecutor {
         }
     }
 
+    private readCurrentDateInfo(query: string): string {
+        const isTomorrow = /明天|tomorrow/i.test(query);
+        const now = getHongKongNow();
+        if (isTomorrow) {
+            now.setDate(now.getDate() + 1);
+        }
+
+        const day = now.getDay() === 0 ? 7 : now.getDay();
+        const label = getDayLabel(day);
+        const dateText = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        return isTomorrow
+            ? `明天是 ${label}，日期是 ${dateText}。`
+            : `今天是 ${label}，日期是 ${dateText}。`;
+    }
+
     private async findNearbyPlace(query: string): Promise<string> {
         try {
             return await formatNearbyPlaceInfo(query, this.context.deviceLocation);
@@ -653,6 +714,8 @@ Response Format (JSON only):
 }
 
 Current context:
+- Recent conversation:
+${this.getRecentConversationContext()}
 - User Prompt: ${prompt}
 - Progress so far: ${JSON.stringify(previousSteps)}`;
 
