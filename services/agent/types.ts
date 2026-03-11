@@ -31,8 +31,14 @@ export type AgentResponse = {
     quickReplies?: string[];
 };
 
+export interface AgentGeoPoint {
+    latitude: number;
+    longitude: number;
+}
+
 export interface AgentContext {
     userId: string;
     sessionId: string;
     history: { role: 'user' | 'assistant' | 'tool'; content: string }[];
+    deviceLocation?: AgentGeoPoint | null;
 }

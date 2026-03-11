@@ -1,6 +1,4 @@
 import { formatDistanceToNow } from 'date-fns';
-import * as Clipboard from 'expo-clipboard';
-import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Bell, Camera, ChevronRight, Copy, Edit3, Globe, Heart as HeartIcon, HelpCircle, LogOut, Mail, MessageSquare, Sparkles, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -190,6 +188,7 @@ export default function ProfileScreen() {
     };
 
     const handleCopyText = async (text: string) => {
+        const Clipboard = await import('expo-clipboard');
         await Clipboard.setStringAsync(text);
         Alert.alert(t('common.tip'), t('profile.help_copied'));
     };
@@ -230,6 +229,7 @@ export default function ProfileScreen() {
 
     const handleAvatarPress = async () => {
         if (!checkLogin(userId)) return;
+        const ImagePicker = await import('expo-image-picker');
 
         // Request permission
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();

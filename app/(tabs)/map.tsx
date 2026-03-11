@@ -99,7 +99,8 @@ const generateMapHTML = (
         name: string,
         description: string,
         labelPosition: 'top' | 'bottom' = 'top',
-        highlighted: boolean = false
+        highlighted: boolean = false,
+        animationDelayMs: number = 0
     ) => {
         const buildingMatch = description.match(/\(([^)]+)\)/);
         const building = buildingMatch ? buildingMatch[1] : '';
@@ -121,7 +122,14 @@ const generateMapHTML = (
             ">🏢 ${building}</div>` : '';
 
         return `
-            <div style="display: flex; flex-direction: column; align-items: center;">
+            <div style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                opacity: 0;
+                animation: foodMarkerFadeIn 360ms ease-out forwards;
+                animation-delay: ${animationDelayMs}ms;
+            ">
                 ${labelPosition === 'top' ? labelHtml : ''}
                 <div style="
                     width: 36px;
@@ -146,7 +154,7 @@ const generateMapHTML = (
     };
 
     // Building Marker Template (Blue Square with Label)
-    const buildingMarkerHtml = (name: string, highlighted: boolean = false) => {
+    const buildingMarkerHtml = (name: string, highlighted: boolean = false, animationDelayMs: number = 0) => {
         // If name is "Full Name (ABBR)", extract "ABBR". Otherwise use clean name.
         const abbrMatch = name.match(/\(([^)]+)\)/);
         const abbr = abbrMatch ? abbrMatch[1] : name;
@@ -155,7 +163,14 @@ const generateMapHTML = (
         const ringColor = highlighted ? '#FEF3C7' : 'white';
 
         return `
-            <div style="display: flex; flex-direction: column; align-items: center;">
+            <div style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                opacity: 0;
+                animation: buildingMarkerFadeIn 360ms ease-out forwards;
+                animation-delay: ${animationDelayMs}ms;
+            ">
                 <div style="
                     background: ${labelBg};
                     color: white;
@@ -225,15 +240,16 @@ const generateMapHTML = (
         `;
     }).join('\n');
 
-    const foodMarkers = foodSpots.map(spot => {
+    const foodMarkers = foodSpots.map((spot, index) => {
         // Southern markers in crowded pairs get 'bottom' labels
         const labelPos = (['o5', 'o7', 'o14'].includes(spot.id)) ? 'bottom' : 'top';
+        const animationDelay = Math.min(index * 45, 360);
 
         return `
             var fm = L.marker([${spot.coordinates.latitude}, ${spot.coordinates.longitude}], { 
                 icon: L.divIcon({
                     className: 'food-marker-icon',
-                    html: \`${foodMarkerHtml(spot.imageUrl || '', spot.name, spot.description || '', labelPos)}\`,
+                    html: \`${foodMarkerHtml(spot.imageUrl || '', spot.name, spot.description || '', labelPos, false, animationDelay)}\`,
                     iconSize: [50, 50],
                     iconAnchor: [25, 25],
                     popupAnchor: [0, -18]
@@ -241,8 +257,8 @@ const generateMapHTML = (
             })
             .addTo(foodLayer);
             fm.__foodId = '${spot.id}';
-            fm.__defaultHtml = \`${foodMarkerHtml(spot.imageUrl || '', spot.name, spot.description || '', labelPos)}\`;
-            fm.__highlightedHtml = \`${foodMarkerHtml(spot.imageUrl || '', spot.name, spot.description || '', labelPos, true)}\`;
+            fm.__defaultHtml = \`${foodMarkerHtml(spot.imageUrl || '', spot.name, spot.description || '', labelPos, false, animationDelay)}\`;
+            fm.__highlightedHtml = \`${foodMarkerHtml(spot.imageUrl || '', spot.name, spot.description || '', labelPos, true, 0)}\`;
             foodMarkersById['${spot.id}'] = fm;
             fm.bindPopup(\`
                 <div style="min-width: 160px; padding: 2px;">
@@ -268,12 +284,13 @@ const generateMapHTML = (
         `;
     }).join('\n');
 
-    const buildingMarkers = buildings.map(b => {
+    const buildingMarkers = buildings.map((b, index) => {
+        const animationDelay = Math.min(index * 40, 320);
         return `
             var bm = L.marker([${b.coordinates.latitude}, ${b.coordinates.longitude}], { 
                 icon: L.divIcon({
                     className: 'building-marker-icon',
-                    html: \`${buildingMarkerHtml(b.name)}\`,
+                    html: \`${buildingMarkerHtml(b.name, false, animationDelay)}\`,
                     iconSize: [40, 40],
                     iconAnchor: [20, 26],
                     popupAnchor: [0, -20]
@@ -283,8 +300,8 @@ const generateMapHTML = (
 
             bm.__buildingId = '${b.id}';
             bm.__buildingName = ${JSON.stringify(b.name)};
-            bm.__defaultHtml = \`${buildingMarkerHtml(b.name)}\`;
-            bm.__highlightedHtml = \`${buildingMarkerHtml(b.name, true)}\`;
+            bm.__defaultHtml = \`${buildingMarkerHtml(b.name, false, animationDelay)}\`;
+            bm.__highlightedHtml = \`${buildingMarkerHtml(b.name, true, 0)}\`;
             buildingMarkersById['${b.id}'] = bm;
 
             bm.bindPopup(\`
@@ -387,6 +404,26 @@ const generateMapHTML = (
             0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.4); }
             70% { box-shadow: 0 0 0 10px rgba(33, 150, 243, 0); }
             100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+        }
+        @keyframes foodMarkerFadeIn {
+            0% {
+                opacity: 0;
+                transform: translateY(8px) scale(0.96);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        @keyframes buildingMarkerFadeIn {
+            0% {
+                opacity: 0;
+                transform: translateY(8px) scale(0.96);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
         .custom-pin-icon {
             background: transparent;
@@ -874,8 +911,10 @@ export default function MapScreen() {
                     ? openFoodMapParam.includes('true')
                     : openFoodMapParam === 'true'
             ) || Boolean(params.foodId);
-            if (!shouldKeepFoodOverlay) {
-                setShowFoodMap(false);
+            if (shouldKeepFoodOverlay) {
+                setShowFoodMap(true);
+            } else {
+                setShowFoodMap(true);
                 setHighlightedFoodId(null);
             }
 

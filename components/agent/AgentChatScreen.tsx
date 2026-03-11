@@ -1,3 +1,4 @@
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Bot, Send, Sparkles, User } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
@@ -28,6 +29,27 @@ interface AgentChatScreenProps {
     showBackButton?: boolean;
 }
 
+const shouldUseTaskAgent = (input: string): boolean => {
+    const text = input.trim().toLowerCase();
+    if (!text) return false;
+
+    const hasBookingDomain = /图书馆|圖書館|library|seat|study room|group study|individual study|room booking|room_bookings|book_slot|scan_date|start_manual_login|sys01\.lib\.hkbu\.edu\.hk/.test(text);
+    const hasTaskIntent = /订位|訂位|预约|預約|book(?!\s*(where|location))/i.test(text)
+        || /booking/i.test(text)
+        || /登录订位|登入訂位|登录|登入/.test(text)
+        || /扫描|scan|查空位|查位|scan_date/.test(text)
+        || /抢位|搶位|预订|預訂|帮我订|幫我訂|reserve/.test(text);
+
+    return hasBookingDomain && hasTaskIntent;
+};
+
+const shouldUseCurrentLocation = (input: string): boolean => {
+    const text = input.trim().toLowerCase();
+    if (!text) return false;
+
+    return /附近|最近|离我最近|離我最近|near me|nearest|around me|我在哪|我在哪儿|我在哪裡|where am i|current location|当前位置|當前位置|最近的建筑|最近的建築|最近的餐厅|最近的餐廳|nearest building|nearest restaurant/i.test(text);
+};
+
 export default function AgentChatScreen({ showBackButton = false }: AgentChatScreenProps) {
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -42,10 +64,10 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     const [loading, setLoading] = useState(false);
     const [keyboardVisible, setKeyboardVisible] = useState(false);
     const [showWebView, setShowWebView] = useState(false);
-    const [useLangGraph, setUseLangGraph] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [loadingSession, setLoadingSession] = useState(true);
     const [showGuestModal, setShowGuestModal] = useState(false);
+    const [deviceLocation, setDeviceLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const { t } = useTranslation();
     const scrollViewRef = useRef<ScrollView>(null);
     const webViewRef = useRef<WebView>(null);
@@ -53,6 +75,67 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     const langGraphAgentRef = useRef<any>(null);
     const [cookieScript, setCookieScript] = useState('');
     const [webViewUrl, setWebViewUrl] = useState('https://library.hkbu.edu.hk/');
+
+    useEffect(() => {
+        const userId = currentUser?.uid || 'demo-user';
+        agentRef.current = new AgentExecutor(userId);
+        agentRef.current.setDeviceLocation(deviceLocation);
+        langGraphAgentRef.current = null;
+    }, [currentUser?.uid]);
+
+    useEffect(() => {
+        agentRef.current.setDeviceLocation(deviceLocation);
+    }, [deviceLocation]);
+
+    const ensureTaskAgent = async () => {
+        if (!langGraphAgentRef.current) {
+            const { LangGraphExecutor } = await import('../../services/agent/langgraph_executor');
+            langGraphAgentRef.current = new LangGraphExecutor(currentUser?.uid || 'demo-user');
+            langGraphAgentRef.current.setCallbacks({
+                onShowWebView: () => setShowWebView(true),
+                onHideWebView: () => setShowWebView(false),
+                onNavigateWebView: (url: string) => setWebViewUrl(url),
+                onPushMessage: (content: string, quickReplies?: string[]) => {
+                    setMessages(prev => [...prev, {
+                        role: 'assistant' as const,
+                        content,
+                        quickReplies,
+                    }]);
+                    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+                },
+            });
+        }
+
+        return langGraphAgentRef.current;
+    };
+
+    const ensureCurrentLocation = async () => {
+        if (deviceLocation) {
+            return deviceLocation;
+        }
+
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                return null;
+            }
+
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
+
+            const coords = {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+            };
+
+            setDeviceLocation(coords);
+            return coords;
+        } catch (error) {
+            console.warn('[AgentChat] Failed to get current location:', error);
+            return null;
+        }
+    };
 
     const handleBackPress = () => {
         if (router.canGoBack()) {
@@ -93,39 +176,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
         };
     }, []);
 
-    useEffect(() => {
-        const setupLangGraphCallbacks = async () => {
-            if (useLangGraph) {
-                try {
-                    const { LangGraphExecutor } = await import('../../services/agent/langgraph_executor');
-                    if (!langGraphAgentRef.current) {
-                        langGraphAgentRef.current = new LangGraphExecutor('demo-user');
-                    }
-
-                    if (langGraphAgentRef.current) {
-                        langGraphAgentRef.current.setCallbacks({
-                            onShowWebView: () => setShowWebView(true),
-                            onHideWebView: () => setShowWebView(false),
-                            onNavigateWebView: (url: string) => setWebViewUrl(url),
-                            onPushMessage: (content: string, quickReplies?: string[]) => {
-                                setMessages(prev => [...prev, {
-                                    role: 'assistant' as const,
-                                    content,
-                                    quickReplies,
-                                }]);
-                                setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-                            },
-                        });
-                    }
-                } catch (error) {
-                    console.error('Failed to load LangGraphExecutor:', error);
-                }
-            }
-        };
-
-        setupLangGraphCallbacks();
-    }, [useLangGraph]);
-
     const handleSend = async (overrideText?: string) => {
         if (!loadingSession && !currentUser) {
             setShowGuestModal(true);
@@ -141,42 +191,33 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
         setLoading(true);
 
         try {
-            let response: any;
-            if (useLangGraph) {
-                if (!langGraphAgentRef.current) {
-                    const { LangGraphExecutor } = await import('../../services/agent/langgraph_executor');
-                    langGraphAgentRef.current = new LangGraphExecutor('demo-user');
-                }
-                response = await langGraphAgentRef.current.process(userMsg);
-
-                setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: response.finalAnswer || '',
-                    steps: response.steps,
-                    quickReplies: response.quickReplies
-                }]);
-            } else {
-                const streamId = Date.now().toString();
-                setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: '',
-                    id: streamId
-                }]);
-
-                const onUpdate = (text: string) => {
-                    setMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: text || '...' } : m));
-                    scrollViewRef.current?.scrollToEnd({ animated: false });
-                };
-
-                response = await agentRef.current.process(userMsg, onUpdate);
-
-                setMessages(prev => prev.map(m => m.id === streamId ? {
-                    ...m,
-                    content: response.finalAnswer || m.content,
-                    steps: response.steps,
-                    quickReplies: response.quickReplies
-                } : m));
+            const useTaskAgent = shouldUseTaskAgent(userMsg);
+            if (!useTaskAgent && shouldUseCurrentLocation(userMsg)) {
+                const coords = await ensureCurrentLocation();
+                agentRef.current.setDeviceLocation(coords);
             }
+            const streamId = Date.now().toString();
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: '',
+                id: streamId
+            }]);
+
+            const onUpdate = (text: string) => {
+                setMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: text || '...' } : m));
+                scrollViewRef.current?.scrollToEnd({ animated: false });
+            };
+
+            const response = useTaskAgent
+                ? await (await ensureTaskAgent()).process(userMsg)
+                : await agentRef.current.process(userMsg, onUpdate);
+
+            setMessages(prev => prev.map(m => m.id === streamId ? {
+                ...m,
+                content: response.finalAnswer || m.content,
+                steps: response.steps,
+                quickReplies: response.quickReplies
+            } : m));
         } catch (error: any) {
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -219,26 +260,15 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                     </View>
                     <View style={styles.headerActions}>
                         {APP_CONFIG.shouldShowDebug(currentUser?.uid) && (
-                            <>
-                                <TouchableOpacity onPress={() => {
-                                    setUseLangGraph(!useLangGraph);
-                                    setMessages(prev => [...prev, {
-                                        role: 'assistant',
-                                        content: `已切换至 ${!useLangGraph ? 'LangGraph (Pilot)' : '标准引擎'}`
-                                    }]);
-                                }} style={[styles.pilotButton, useLangGraph && styles.pilotButtonActive]}>
-                                    <Text style={[styles.pilotButtonText, useLangGraph && styles.pilotButtonTextActive]}>{useLangGraph ? 'LG' : 'STD'}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => setShowWebView(!showWebView)}
-                                    style={[
-                                        styles.debugButton,
-                                        showWebView && styles.debugButtonActive
-                                    ]}
-                                >
-                                    <Bot size={16} color={showWebView ? '#FFFFFF' : '#1E3A8A'} />
-                                </TouchableOpacity>
-                            </>
+                            <TouchableOpacity
+                                onPress={() => setShowWebView(!showWebView)}
+                                style={[
+                                    styles.debugButton,
+                                    showWebView && styles.debugButtonActive
+                                ]}
+                            >
+                                <Bot size={16} color={showWebView ? '#FFFFFF' : '#1E3A8A'} />
+                            </TouchableOpacity>
                         )}
                     </View>
                 </View>
@@ -263,8 +293,8 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                         <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('期末考试的A、B、C分别对应多少绩点？')}>
                             <Text style={styles.suggestionText}>“期末考试的A、B、C分别对应多少绩点？”</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('学校的图书馆在哪里？')}>
-                            <Text style={styles.suggestionText}>“学校的图书馆在哪里？”</Text>
+                        <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('我的课表里面有什么')}>
+                            <Text style={styles.suggestionText}>“我的课表里面有什么”</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -616,26 +646,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-    },
-    pilotButton: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        backgroundColor: '#F9FAFB',
-    },
-    pilotButtonActive: {
-        backgroundColor: '#1E3A8A',
-        borderColor: '#1E3A8A',
-    },
-    pilotButtonText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: '#6B7280',
-    },
-    pilotButtonTextActive: {
-        color: '#FFFFFF',
     },
     debugButton: {
         width: 36,

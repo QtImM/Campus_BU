@@ -83,6 +83,11 @@ export default function TabLayout() {
                 canPreventDefault: true,
               });
 
+              if (route.name === 'map' && !event.defaultPrevented) {
+                navigation.navigate(route.name, { openFoodMap: 'true' });
+                return;
+              }
+
               if (!isFocused && !event.defaultPrevented) {
                 navigation.navigate(route.name);
               }

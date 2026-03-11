@@ -2,6 +2,50 @@ import { ToolDefinition } from './types';
 
 export const TOOLS: ToolDefinition[] = [
     {
+        name: 'read_user_schedule',
+        description: 'Read the current user schedule for queries like today classes, next class, or classes on a specific weekday.',
+        parameters: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'The user request about their personal schedule, in Chinese or English.' }
+            },
+            required: ['query']
+        }
+    },
+    {
+        name: 'read_course_community',
+        description: 'Read a course community snapshot including reviews, chatroom activity, and teaming posts for a specific course.',
+        parameters: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'The user request about a course review, chatroom, or teaming status.' }
+            },
+            required: ['query']
+        }
+    },
+    {
+        name: 'read_campus_building',
+        description: 'Read HKBU building information such as location, description, and nearby facilities for a named building or building code.',
+        parameters: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'The user request about a building, such as AAB, WLB, library building, or where a building is.' }
+            },
+            required: ['query']
+        }
+    },
+    {
+        name: 'find_nearby_place',
+        description: 'Use the current device location to find the nearest HKBU building or food outlet.',
+        parameters: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'The user request about nearby buildings, restaurants, canteens, or current location.' }
+            },
+            required: ['query']
+        }
+    },
+    {
         name: 'search_canteen_menu',
         description: 'Search for canteen menus and recommendations based on location.',
         parameters: {

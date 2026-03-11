@@ -1,9 +1,9 @@
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, ImageUp, MapPin, Pencil, Search, Trash2, X } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+    ActivityIndicator,
     Alert,
     Image,
     Modal,
@@ -36,7 +36,7 @@ const getDefaultDay = () => {
     return day === 0 ? 7 : day;
 };
 
-const formatEntryTime = (entry: UserScheduleEntry | ScheduleImportItemRecord) => {
+const formatEntryTime = (entry: UserScheduleEntry | ScheduleImportItemRecord, t: any) => {
     if ('startTime' in entry && entry.startTime && entry.endTime) {
         return `${entry.startTime} - ${entry.endTime}`;
     }
@@ -50,12 +50,12 @@ const formatEntryTime = (entry: UserScheduleEntry | ScheduleImportItemRecord) =>
         ? entry.extractedEndPeriod
         : (entry as UserScheduleEntry).endPeriod;
     if (startPeriod && endPeriod) {
-        return `第${startPeriod}-${endPeriod}节`;
+        return t('profile.schedule.period_format', { start: startPeriod, end: endPeriod });
     }
     const weekText = 'extractedWeekText' in entry
         ? entry.extractedWeekText
         : (entry as UserScheduleEntry).weekText;
-    return weekText || '时间待确认';
+    return weekText || t('profile.schedule.time_pending', '时间待确认');
 };
 
 const canSaveItem = (item: ScheduleImportItemRecord) => {
@@ -69,16 +69,16 @@ const canSaveItem = (item: ScheduleImportItemRecord) => {
     return hasTitle && hasDay && hasTime;
 };
 
-const getImportItemTitle = (item: ScheduleImportItemRecord) => {
+const getImportItemTitle = (item: ScheduleImportItemRecord, t: any) => {
     if (item.extractedCourseName || item.extractedCourseCode) {
-        return item.extractedCourseName || item.extractedCourseCode || '待确认课程';
+        return item.extractedCourseName || item.extractedCourseCode || t('profile.schedule.pending_course', '待确认课程');
     }
 
     if (item.sourceBlock) {
         return item.sourceBlock.length > 24 ? `${item.sourceBlock.slice(0, 24)}...` : item.sourceBlock;
     }
 
-    return '待人工确认课程';
+    return t('profile.schedule.pending_manual_confirm', '待人工确认课程');
 };
 
 export default function MyScheduleCard({ userId }: { userId: string | null }) {
@@ -195,6 +195,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             Alert.alert(scheduleT('alerts.login_title', '请先登录'), scheduleT('alerts.login_message', '登录后才能导入个人课表。'));
             return;
         }
+        const ImagePicker = await import('expo-image-picker');
 
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
@@ -249,7 +250,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
     const handleDirectSave = async (item: ScheduleImportItemRecord) => {
         if (!userId) return;
         if (hasCourseCodeConflict(item.extractedCourseCode)) {
-            Alert.alert('课程冲突', `课表中已经存在课程代码为 ${item.extractedCourseCode} 的课程，不能重复加入。`);
+            Alert.alert(scheduleT('course_conflict', '课程冲突'), scheduleT('course_code_conflict', { code: item.extractedCourseCode }));
             return;
         }
         setSavingItemId(item.id);
@@ -257,9 +258,9 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             await saveImportItemToSchedule({ userId, item, source: 'ocr' });
             updateImportItemLocally(item.id, { status: 'confirmed' });
             await loadEntries();
-            showToast('已加入课表');
+            showToast(scheduleT('added_to_schedule', '已加入课表'));
         } catch (error: any) {
-            Alert.alert('加入失败', error?.message || '这条课程暂时无法加入课表。');
+            Alert.alert(scheduleT('add_failed', '加入失败'), error?.message || scheduleT('cannot_add_course', '这条课程暂时无法加入课表。'));
         } finally {
             setSavingItemId(null);
         }
@@ -272,7 +273,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             await ignoreImportItem(userId, item);
             setImportItems(prev => prev.filter(current => current.id !== item.id));
         } catch (error) {
-            Alert.alert('操作失败', '暂时无法忽略这条识别结果。');
+            Alert.alert(scheduleT('operation_failed', '操作失败'), scheduleT('cannot_ignore', '暂时无法忽略这条识别结果。'));
         } finally {
             setSavingItemId(null);
         }
@@ -317,11 +318,11 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
         const patchedItem = buildManualPatchedItem(selectedImportItem);
         const nextCourseCode = selectedMatchedCourse.code || patchedItem.extractedCourseCode;
         if (hasCourseCodeConflict(nextCourseCode)) {
-            Alert.alert('课程冲突', `课表中已经存在课程代码为 ${nextCourseCode} 的课程，不能重复加入。`);
+            Alert.alert(scheduleT('course_conflict', '课程冲突'), scheduleT('course_code_conflict', { code: nextCourseCode }));
             return;
         }
         if (!patchedItem.extractedDayOfWeek) {
-            Alert.alert('还差一点', '请先补充上课星期。');
+            Alert.alert(scheduleT('almost_there', '还差一点'), scheduleT('please_add_day', '请先补充上课星期。'));
             return;
         }
 
@@ -331,7 +332,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             patchedItem.extractedWeekText
         );
         if (!hasTime) {
-            Alert.alert('还差一点', '请先补充上课时间或周次说明。');
+            Alert.alert(scheduleT('almost_there', '还差一点'), scheduleT('please_add_time', '请先补充上课时间或周次说明。'));
             return;
         }
 
@@ -357,9 +358,9 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             setSelectedImportItem(null);
             setSelectedMatchedCourse(null);
             await loadEntries();
-            showToast('已加入课表');
+            showToast(scheduleT('added_to_schedule', '已加入课表'));
         } catch (error: any) {
-            Alert.alert('加入失败', error?.message || '匹配课程后保存失败。');
+            Alert.alert(scheduleT('add_failed', '加入失败'), error?.message || scheduleT('cannot_add_course', '匹配课程后保存失败。'));
         } finally {
             setSavingItemId(null);
         }
@@ -440,9 +441,9 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             });
             await loadEntries();
             closeEntryEditor();
-            showToast('课表已更新');
+            showToast(scheduleT('course_deleted', '课表已更新'));
         } catch (error: any) {
-            Alert.alert('更新失败', error?.message || '暂时无法更新这条课程。');
+            Alert.alert(scheduleT('update_failed', '更新失败'), error?.message || scheduleT('cannot_update', '暂时无法更新这条课程。'));
         } finally {
             setSavingEntryId(null);
         }
@@ -451,10 +452,10 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
     const handleDeleteEntry = async (entry: UserScheduleEntry) => {
         if (!userId) return;
 
-        Alert.alert('删除课程', `确定删除 ${entry.title} 吗？`, [
-            { text: '取消', style: 'cancel' },
+        Alert.alert(scheduleT('delete_course_title', '删除课程'), scheduleT('confirm_delete', { title: entry.title }), [
+            { text: t('common.cancel', '取消'), style: 'cancel' },
             {
-                text: '删除',
+                text: scheduleT('delete', '删除'),
                 style: 'destructive',
                 onPress: async () => {
                     setSavingEntryId(entry.id);
@@ -464,9 +465,9 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                         if (editingEntry?.id === entry.id) {
                             closeEntryEditor();
                         }
-                        showToast('已删除课程');
+                        showToast(scheduleT('course_deleted', '已删除课程'));
                     } catch (error: any) {
-                        Alert.alert('删除失败', error?.message || '暂时无法删除这条课程。');
+                        Alert.alert(scheduleT('delete_failed', '删除失败'), error?.message || scheduleT('cannot_delete', '暂时无法删除这条课程。'));
                     } finally {
                         setSavingEntryId(null);
                     }
@@ -479,7 +480,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
         if (!userId || !editingDayOfWeek) return;
 
         if (hasCourseCodeConflict(editingCourseCode)) {
-            Alert.alert('课程冲突', `课表中已经存在课程代码为 ${editingCourseCode} 的课程，不能重复加入。`);
+            Alert.alert(scheduleT('course_conflict', '课程冲突'), scheduleT('course_code_conflict', { code: editingCourseCode }));
             return;
         }
 
@@ -499,9 +500,9 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             });
             await loadEntries();
             closeManualEntryEditor();
-            showToast('已新增课程');
+            showToast(scheduleT('course_added', '已新增课程'));
         } catch (error: any) {
-            Alert.alert('新增失败', error?.message || '暂时无法新增这条课程。');
+            Alert.alert(scheduleT('create_failed', '新增失败'), error?.message || scheduleT('cannot_create', '暂时无法新增这条课程。'));
         } finally {
             setSavingEntryId(null);
         }
@@ -539,7 +540,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
-                {DAY_OPTIONS.map(day => (
+                {dayOptions.map(day => (
                     <TouchableOpacity
                         key={day.key}
                         style={[styles.dayTab, selectedDay === day.key && styles.dayTabActive]}
@@ -557,7 +558,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             ) : dayEntries.length === 0 ? (
                 <View style={styles.stateBox}>
                     <CalendarDays size={24} color="#94A3B8" />
-                    <Text style={styles.stateTitle}>这一天还没有课程</Text>
+                    <Text style={styles.stateTitle}>{scheduleT('no_class_today', '这一天还没有课程')}</Text>
                 </View>
             ) : (
                 <View style={styles.entryList}>
@@ -569,11 +570,11 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                             </View>
                             <View style={styles.metaRow}>
                                 <Search size={14} color="#64748B" />
-                                <Text style={styles.metaText}>{formatEntryTime(entry)}</Text>
+                                <Text style={styles.metaText}>{formatEntryTime(entry, t)}</Text>
                             </View>
                             <View style={styles.metaRow}>
                                 <MapPin size={14} color="#64748B" />
-                                <Text style={styles.metaText}>{entry.room || '教室待补充'}</Text>
+                                <Text style={styles.metaText}>{entry.room || scheduleT('room_pending', '教室待补充')}</Text>
                             </View>
                         </View>
                     ))}
@@ -639,26 +640,26 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
 
                         {importItems.length > 0 ? (
                             <View style={styles.reviewSection}>
-                                <Text style={styles.sectionTitle}>识别结果确认</Text>
+                                <Text style={styles.sectionTitle}>{scheduleT('import_results', '识别结果确认')}</Text>
                                 {importItems.map(item => (
                                     <View key={item.id} style={styles.reviewCard}>
                                         <View style={styles.entryHeader}>
-                                            <Text style={styles.entryTitle}>{getImportItemTitle(item)}</Text>
+                                            <Text style={styles.entryTitle}>{getImportItemTitle(item, t)}</Text>
                                             <Text style={styles.reviewStatus}>
-                                                {item.status === 'confirmed' ? '已加入' : item.status === 'ignored' ? '已忽略' : item.status === 'needs_manual_match' ? '需补充' : '待确认'}
+                                                {item.status === 'confirmed' ? scheduleT('status_confirmed', '已加入') : item.status === 'ignored' ? scheduleT('status_ignored', '已忽略') : item.status === 'needs_manual_match' ? scheduleT('status_needs_manual', '需补充') : scheduleT('status_pending', '待确认')}
                                             </Text>
                                         </View>
                                         <View style={styles.metaRow}>
                                             <BookOpen size={14} color="#64748B" />
-                                            <Text style={styles.metaText}>{item.extractedCourseCode || '课程代码待补充'}</Text>
+                                            <Text style={styles.metaText}>{item.extractedCourseCode || scheduleT('course_code_pending', '课程代码待补充')}</Text>
                                         </View>
                                         <View style={styles.metaRow}>
                                             <Search size={14} color="#64748B" />
-                                            <Text style={styles.metaText}>{formatEntryTime(item)}</Text>
+                                            <Text style={styles.metaText}>{formatEntryTime(item, t)}</Text>
                                         </View>
                                         <View style={styles.metaRow}>
                                             <MapPin size={14} color="#64748B" />
-                                            <Text style={styles.metaText}>{item.extractedRoom || '教室待补充'}</Text>
+                                            <Text style={styles.metaText}>{item.extractedRoom || scheduleT('room_pending', '教室待补充')}</Text>
                                         </View>
                                         <View style={styles.actionRow}>
                                             <TouchableOpacity
@@ -666,21 +667,21 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                                 onPress={() => handleDirectSave(item)}
                                                 disabled={!canSaveItem(item) || item.status === 'confirmed' || item.status === 'ignored' || savingItemId === item.id}
                                             >
-                                                <Text style={styles.outlineButtonText}>{savingItemId === item.id ? '处理中...' : '直接加入'}</Text>
+                                                <Text style={styles.outlineButtonText}>{savingItemId === item.id ? scheduleT('processing', '处理中...') : scheduleT('add_directly', '直接加入')}</Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity
                                                 style={[styles.outlineButton, item.status === 'confirmed' && styles.disabledOutline]}
                                                 onPress={() => openSearchForItem(item)}
                                                 disabled={item.status === 'confirmed'}
                                             >
-                                                <Text style={styles.outlineButtonText}>搜课程匹配</Text>
+                                                <Text style={styles.outlineButtonText}>{scheduleT('search_match_course', '搜课程匹配')}</Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity
                                                 style={styles.ghostButton}
                                                 onPress={() => handleIgnore(item)}
                                                 disabled={item.status === 'confirmed' || savingItemId === item.id}
                                             >
-                                                <Text style={styles.ghostButtonText}>忽略</Text>
+                                                <Text style={styles.ghostButtonText}>{scheduleT('ignore', '忽略')}</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -700,24 +701,24 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                     <View key={entry.id} style={styles.reviewCard}>
                                         <View style={styles.entryHeader}>
                                             <Text style={styles.entryTitle}>{entry.title}</Text>
-                                            <Text style={styles.reviewStatus}>{DAY_OPTIONS.find(day => day.key === entry.dayOfWeek)?.label || `周${entry.dayOfWeek}`}</Text>
+                                            <Text style={styles.reviewStatus}>{dayOptions.find(day => day.key === entry.dayOfWeek)?.label || scheduleT('week_label', { day: entry.dayOfWeek })}</Text>
                                         </View>
                                         <View style={styles.metaRow}>
                                             <BookOpen size={14} color="#64748B" />
-                                            <Text style={styles.metaText}>{entry.courseCode || '课程代码待补充'}</Text>
+                                            <Text style={styles.metaText}>{entry.courseCode || scheduleT('course_code_pending', '课程代码待补充')}</Text>
                                         </View>
                                         <View style={styles.metaRow}>
                                             <Search size={14} color="#64748B" />
-                                            <Text style={styles.metaText}>{formatEntryTime(entry)}</Text>
+                                            <Text style={styles.metaText}>{formatEntryTime(entry, t)}</Text>
                                         </View>
                                         <View style={styles.metaRow}>
                                             <MapPin size={14} color="#64748B" />
-                                            <Text style={styles.metaText}>{entry.room || '教室待补充'}</Text>
+                                            <Text style={styles.metaText}>{entry.room || scheduleT('room_pending', '教室待补充')}</Text>
                                         </View>
                                         <View style={styles.actionRow}>
                                             <TouchableOpacity style={styles.outlineButton} onPress={() => openEditorForEntry(entry)}>
                                                 <Pencil size={14} color="#1E3A8A" />
-                                                <Text style={styles.outlineButtonText}>修改</Text>
+                                                <Text style={styles.outlineButtonText}>{scheduleT('edit_action', '修改')}</Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity
                                                 style={styles.deleteButton}
@@ -725,7 +726,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                                 disabled={savingEntryId === entry.id}
                                             >
                                                 <Trash2 size={14} color="#B91C1C" />
-                                                <Text style={styles.deleteButtonText}>{savingEntryId === entry.id ? '处理中...' : '删除'}</Text>
+                                                <Text style={styles.deleteButtonText}>{savingEntryId === entry.id ? scheduleT('processing', '处理中...') : t('common.delete', '删除')}</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -739,7 +740,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             <Modal visible={showSearchModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeSearchModal}>
                 <View style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>搜课程加入</Text>
+                        <Text style={styles.modalTitle}>{scheduleT('search_to_add', '搜课程加入')}</Text>
                         <TouchableOpacity onPress={closeSearchModal}>
                             <X size={22} color="#1F2937" />
                         </TouchableOpacity>
@@ -751,7 +752,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                             style={styles.searchInput}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
-                            placeholder="输入课程代码或课程名"
+                            placeholder={scheduleT('search_course_placeholder', '输入课程代码或课程名')}
                             placeholderTextColor={PLACEHOLDER_COLOR}
                             autoCapitalize="characters"
                         />
@@ -760,13 +761,13 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                     <ScrollView contentContainerStyle={styles.modalContent}>
                         {selectedImportItem ? (
                             <View style={styles.contextCard}>
-                                <Text style={styles.contextTitle}>{getImportItemTitle(selectedImportItem)}</Text>
-                                <Text style={styles.contextText}>{formatEntryTime(selectedImportItem)} · {selectedImportItem.extractedRoom || '教室待补充'}</Text>
+                                <Text style={styles.contextTitle}>{getImportItemTitle(selectedImportItem, t)}</Text>
+                                <Text style={styles.contextText}>{formatEntryTime(selectedImportItem, t)} · {selectedImportItem.extractedRoom || scheduleT('room_pending', '教室待补充')}</Text>
                             </View>
                         ) : null}
 
                         <View style={styles.manualFormCard}>
-                            <Text style={styles.manualFormTitle}>手动补充时间和教室</Text>
+                            <Text style={styles.manualFormTitle}>{scheduleT('manual_supplement', '手动补充时间和教室')}</Text>
                             {selectedMatchedCourse ? (
                                 <View style={styles.selectedCourseChip}>
                                     <Text style={styles.selectedCourseChipCode}>{selectedMatchedCourse.code}</Text>
@@ -777,39 +778,39 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                 style={styles.manualInput}
                                 value={manualCourseName}
                                 onChangeText={setManualCourseName}
-                                placeholder="课程名，可留空后用搜课结果覆盖"
+                                placeholder={scheduleT('course_name_optional', '课程名，可留空后用搜课结果覆盖')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={manualRoom}
                                 onChangeText={setManualRoom}
-                                placeholder="教室，例如 AAB201"
+                                placeholder={scheduleT('room_example', '教室，例如 AAB201')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={manualStartTime}
                                 onChangeText={setManualStartTime}
-                                placeholder="开始时间，例如 09:00"
+                                placeholder={scheduleT('start_time_example', '开始时间，例如 09:00')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={manualEndTime}
                                 onChangeText={setManualEndTime}
-                                placeholder="结束时间，例如 10:50"
+                                placeholder={scheduleT('end_time_example', '结束时间，例如 10:50')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={manualWeekText}
                                 onChangeText={setManualWeekText}
-                                placeholder="周次说明，可选"
+                                placeholder={scheduleT('week_text_optional', '周次说明，可选')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
-                                {DAY_OPTIONS.map(day => (
+                                {dayOptions.map(day => (
                                     <TouchableOpacity
                                         key={`manual-${day.key}`}
                                         style={[styles.dayTab, manualDayOfWeek === day.key && styles.dayTabActive]}
@@ -825,7 +826,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                 disabled={!selectedMatchedCourse || savingItemId === selectedImportItem?.id}
                             >
                                 <Text style={styles.confirmCourseButtonText}>
-                                    {savingItemId === selectedImportItem?.id ? '处理中...' : selectedMatchedCourse ? '加入已选课程' : '先从下方选择课程'}
+                                    {savingItemId === selectedImportItem?.id ? scheduleT('processing', '处理中...') : selectedMatchedCourse ? scheduleT('add_selected_course', '加入已选课程') : scheduleT('select_course_first', '先从下方选择课程')}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -836,8 +837,8 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                             </View>
                         ) : courseResults.length === 0 ? (
                             <View style={styles.stateBox}>
-                                <Text style={styles.stateTitle}>没有找到相关课程</Text>
-                                <Text style={styles.stateText}>可以换关键词继续搜，或者直接去新增课程。</Text>
+                                <Text style={styles.stateTitle}>{scheduleT('no_matching_courses', '没有找到相关课程')}</Text>
+                                <Text style={styles.stateText}>{scheduleT('try_different_keyword', '可以换关键词继续搜，或者直接去新增课程。')}</Text>
                             </View>
                         ) : (
                             courseResults.map(course => (
@@ -845,16 +846,16 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                     <View style={styles.courseInfo}>
                                         <Text style={styles.courseCode}>{course.code}</Text>
                                         <Text style={styles.courseName}>{course.name}</Text>
-                                        <Text style={styles.courseMeta}>{course.instructor || 'Teacher TBD'} · {course.department || 'General'}</Text>
+                                        <Text style={styles.courseMeta}>{course.instructor || scheduleT('teacher_tbd', 'Teacher TBD')} · {course.department || scheduleT('general_department', 'General')}</Text>
                                     </View>
-                                    <Text style={styles.coursePick}>{selectedMatchedCourse?.id === course.id ? '已选中' : '选中'}</Text>
+                                    <Text style={styles.coursePick}>{selectedMatchedCourse?.id === course.id ? scheduleT('selected', '已选中') : scheduleT('select', '选中')}</Text>
                                 </TouchableOpacity>
                             ))
                         )}
 
                         <TouchableOpacity style={styles.addCourseCard} onPress={handleAddNewCourse}>
-                            <Text style={styles.addCourseTitle}>没有相关课程？</Text>
-                            <Text style={styles.addCourseText}>跳转到课程点评的 Add New Course 新增课程</Text>
+                            <Text style={styles.addCourseTitle}>{scheduleT('no_related_course', '没有相关课程？')}</Text>
+                            <Text style={styles.addCourseText}>{scheduleT('add_course_text', '跳转到课程点评的新增课程页面')}</Text>
                         </TouchableOpacity>
                     </ScrollView>
                 </View>
@@ -863,7 +864,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
             <Modal visible={showEntryEditor} animationType="slide" presentationStyle="pageSheet" onRequestClose={closeEntryEditor}>
                 <View style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>修改课表</Text>
+                        <Text style={styles.modalTitle}>{scheduleT('edit_schedule_title', '修改课表')}</Text>
                         <TouchableOpacity onPress={closeEntryEditor}>
                             <X size={22} color="#1F2937" />
                         </TouchableOpacity>
@@ -871,19 +872,19 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
 
                     <ScrollView contentContainerStyle={styles.modalContent}>
                         <View style={styles.manualFormCard}>
-                            <Text style={styles.manualFormTitle}>修改课程信息</Text>
+                            <Text style={styles.manualFormTitle}>{scheduleT('edit_course_info', '修改课程信息')}</Text>
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingTitle}
                                 onChangeText={setEditingTitle}
-                                placeholder="课程名"
+                                placeholder={scheduleT('course_name', '课程名')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingCourseCode}
                                 onChangeText={setEditingCourseCode}
-                                placeholder="课程代码"
+                                placeholder={scheduleT('course_code', '课程代码')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                                 autoCapitalize="characters"
                             />
@@ -891,28 +892,28 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                 style={styles.manualInput}
                                 value={editingRoom}
                                 onChangeText={setEditingRoom}
-                                placeholder="教室，例如 AAB201"
+                                placeholder={scheduleT('room_example', '教室，例如 AAB201')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingStartTime}
                                 onChangeText={setEditingStartTime}
-                                placeholder="开始时间，例如 09:00"
+                                placeholder={scheduleT('start_time_example', '开始时间，例如 09:00')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingEndTime}
                                 onChangeText={setEditingEndTime}
-                                placeholder="结束时间，例如 10:50"
+                                placeholder={scheduleT('end_time_example', '结束时间，例如 10:50')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingWeekText}
                                 onChangeText={setEditingWeekText}
-                                placeholder="周次说明，可选"
+                                placeholder={scheduleT('week_text_optional', '周次说明，可选')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
@@ -932,7 +933,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                 disabled={!editingTitle.trim() || !editingDayOfWeek || savingEntryId === editingEntry?.id}
                             >
                                 <Text style={styles.confirmCourseButtonText}>
-                                    {savingEntryId === editingEntry?.id ? '处理中...' : '保存修改'}
+                                    {savingEntryId === editingEntry?.id ? scheduleT('processing', '处理中...') : scheduleT('save_changes', '保存修改')}
                                 </Text>
                             </TouchableOpacity>
                             {editingEntry ? (
@@ -941,7 +942,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                     onPress={() => handleDeleteEntry(editingEntry)}
                                     disabled={savingEntryId === editingEntry.id}
                                 >
-                                    <Text style={styles.deleteEntryButtonLargeText}>{savingEntryId === editingEntry.id ? '处理中...' : '删除这条课程'}</Text>
+                                    <Text style={styles.deleteEntryButtonLargeText}>{savingEntryId === editingEntry.id ? scheduleT('processing', '处理中...') : scheduleT('delete_this_course', '删除这条课程')}</Text>
                                 </TouchableOpacity>
                             ) : null}
                         </View>
@@ -960,19 +961,19 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
 
                     <ScrollView contentContainerStyle={styles.modalContent}>
                         <View style={styles.manualFormCard}>
-                            <Text style={styles.manualFormTitle}>填写课程信息</Text>
+                            <Text style={styles.manualFormTitle}>{scheduleT('fill_course_info', '填写课程信息')}</Text>
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingTitle}
                                 onChangeText={setEditingTitle}
-                                placeholder="课程名"
+                                placeholder={scheduleT('course_name', '课程名')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingCourseCode}
                                 onChangeText={setEditingCourseCode}
-                                placeholder="课程代码"
+                                placeholder={scheduleT('course_code', '课程代码')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                                 autoCapitalize="characters"
                             />
@@ -980,28 +981,28 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                 style={styles.manualInput}
                                 value={editingRoom}
                                 onChangeText={setEditingRoom}
-                                placeholder="教室，例如 AAB201"
+                                placeholder={scheduleT('room_example', '教室，例如 AAB201')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingStartTime}
                                 onChangeText={setEditingStartTime}
-                                placeholder="开始时间，例如 09:00"
+                                placeholder={scheduleT('start_time_example', '开始时间，例如 09:00')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingEndTime}
                                 onChangeText={setEditingEndTime}
-                                placeholder="结束时间，例如 10:50"
+                                placeholder={scheduleT('end_time_example', '结束时间，例如 10:50')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <TextInput
                                 style={styles.manualInput}
                                 value={editingWeekText}
                                 onChangeText={setEditingWeekText}
-                                placeholder="周次说明，可选"
+                                placeholder={scheduleT('week_text_optional', '周次说明，可选')}
                                 placeholderTextColor={PLACEHOLDER_COLOR}
                             />
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
@@ -1021,7 +1022,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
                                 disabled={!editingTitle.trim() || !editingDayOfWeek || savingEntryId === 'manual-create'}
                             >
                                 <Text style={styles.confirmCourseButtonText}>
-                                    {savingEntryId === 'manual-create' ? '处理中...' : '新增到课表'}
+                                    {savingEntryId === 'manual-create' ? scheduleT('processing', '处理中...') : scheduleT('add_to_schedule', '新增到课表')}
                                 </Text>
                             </TouchableOpacity>
                         </View>
