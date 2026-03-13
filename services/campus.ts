@@ -1,4 +1,5 @@
 import { Post, PostCategory, PostComment, PostType } from '../types';
+import { getFollowingUserIds } from './follows';
 import { getBlockedUserIds } from './moderation';
 import { supabase } from './supabase';
 
@@ -64,12 +65,27 @@ const mapSupabaseToPost = (row: any): Post => {
 };
 
 /**
+ * Mark which posts have authors that the current user is following
+ */
+const markFollowingAuthors = async (posts: Post[], currentUserId?: string) => {
+    if (!currentUserId || posts.length === 0) return;
+
+    const followingIds = await getFollowingUserIds(currentUserId);
+    if (followingIds.length === 0) return;
+
+    const followingSet = new Set(followingIds);
+    posts.forEach(p => {
+        p.isFollowingAuthor = followingSet.has(p.authorId);
+    });
+};
+
+/**
  * Fetch posts by category
  */
-export const fetchPosts = async (category: PostCategory = 'All', currentUserId?: string): Promise<Post[]> => {
+export const fetchPosts = async (category?: PostCategory, currentUserId?: string): Promise<Post[]> => {
     let query = supabase.from(POSTS_TABLE).select('*, author:users!author_id(*)');
 
-    const type = CATEGORY_TO_TYPE[category];
+    const type = CATEGORY_TO_TYPE[category || 'All'];
     if (type !== 'all') {
         query = query.eq('type', type);
     }
@@ -109,6 +125,121 @@ export const fetchPosts = async (category: PostCategory = 'All', currentUserId?:
         }
     }
 
+    await markFollowingAuthors(posts, currentUserId);
+    return posts;
+};
+
+/**
+ * Fetch posts created by a specific author.
+ */
+export const fetchPostsByAuthor = async (authorId: string, currentUserId?: string): Promise<Post[]> => {
+    const { data, error } = await supabase
+        .from(POSTS_TABLE)
+        .select('*, author:users!author_id(*)')
+        .eq('author_id', authorId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching posts by author:', error);
+        throw error;
+    }
+
+    let posts = (data || []).map(mapSupabaseToPost);
+
+    // Filter out posts from blocked users
+    if (currentUserId) {
+        const blockedIds = await getBlockedUserIds(currentUserId);
+        if (blockedIds.length > 0) {
+            const blockedSet = new Set(blockedIds);
+            posts = posts.filter(p => !blockedSet.has(p.authorId));
+        }
+    }
+
+    // Mark current user's like state on these posts
+    if (currentUserId && posts.length > 0) {
+        const postIds = posts.map(p => p.id);
+        const { data: likes } = await supabase
+            .from(LIKES_TABLE)
+            .select('post_id')
+            .eq('user_id', currentUserId)
+            .in('post_id', postIds);
+
+        if (likes) {
+            const likedPostIds = new Set(likes.map(l => l.post_id));
+            posts.forEach(p => {
+                p.isLiked = likedPostIds.has(p.id);
+            });
+        }
+    }
+
+    await markFollowingAuthors(posts, currentUserId);
+    return posts;
+};
+
+/**
+ * Fetch posts liked by a specific user.
+ */
+export const fetchLikedPosts = async (userId: string, currentUserId?: string): Promise<Post[]> => {
+    const { data: likes, error: likesError } = await supabase
+        .from(LIKES_TABLE)
+        .select('post_id')
+        .eq('user_id', userId);
+
+    if (likesError) {
+        console.error('Error fetching liked posts:', likesError);
+        throw likesError;
+    }
+
+    const likedPostIds = Array.from(new Set((likes || []).map(l => l.post_id)));
+    if (likedPostIds.length === 0) {
+        return [];
+    }
+
+    const { data, error } = await supabase
+        .from(POSTS_TABLE)
+        .select('*, author:users!author_id(*)')
+        .in('id', likedPostIds);
+
+    if (error) {
+        console.error('Error fetching liked post records:', error);
+        throw error;
+    }
+
+    let posts = (data || []).map(mapSupabaseToPost);
+
+    // Keep list order aligned with likes list order
+    const idOrder = new Map<string, number>();
+    likedPostIds.forEach((postId, index) => idOrder.set(postId, index));
+    posts.sort((a, b) => (idOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (idOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+
+    if (currentUserId) {
+        const blockedIds = await getBlockedUserIds(currentUserId);
+        if (blockedIds.length > 0) {
+            const blockedSet = new Set(blockedIds);
+            posts = posts.filter(p => !blockedSet.has(p.authorId));
+        }
+
+        const postIds = posts.map(p => p.id);
+        if (postIds.length > 0) {
+            const { data: currentUserLikes } = await supabase
+                .from(LIKES_TABLE)
+                .select('post_id')
+                .eq('user_id', currentUserId)
+                .in('post_id', postIds);
+
+            const currentLikedSet = new Set((currentUserLikes || []).map(l => l.post_id));
+            posts.forEach(p => {
+                p.isLiked = currentLikedSet.has(p.id);
+            });
+        }
+    } else {
+        const likedSet = new Set(likedPostIds);
+        posts.forEach(p => {
+            p.isLiked = likedSet.has(p.id);
+        });
+    }
+
+    await markFollowingAuthors(posts, currentUserId);
     return posts;
 };
 
@@ -158,6 +289,7 @@ export const searchPosts = async (queryText: string, currentUserId?: string): Pr
         }
     }
 
+    await markFollowingAuthors(posts, currentUserId);
     return posts;
 };
 
@@ -180,16 +312,10 @@ export const fetchPostById = async (postId: string, currentUserId?: string): Pro
 
     const post = mapSupabaseToPost(data);
 
-    // If userId is provided, check if the user has liked this post
+    // Mark following status
     if (currentUserId) {
-        const { data: like } = await supabase
-            .from(LIKES_TABLE)
-            .select('*')
-            .eq('post_id', postId)
-            .eq('user_id', currentUserId)
-            .maybeSingle();
-
-        post.isLiked = !!like;
+        const followingIds = await getFollowingUserIds(currentUserId);
+        post.isFollowingAuthor = followingIds.includes(post.authorId);
     }
 
     return post;
