@@ -37,14 +37,7 @@ This creates:
 
 ### Step 2: Add First Admin
 
-After running the migration, add your first admin:
-
-```bash
-# Run this in Supabase SQL Editor
-supabase/add_first_admin.sql
-```
-
-This adds `25421751@life.hkbu.edu.hk` as the first admin.
+Try add another user as admin following the instructions in supabase/admin_management_helpers.sql, for example: 25421751@life.hkbu.edu.hk
 
 **Important**: The user must have registered/logged in at least once for their account to exist in `auth.users`.
 
@@ -95,54 +88,6 @@ SELECT check_admin_status('user-email@life.hkbu.edu.hk');
 ```sql
 SELECT * FROM list_all_admins();
 ```
-
-### Method 2: Direct SQL Commands
-
-#### Add Admin Manually
-```sql
-DO $$
-DECLARE
-  admin_user_id uuid;
-BEGIN
-  SELECT id INTO admin_user_id
-  FROM auth.users
-  WHERE email = 'user-email@life.hkbu.edu.hk';
-  
-  IF admin_user_id IS NOT NULL THEN
-    INSERT INTO public.app_admins (user_id, email, granted_by, is_active)
-    VALUES (admin_user_id, 'user-email@life.hkbu.edu.hk', admin_user_id, true);
-  END IF;
-END $$;
-```
-
-#### Remove Admin Manually
-```sql
-UPDATE public.app_admins
-SET is_active = false,
-    revoked_at = now(),
-    revoke_reason = 'No longer needed'
-WHERE user_id = (
-  SELECT id FROM auth.users 
-  WHERE email = 'user-email@life.hkbu.edu.hk'
-);
-```
-
-## How It Works
-
-### Frontend Integration
-
-The admin badge is automatically displayed when:
-1. User's admin status is checked via `isAdmin()` function
-2. Result is cached for 5 minutes for performance
-3. Badge appears next to BU_Edu badge (if both apply)
-
-### Where Badges Appear
-
-- ✅ Profile page (next to display name)
-- ✅ Forum posts (next to author name)
-- ✅ Campus posts (next to author name)
-- ✅ Post comments (next to commenter name)
-- ✅ Course reviews (next to reviewer name)
 
 ### Badge Priority
 
@@ -224,7 +169,6 @@ Potential features to add:
 supabase/
 ├── migrations/
 │   └── 20260312_add_admin_system.sql      # Main migration
-├── add_first_admin.sql                     # Initial admin script
 └── admin_management_helpers.sql            # Helper functions
 
 components/common/
