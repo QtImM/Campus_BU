@@ -27,11 +27,13 @@ const mapRow = (row: any): ForumPost => {
         replyCount: row.reply_count || 0,
         upvoteCount: row.upvote_count || 0,
         isUpvoted: false,
+        isFollowingAuthor: false,
         lastReplyAt: new Date(row.last_reply_at),
         createdAt: new Date(row.created_at),
     };
 };
 
+// ── Helper: Mark following authors ────────────────────────────────────────────
 const markFollowingAuthors = async (posts: ForumPost[], currentUserId?: string) => {
     if (!currentUserId || posts.length === 0) return;
 
@@ -141,6 +143,8 @@ export const fetchForumPostById = async (
             .eq('user_id', currentUserId)
             .maybeSingle();
         post.isUpvoted = !!upvote;
+
+        // Mark following status
         const followingIds = await getFollowingUserIds(currentUserId);
         post.isFollowingAuthor = followingIds.includes(post.authorId);
     }

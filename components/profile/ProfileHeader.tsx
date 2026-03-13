@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Share } from 'react-native';
 import { Camera, Edit3, User as UserIcon } from 'lucide-react-native';
+import React from 'react';
+import { Image, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { User } from '../../types';
+import { isAdminSync, isHKBUEmail } from '../../utils/userUtils';
+import { AdminBadge } from '../common/AdminBadge';
 import { EduBadge } from '../common/EduBadge';
-import { isHKBUEmail } from '../../utils/userUtils';
 
 interface ProfileHeaderProps {
     user: User | null;
@@ -69,6 +70,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     <View style={styles.nameRow}>
                         <Text style={styles.name}>{displayName}</Text>
                         {!isGuest && <EduBadge shouldShow={isHKBUEmail(user.email)} size="small" />}
+                        {!isGuest && <AdminBadge shouldShow={isAdminSync(user.uid)} size="small" />}
                     </View>
                     <Text style={styles.bio} numberOfLines={1}>{subtitle}</Text>
                     {!isGuest && user?.stats && (

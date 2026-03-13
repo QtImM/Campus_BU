@@ -30,6 +30,8 @@ import {
     View,
 } from 'react-native';
 import { ActionModal } from '../../components/campus/ActionModal';
+import { AdminDeletionModal, DeletionReason } from '../../components/campus/AdminDeletionModal';
+import { BottomSheet } from '../../components/campus/BottomSheet';
 import { Toast, ToastType } from '../../components/campus/Toast';
 import { EduBadge } from '../../components/common/EduBadge';
 import { TranslatableText } from '../../components/common/TranslatableText';
@@ -44,7 +46,7 @@ import {
     togglePostLike,
 } from '../../services/campus';
 import { Post, PostComment } from '../../types';
-import { isHKBUEmail } from '../../utils/userUtils';
+import { isAdmin, isHKBUEmail } from '../../utils/userUtils';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -105,6 +107,29 @@ export default function PostDetailScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [deleteType, setDeleteType] = useState<'post' | 'comment'>('post');
     const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+    const [settingsSheetVisible, setSettingsSheetVisible] = useState(false);
+    const [adminDeletionModalVisible, setAdminDeletionModalVisible] = useState(false);
+    const [isAdminUser, setIsAdminUser] = useState(false);
+
+    // Debug logging for settings sheet
+    React.useEffect(() => {
+        console.log('[PostDetail] settingsSheetVisible changed:', settingsSheetVisible);
+    }, [settingsSheetVisible]);
+
+    // Check if current user is admin
+    React.useEffect(() => {
+        const checkAdminStatus = async () => {
+            if (currentUser?.uid) {
+                console.log('[PostDetail] Checking admin status for user:', currentUser.uid);
+                const admin = await isAdmin(currentUser.uid);
+                console.log('[PostDetail] User is admin:', admin);
+                setIsAdminUser(admin);
+            } else {
+                setIsAdminUser(false);
+            }
+        };
+        checkAdminStatus();
+    }, [currentUser?.uid]);
     const [toast, setToast] = useState<{ visible: boolean; message: string; type: ToastType }>({
         visible: false,
         message: '',
@@ -112,12 +137,6 @@ export default function PostDetailScreen() {
     });
     const [replyTarget, setReplyTarget] = useState<PostComment | null>(null);
     const commentInputRef = useRef<TextInput>(null);
-
-    const openPublicProfile = (authorId?: string, isAnonymous?: boolean) => {
-        if (!authorId || isAnonymous) return;
-        if (authorId === currentUser?.uid) return;
-        router.push(`/profile/${authorId}` as any);
-    };
 
     // Fire zoom animation immediately on mount
     useEffect(() => {
@@ -284,6 +303,86 @@ export default function PostDetailScreen() {
         }
     };
 
+    // Admin deletion handlers
+    const handleAdminDeletePress = () => {
+        console.log('[PostDetail] Admin delete pressed in settings sheet');
+        setSettingsSheetVisible(false);
+        setTimeout(() => {
+            setAdminDeletionModalVisible(true);
+        }, 300);
+    };
+
+    const handleAdminDeleteConfirm = async (reason: DeletionReason, customReason?: string) => {
+        console.log('[PostDetail] Admin delete confirmed with reason:', reason, customReason);
+
+        if (!post) {
+            console.error('[PostDetail] No post to delete');
+            return;
+        }
+
+        try {
+            setAdminDeletionModalVisible(false);
+            setLoading(true);
+
+            // Call the delete function
+            await deletePost(post.id);
+
+            console.log('[PostDetail] Post deleted successfully');
+
+            // Show success toast
+            const reasonText = reason === 'other' && customReason
+                ? `原因：${customReason}`
+                : getReasonDisplayText(reason);
+            setToast({
+                visible: true,
+                message: `帖子已删除 (${reasonText})`,
+                type: 'success'
+            });
+
+            // Global sync for deletion
+            DeviceEventEmitter.emit('campus_post_updated', {
+                id: post.id,
+                deleted: true,
+                deletionReason: reason,
+                deletionCustomReason: customReason
+            });
+
+            // Navigate back after short delay
+            setTimeout(() => router.back(), 1500);
+        } catch (error) {
+            console.error('[PostDetail] Error deleting post:', error);
+            setToast({
+                visible: true,
+                message: '删除失败，请重试',
+                type: 'error'
+            });
+            setAdminDeletionModalVisible(false);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAdminDeleteCancel = () => {
+        console.log('[PostDetail] Admin delete cancelled');
+        setAdminDeletionModalVisible(false);
+    };
+
+    // Helper function to get display text for reason
+    const getReasonDisplayText = (reason: DeletionReason): string => {
+        switch (reason) {
+            case 'spam':
+                return '垃圾内容/广告';
+            case 'unfriendly':
+                return '不友善/违规内容';
+            case 'duplicate':
+                return '重复内容';
+            case 'other':
+                return '其他';
+            default:
+                return '未知原因';
+        }
+    };
+
     // ── Loading / not found states ────────────────────────────────────────────
     // No full-page spinner — we show the page immediately with a skeleton
 
@@ -329,13 +428,14 @@ export default function PostDetailScreen() {
                         <ChevronLeft size={24} color="#1E3A8A" />
                     </TouchableOpacity>
                     <Text style={styles.topBarTitle}>HKCampus</Text>
-                    {post && currentUser?.uid === post.authorId ? (
-                        <TouchableOpacity style={styles.backBtn} onPress={triggerDeletePost}>
-                            <MoreHorizontal size={22} color="#1E3A8A" />
-                        </TouchableOpacity>
-                    ) : (
-                        <View style={{ width: 40 }} />
-                    )}
+                    <TouchableOpacity style={styles.settingsBtn} onPress={() => {
+                        console.log('[PostDetail] Settings button pressed!');
+                        console.log('[PostDetail] Current settingsSheetVisible:', settingsSheetVisible);
+                        console.log('[PostDetail] Setting settingsSheetVisible to true');
+                        setSettingsSheetVisible(true);
+                    }}>
+                        <MoreHorizontal size={22} color="#1E3A8A" />
+                    </TouchableOpacity>
                 </View>
 
                 <ScrollView
@@ -415,12 +515,7 @@ export default function PostDetailScreen() {
 
                     {/* ══ AUTHOR INFO ═════════════════════════════════════════════ */}
                     <View style={styles.authorSection}>
-                        <TouchableOpacity
-                            style={styles.authorAvatar}
-                            onPress={() => openPublicProfile(post?.authorId, post?.isAnonymous)}
-                            disabled={!post || !!post.isAnonymous}
-                            activeOpacity={!post || !!post.isAnonymous ? 1 : 0.7}
-                        >
+                        <View style={styles.authorAvatar}>
                             {post && !post.isAnonymous && isValidUrl(post.authorAvatar) ? (
                                 <Image source={{ uri: post.authorAvatar }} style={styles.avatarImg} />
                             ) : loading ? null : (
@@ -428,7 +523,7 @@ export default function PostDetailScreen() {
                                     {post?.isAnonymous ? '?' : post?.authorName.charAt(0).toUpperCase()}
                                 </Text>
                             )}
-                        </TouchableOpacity>
+                        </View>
                         {loading ? (
                             // Author skeleton
                             <View style={{ flex: 1, gap: 6 }}>
@@ -493,12 +588,7 @@ export default function PostDetailScreen() {
                         {!loading && organizedComments.map(comment => (
                             <View key={comment.id} style={styles.commentContainer}>
                                 <View style={styles.commentItem}>
-                                    <TouchableOpacity
-                                        style={styles.commentAvatar}
-                                        onPress={() => openPublicProfile(comment.authorId)}
-                                        disabled={!comment.authorId}
-                                        activeOpacity={comment.authorId ? 0.7 : 1}
-                                    >
+                                    <View style={styles.commentAvatar}>
                                         {comment.authorAvatar && isValidUrl(comment.authorAvatar) ? (
                                             <Image source={{ uri: comment.authorAvatar }} style={styles.avatarImg} />
                                         ) : (
@@ -506,7 +596,7 @@ export default function PostDetailScreen() {
                                                 {comment.authorName?.charAt(0).toUpperCase() ?? '?'}
                                             </Text>
                                         )}
-                                    </TouchableOpacity>
+                                    </View>
                                     <View style={styles.commentBody}>
                                         <View style={styles.commentHeader}>
                                             <Text style={styles.commentAuthor}>{comment.authorName}</Text>
@@ -544,12 +634,7 @@ export default function PostDetailScreen() {
                                     <View style={styles.repliesList}>
                                         {comment.replies.map((reply: PostComment) => (
                                             <View key={reply.id} style={styles.replyItem}>
-                                                <TouchableOpacity
-                                                    style={styles.commentAvatarSmall}
-                                                    onPress={() => openPublicProfile(reply.authorId)}
-                                                    disabled={!reply.authorId}
-                                                    activeOpacity={reply.authorId ? 0.7 : 1}
-                                                >
+                                                <View style={styles.commentAvatarSmall}>
                                                     {reply.authorAvatar && isValidUrl(reply.authorAvatar) ? (
                                                         <Image source={{ uri: reply.authorAvatar }} style={styles.avatarImg} />
                                                     ) : (
@@ -557,7 +642,7 @@ export default function PostDetailScreen() {
                                                             {reply.authorName?.charAt(0).toUpperCase() ?? '?'}
                                                         </Text>
                                                     )}
-                                                </TouchableOpacity>
+                                                </View>
                                                 <View style={styles.commentBody}>
                                                     <View style={styles.commentHeader}>
                                                         <Text style={styles.commentAuthorSmall}>{reply.authorName}</Text>
@@ -666,6 +751,31 @@ export default function PostDetailScreen() {
                 </View>
 
                 {/* ── Modals ── */}
+                <BottomSheet
+                    visible={settingsSheetVisible}
+                    onClose={() => setSettingsSheetVisible(false)}
+                >
+                    {/* Admin-only delete option */}
+                    {isAdminUser && (
+                        <TouchableOpacity
+                            style={styles.adminDeleteOption}
+                            onPress={handleAdminDeletePress}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.adminDeleteIconContainer}>
+                                <Trash2 size={20} color="#DC2626" />
+                            </View>
+                            <Text style={styles.adminDeleteText}>管理员删除</Text>
+                        </TouchableOpacity>
+                    )}
+                    {/* Empty content for non-admin users or future features */}
+                    {!isAdminUser && <View style={{ flex: 1 }} />}
+                </BottomSheet>
+                <AdminDeletionModal
+                    visible={adminDeletionModalVisible}
+                    onConfirm={handleAdminDeleteConfirm}
+                    onCancel={handleAdminDeleteCancel}
+                />
                 <ActionModal
                     visible={deleteModalVisible}
                     title={deleteType === 'post' ? '删除帖子' : '删除评论'}
@@ -783,6 +893,13 @@ const styles = StyleSheet.create({
         borderBottomColor: '#F0F2F8',
     },
     backBtn: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 20,
+    },
+    settingsBtn: {
         width: 40,
         height: 40,
         alignItems: 'center',
@@ -1073,5 +1190,41 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#6B7280',
         fontWeight: '600',
+    },
+    adminDeleteOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+        gap: 12,
+    },
+    adminDeleteIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FEF2F2',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    adminDeleteText: {
+        fontSize: 16,
+        color: '#DC2626',
+        fontWeight: '600',
+    },
+    settingsSheetContent: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 20,
+    },
+    settingsSheetTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#111827',
+        marginBottom: 8,
+    },
+    settingsSheetSubtitle: {
+        fontSize: 14,
+        color: '#9CA3AF',
     },
 });

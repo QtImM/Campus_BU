@@ -64,6 +64,9 @@ const mapSupabaseToPost = (row: any): Post => {
     };
 };
 
+/**
+ * Mark which posts have authors that the current user is following
+ */
 const markFollowingAuthors = async (posts: Post[], currentUserId?: string) => {
     if (!currentUserId || posts.length === 0) return;
 
@@ -79,10 +82,10 @@ const markFollowingAuthors = async (posts: Post[], currentUserId?: string) => {
 /**
  * Fetch posts by category
  */
-export const fetchPosts = async (category: PostCategory = 'All', currentUserId?: string): Promise<Post[]> => {
+export const fetchPosts = async (category?: PostCategory, currentUserId?: string): Promise<Post[]> => {
     let query = supabase.from(POSTS_TABLE).select('*, author:users!author_id(*)');
 
-    const type = CATEGORY_TO_TYPE[category];
+    const type = CATEGORY_TO_TYPE[category || 'All'];
     if (type !== 'all') {
         query = query.eq('type', type);
     }
@@ -309,17 +312,8 @@ export const fetchPostById = async (postId: string, currentUserId?: string): Pro
 
     const post = mapSupabaseToPost(data);
 
-    // If userId is provided, check if the user has liked this post
+    // Mark following status
     if (currentUserId) {
-        const { data: like } = await supabase
-            .from(LIKES_TABLE)
-            .select('*')
-            .eq('post_id', postId)
-            .eq('user_id', currentUserId)
-            .maybeSingle();
-
-        post.isLiked = !!like;
-
         const followingIds = await getFollowingUserIds(currentUserId);
         post.isFollowingAuthor = followingIds.includes(post.authorId);
     }

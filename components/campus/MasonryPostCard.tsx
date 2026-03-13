@@ -84,7 +84,6 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
 
         const palette = isTextOnly ? getPalette(post.id) : null;
         const timeAgo = formatDistanceToNow(post.createdAt, { addSuffix: true });
-        const canOpenAuthor = !!onAuthorPress && !post.isAnonymous;
 
         const onPressIn = useCallback(() => {
             pressed.value = withSpring(0.97, { damping: 20, stiffness: 120 });
@@ -98,6 +97,8 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
         const animatedStyle = useAnimatedStyle(() => ({
             transform: [{ scale: pressed.value }],
         }));
+
+        const canOpenAuthor = !!onAuthorPress;
 
         return (
             <Animated.View style={[styles.cardWrapper, animatedStyle]}>
@@ -131,14 +132,6 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                                     </Text>
                                 </View>
                             )}
-                            {post.isFollowingAuthor && (
-                                <View style={styles.followingBadge}>
-                                    <View style={styles.followingBadgeContent}>
-                                        <View style={styles.followingBadgeDot} />
-                                        <Text style={styles.followingBadgeText}>你的关注</Text>
-                                    </View>
-                                </View>
-                            )}
                         </View>
                     ) : (
                         /* Text-cover card (XHS style) */
@@ -168,6 +161,7 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                                 </View>
                             )}
 
+                            {/* Following badge on cover */}
                             {post.isFollowingAuthor && (
                                 <View style={styles.followingBadgeTextCover}>
                                     <View style={styles.followingBadgeContent}>
@@ -207,7 +201,7 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                         )}
 
                         {/* Author row */}
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.authorRow}
                             onPress={() => {
                                 if (canOpenAuthor) {
@@ -237,6 +231,16 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                                 size="small"
                             />
                         </TouchableOpacity>
+
+                        {/* Following badge for image cards */}
+                        {post.isFollowingAuthor && !isTextOnly && (
+                            <View style={styles.followingBadge}>
+                                <View style={styles.followingBadgeContent}>
+                                    <View style={styles.followingBadgeDot} />
+                                    <Text style={styles.followingBadgeText}>你的关注</Text>
+                                </View>
+                            </View>
+                        )}
 
                         {/* Counts */}
                         <View style={styles.countRow}>
@@ -300,59 +304,6 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '700',
         color: '#fff',
-    },
-    followingBadge: {
-        position: 'absolute',
-        bottom: 10,
-        left: 10,
-        backgroundColor: 'rgba(255,255,255,0.95)',
-        paddingHorizontal: 9,
-        paddingVertical: 5,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: '#FFFFFF',
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.16,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    followingBadgeContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    followingBadgeDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#1E3A8A',
-    },
-    followingBadgeText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#1E3A8A',
-        letterSpacing: 0.1,
-    },
-    followingBadgeTextOnCover: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#fff',
-        letterSpacing: 0.1,
-    },
-    followingBadgeTextCover: {
-        position: 'absolute',
-        bottom: 10,
-        left: 10,
-        backgroundColor: 'rgba(15,23,42,0.45)',
-        paddingHorizontal: 9,
-        paddingVertical: 5,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.22)',
-    },
-    followingBadgeDotOnCover: {
-        backgroundColor: '#93C5FD',
     },
 
     // ── Text cover (XHS style) ────────────────────────────────────────────────
@@ -472,5 +423,59 @@ const styles = StyleSheet.create({
     },
     likedText: {
         color: '#EF4444',
+        fontWeight: '600',
+    },
+    followingBadge: {
+        position: 'absolute',
+        bottom: 10,
+        left: 10,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: '#FFFFFF',
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.16,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    followingBadgeContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    followingBadgeDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#1E3A8A',
+    },
+    followingBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#1E3A8A',
+        letterSpacing: 0.1,
+    },
+    followingBadgeTextOnCover: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#fff',
+        letterSpacing: 0.1,
+    },
+    followingBadgeTextCover: {
+        position: 'absolute',
+        bottom: 10,
+        left: 10,
+        backgroundColor: 'rgba(15,23,42,0.45)',
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.22)',
+    },
+    followingBadgeDotOnCover: {
+        backgroundColor: '#93C5FD',
     },
 });
