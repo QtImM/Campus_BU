@@ -10,7 +10,12 @@ import { LoginPromptProvider } from '../context/LoginPromptContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import '../global.css';
 import { getUserProfile, isDemoMode, onAuthChange, shouldSkipAuthRedirect } from '../services/auth';
+<<<<<<< Updated upstream
 import { registerForPushNotificationsAsync, savePushToken } from '../services/push_notifications';
+=======
+import { prefetchBuildings } from '../services/buildings';
+import { prefetchLocalCourses } from '../services/courses';
+>>>>>>> Stashed changes
 import './i18n/i18n'; // Initialize i18n
 import { i18nPromise } from './i18n/i18n';
 
@@ -96,6 +101,10 @@ export default function RootLayout() {
               router.replace('/(auth)/login');
             }
           } else {
+            // Initiate background data prefetching as soon as we know we have a user
+            prefetchLocalCourses().catch(e => console.log('Prefetch courses failed:', e));
+            prefetchBuildings().catch(e => console.log('Prefetch buildings failed:', e));
+
             const profile = await getUserProfile(user.uid);
 
             if (!profile) {

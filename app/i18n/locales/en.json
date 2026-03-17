@@ -231,7 +231,8 @@
             "hide": "Hide",
             "edit": "Edit",
             "save": "Save",
-            "on": "On"
+            "on": "On",
+            "off": "Off"
         },
         "markers": {
             "user": "User",

@@ -39,9 +39,19 @@ export class WebViewBridge {
 
             this.addListener(listener);
 
-            // Allow some breadcrumbs/logging for the user during long waits
             this.webViewRef?.current?.injectJavaScript(script);
         });
+    }
+
+    /**
+     * Just execute a script without waiting for a result
+     */
+    execute(script: string) {
+        if (!this.webViewRef?.current) {
+            console.warn('[WebViewBridge] Cannot execute script, WebView not initialized');
+            return;
+        }
+        this.webViewRef.current.injectJavaScript(script);
     }
 
     /**

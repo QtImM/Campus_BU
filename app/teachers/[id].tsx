@@ -3,6 +3,7 @@ import {
     ArrowLeft,
     Plus,
     Star,
+    Trash2,
     X,
     Zap
 } from 'lucide-react-native';
@@ -22,8 +23,10 @@ import {
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { EduBadge } from '../../components/common/EduBadge';
 import { getCurrentUser } from '../../services/auth';
 import {
+    deleteTeacherReview,
     getTeacherById,
     getTeacherReviews,
     submitTeacherReview,
@@ -31,8 +34,11 @@ import {
 } from '../../services/teachers';
 import { Teacher, TeacherReview } from '../../types';
 import { isHKBUEmail } from '../../utils/userUtils';
+<<<<<<< Updated upstream
 import { EduBadge } from '../../components/common/EduBadge';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+=======
+>>>>>>> Stashed changes
 
 // 根据姓名生成首字母
 const getInitials = (name: string): string => {
@@ -72,10 +78,14 @@ export default function TeacherDetailScreen() {
     const [tags, setTags] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+<<<<<<< Updated upstream
     const { checkLogin } = useLoginPrompt();
+=======
+>>>>>>> Stashed changes
 
     useEffect(() => {
         loadData();
+        getCurrentUser().then(u => setCurrentUserId(u?.uid || null));
     }, [id]);
 
     const loadData = async () => {
@@ -143,6 +153,27 @@ export default function TeacherDetailScreen() {
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const handleDeleteTeacherReview = (reviewId: string) => {
+        Alert.alert(
+            '删除评价',
+            '确定要删除这条评价吗？此操作不可撤销。',
+            [
+                { text: '取消', style: 'cancel' },
+                {
+                    text: '删除', style: 'destructive',
+                    onPress: async () => {
+                        const { success, error } = await deleteTeacherReview(reviewId, id as string);
+                        if (success) {
+                            setReviews(prev => prev.filter(r => r.id !== reviewId));
+                        } else {
+                            Alert.alert('Error', `Failed to delete review: ${error}`);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     // Safe Area for Custom Header
@@ -285,6 +316,16 @@ export default function TeacherDetailScreen() {
                                                 {t('teachers.difficulty')}: {review.difficulty.toFixed(1)}
                                             </Text>
                                         </View>
+                                    )}
+
+                                    {currentUserId && review.authorId === currentUserId && (
+                                        <TouchableOpacity
+                                            onPress={() => handleDeleteTeacherReview(review.id)}
+                                            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'flex-end' }}
+                                        >
+                                            <Trash2 size={14} color="#EF4444" />
+                                            <Text style={{ fontSize: 12, color: '#EF4444' }}>删除评价</Text>
+                                        </TouchableOpacity>
                                     )}
                                 </View>
                             ))

@@ -1584,14 +1584,14 @@ export default function MapScreen() {
                     >
                         <Utensils size={18} color={showFoodMap ? "#fff" : "#FF6B6B"} />
                         <Text style={[styles.foodMapBadgeText, showFoodMap && { color: '#fff' }]}>
-                            {showFoodMap ? `${t('map.overlay.food')}: ${t('map.overlay.on')}` : t('map.overlay.food')}
+                            {`${t('map.overlay.food')}: ${showFoodMap ? t('map.overlay.on') : t('map.overlay.off')}`}
                         </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[
                             styles.foodMapBadge,
-                            { marginLeft: 8 },
+                            { marginLeft: 6 },
                             showBuildingMap ? { backgroundColor: '#4B0082', borderColor: '#4B0082' } : styles.foodMapBadgeInactive
                         ]}
                         onPress={() => {
@@ -1607,7 +1607,7 @@ export default function MapScreen() {
                     >
                         <Building size={16} color={showBuildingMap ? "#fff" : "#4B0082"} />
                         <Text style={[styles.foodMapBadgeText, showBuildingMap && { color: '#fff' }]}>
-                            {showBuildingMap ? `${t('map.overlay.buildings')}: ${t('map.overlay.on')}` : t('map.overlay.buildings')}
+                            {`${t('map.overlay.buildings')}: ${showBuildingMap ? t('map.overlay.on') : t('map.overlay.off')}`}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -2133,7 +2133,7 @@ const styles = StyleSheet.create({
     },
     headerLeft: {
         flexShrink: 0,
-        marginRight: 10,
+        marginRight: 4,
     },
     headerRight: {
         flex: 1,
@@ -2151,9 +2151,9 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     iconButton: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 66,
+        height: 66,
+        borderRadius: 33,
         backgroundColor: '#fff',
         alignItems: 'center',
         justifyContent: 'center',
@@ -2162,6 +2162,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.15,
         shadowRadius: 4,
         elevation: 3,
+        paddingHorizontal: 4,
     },
     iconButtonText: {
         fontSize: 10,
@@ -2169,20 +2170,24 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         marginTop: 2,
         textAlign: 'center',
+<<<<<<< Updated upstream
     },
     iconButtonTextLong: {
         width: '100%',
         fontSize: 9,
         lineHeight: 11,
         marginTop: 3,
+=======
+        lineHeight: 12,
+>>>>>>> Stashed changes
     },
     foodMapBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 25,
-        gap: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderRadius: 24,
+        gap: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
@@ -2198,7 +2203,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FF6B6B',
     },
     foodMapBadgeText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: 'bold',
         color: '#FF6B6B',
     },

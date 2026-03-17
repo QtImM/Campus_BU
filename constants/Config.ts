@@ -63,6 +63,12 @@ export const APP_CONFIG = {
     // --- Visual Branding ---
     appName: 'CampusCopy',
     version: '1.2.0-beta',
+
+    // --- Coze Integration (Option B) ---
+    cozeConfig: {
+        apiBase: 'https://api.coze.cn/v1/workflow/run',
+        workflowId: '7613633505641709603',
+    }
 };
 
 /**

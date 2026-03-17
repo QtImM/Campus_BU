@@ -131,6 +131,7 @@ export default function TeacherListScreen() {
 
             {/* Custom Header */}
             <View style={styles.customHeader}>
+<<<<<<< Updated upstream
                 <TouchableOpacity onPress={() => {
                     if (router.canGoBack()) {
                         router.back();
@@ -138,6 +139,9 @@ export default function TeacherListScreen() {
                         router.replace('/(tabs)/course');
                     }
                 }} style={styles.backBtn}>
+=======
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+>>>>>>> Stashed changes
                     <ArrowLeft size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle} numberOfLines={1}>{t('teachers.title')}</Text>

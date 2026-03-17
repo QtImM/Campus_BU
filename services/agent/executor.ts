@@ -5,12 +5,16 @@ import { fetchTeamingRequests } from '../teaming';
 import { getUserScheduleEntries, UserScheduleEntry } from '../schedule';
 import { LIBRARY_SCRIPTS } from './automation/library';
 import { agentBridge } from './bridge';
+<<<<<<< Updated upstream
 import {
     formatBuildingInfo,
     formatNearbyPlaceInfo,
     isBuildingInfoQuery,
     isNearbyPlaceQuery,
 } from './campus_queries';
+=======
+import { CozeService } from './coze';
+>>>>>>> Stashed changes
 import { callDeepSeekStream } from './llm';
 import { getAllUserFacts, saveMemoryFact } from './memory';
 import { TOOLS } from './tools';
@@ -465,7 +469,54 @@ export class AgentExecutor {
                     return "Floor 3 has 15 individual carrels available at the moment.";
                 }
             case 'book_library_seat':
-                return "Seat reservation initiated. Please confirm the time on the screen.";
+                // Plan B Logic: Coze Brain + Local Hands
+                try {
+                    // 1. Check Auth in WebView
+                    const { isLoggedIn } = await agentBridge.injectAndObserve(LIBRARY_SCRIPTS.CHECK_AUTH, 'AUTH_STATUS');
+                    if (!isLoggedIn) {
+                        return "It looks like you aren't logged in to the library portal yet. Please log in on the library page first so I can complete the booking for you.";
+                    }
+
+                    // 2. Scan for current availability (Eyes)
+                    const { slots } = await agentBridge.injectAndObserve(LIBRARY_SCRIPTS.SCAN_SLOTS, 'LIBRARY_SCAN_RESULT');
+
+                    if (!slots || slots.length === 0) {
+                        return "I can't see any available slots on the current page. Please make sure you are on the correct library booking page.";
+                    }
+
+                    // 3. Call Coze (Brain) for intelligent selection
+                    console.log('[Agent] Consulting Coze brain for:', input.time);
+                    const cozeResult = await CozeService.runWorkflow({
+                        query: `User wants to book at: ${input.time}`,
+                        slots_data: JSON.stringify(slots)
+                    });
+
+                    const targetSlotId = cozeResult?.slotId || cozeResult?.selected_slot_id;
+                    const targetSlot = slots.find((s: any) => s.id === targetSlotId);
+
+                    if (!targetSlot) {
+                        // Fallback to simple selection if Coze fails or doesn't find a match
+                        const fallbackSlot = slots.find((s: any) =>
+                            s.status === 'available' &&
+                            (s.title.includes(input.time || '') || s.time.includes(input.time || ''))
+                        );
+
+                        if (!fallbackSlot) {
+                            return `Coze and I couldn't find an available slot for ${input.time || 'your requested time'}. Would you like to check another time?`;
+                        }
+
+                        agentBridge.execute(LIBRARY_SCRIPTS.BOOK_SLOT(fallbackSlot.id));
+                        return `Successfully initiated booking for ${fallbackSlot.title} (Local match). Please confirm on the screen!`;
+                    }
+
+                    // 4. Execute the click (Hands)
+                    agentBridge.execute(LIBRARY_SCRIPTS.BOOK_SLOT(targetSlot.id));
+
+                    return `Successfully initiated booking for ${targetSlot.title} via Coze. Please check the library page to confirm the final submission!`;
+                } catch (e: any) {
+                    console.error('[Agent] Booking failed:', e);
+                    return `Sorry, I encountered an error: ${e.message}. Please try manual booking on the library screen.`;
+                }
             case 'search_campus_faq':
                 // 1. Search local legacy FAQs
                 const localResults = FAQService.searchFAQs(input.query);

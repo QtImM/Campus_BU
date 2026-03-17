@@ -199,8 +199,34 @@ async function updateTeacherStats(teacherId: string) {
                 review_count: allRatings.length
             })
             .eq('id', teacherId);
+    } else {
+        // No reviews left, reset stats
+        await supabase
+            .from('teachers')
+            .update({ rating_avg: 0, review_count: 0 })
+            .eq('id', teacherId);
     }
 }
+
+/**
+ * 删除教师评价（仅限作者本人）
+ */
+export const deleteTeacherReview = async (reviewId: string, teacherId: string) => {
+    const { error } = await supabase
+        .from('teacher_reviews')
+        .delete()
+        .eq('id', reviewId);
+
+    if (error) {
+        console.error('Error deleting teacher review:', error);
+        return { success: false, error: error.message };
+    }
+
+    // Re-calculate teacher stats after deletion
+    await updateTeacherStats(teacherId);
+    return { success: true, error: null };
+};
+
 
 /**
  * 生成教师的 AI 总结（虎扑风格锐评）

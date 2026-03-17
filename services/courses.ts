@@ -61,7 +61,34 @@ export const addLocalReview = async (review: Partial<Review>): Promise<{ error: 
     }
 };
 
-export const getLocalCourses = async (): Promise<Course[]> => {
+let cachedLocalCourses: Course[] | null = null;
+let fetchCoursesPromise: Promise<Course[]> | null = null;
+
+export const prefetchLocalCourses = () => {
+    if (!fetchCoursesPromise) {
+        fetchCoursesPromise = _getLocalCoursesInternal().then(data => {
+            cachedLocalCourses = data;
+            return data;
+        });
+    }
+    return fetchCoursesPromise;
+};
+
+export const getLocalCourses = async (forceRefresh = false): Promise<Course[]> => {
+    if (forceRefresh) {
+        cachedLocalCourses = null;
+        fetchCoursesPromise = null;
+    }
+    if (cachedLocalCourses) return cachedLocalCourses;
+    return prefetchLocalCourses();
+};
+
+export const invalidateCourseCache = () => {
+    cachedLocalCourses = null;
+    fetchCoursesPromise = null;
+};
+
+const _getLocalCoursesInternal = async (): Promise<Course[]> => {
     try {
         const jsonValue = await storage.getItem(LOCAL_COURSES_KEY);
         const storageCourses: Course[] = jsonValue != null ? JSON.parse(jsonValue) : [];
@@ -78,27 +105,32 @@ export const getLocalCourses = async (): Promise<Course[]> => {
 
         const courses = Array.from(courseMap.values());
 
-        // 3. Fetch review data from database for all local courses
-        const courseIds = courses.map(c => c.id);
+        // 3. Fetch review stats by joining with courses (avoids UUID mismatch)
         const { data: reviewData, error } = await supabase
             .from('course_reviews')
-            .select('course_id, rating')
-            .in('course_id', courseIds)
+            .select(`
+                rating,
+                courses!inner(code)
+            `)
             .not('rating', 'is', null);
 
         if (!error && reviewData) {
-            // Calculate count and average rating per course
+            // Aggregate ratings by course code
             const statsMap = new Map<string, { count: number; sum: number }>();
-            reviewData.forEach(r => {
-                const stats = statsMap.get(r.course_id) || { count: 0, sum: 0 };
-                stats.count += 1;
-                stats.sum += r.rating || 0;
-                statsMap.set(r.course_id, stats);
+            reviewData.forEach((r: any) => {
+                const code = r.courses?.code?.toUpperCase().replace(/\s+/g, '');
+                if (code) {
+                    const stats = statsMap.get(code) || { count: 0, sum: 0 };
+                    stats.count += 1;
+                    stats.sum += r.rating || 0;
+                    statsMap.set(code, stats);
+                }
             });
 
             // Update course review counts and ratings
             courses.forEach(course => {
-                const stats = statsMap.get(course.id);
+                const code = (course.code || '').toUpperCase().replace(/\s+/g, '');
+                const stats = statsMap.get(code);
                 if (stats && stats.count > 0) {
                     course.reviewCount = stats.count;
                     course.rating = parseFloat((stats.sum / stats.count).toFixed(1));
@@ -212,6 +244,11 @@ export const addLocalCourse = async (course: Partial<Course>): Promise<{ data: a
 
         const updated = [newCourse, ...existing];
         await storage.setItem(LOCAL_COURSES_KEY, JSON.stringify(updated));
+
+        // Invalidate cache
+        cachedLocalCourses = null;
+        fetchCoursesPromise = null;
+
         return { data: newCourse, error: null };
     } catch (e: any) {
         return { data: null, error: e };
@@ -346,14 +383,24 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
     };
 };
 
+<<<<<<< Updated upstream
 export const getReviews = async (courseId: string, courseCode?: string): Promise<Review[]> => {
     const candidateCourseIds = await buildReviewCourseIdCandidates(courseId, courseCode);
+=======
+export const getReviews = async (courseId: string): Promise<Review[]> => {
+    const { resolvedCourseId } = await ensureCourseExistsForReview(courseId);
+    const targetCourseId = resolvedCourseId || courseId;
+>>>>>>> Stashed changes
 
     // Query Supabase for all courses (including local_ ones)
     const { data, error } = await supabase
         .from('course_reviews')
         .select('*, author:users!author_id(email, display_name, avatar_url)')
+<<<<<<< Updated upstream
         .in('course_id', candidateCourseIds)
+=======
+        .eq('course_id', targetCourseId)
+>>>>>>> Stashed changes
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -362,14 +409,14 @@ export const getReviews = async (courseId: string, courseCode?: string): Promise
     }
     if (!data) return [];
     return data.map(r => {
-        const author = r.author;
+        const author = r.author || {};
         return {
             id: r.id,
-            courseId: r.course_id,
+            courseId: courseId, // Return original courseId so frontend mapping works
             authorId: r.author_id,
-            authorName: r.author_name || author?.display_name || 'Anonymous',
-            authorEmail: author?.email,
-            authorAvatar: r.author_avatar || author?.avatar_url || '👤',
+            authorName: r.author_name || author.display_name || 'Anonymous',
+            authorEmail: author.email,
+            authorAvatar: r.author_avatar || author.avatar_url || '👤',
             rating: r.rating,
             difficulty: r.difficulty || 3,
             content: r.content || '',
@@ -382,13 +429,39 @@ export const getReviews = async (courseId: string, courseCode?: string): Promise
     });
 };
 
+<<<<<<< Updated upstream
 export const hasUserReviewed = async (courseId: string, userId: string, courseCode?: string): Promise<boolean> => {
     const candidateCourseIds = await buildReviewCourseIdCandidates(courseId, courseCode);
+=======
+export const deleteReview = async (reviewId: string) => {
+    const { error } = await supabase
+        .from('course_reviews')
+        .delete()
+        .eq('id', reviewId);
+
+    if (error) {
+        console.error('Error deleting review:', error);
+        return { success: false, error: error.message };
+    }
+    // Invalidate course list cache so review counts refresh on next load
+    invalidateCourseCache();
+    return { success: true, error: null };
+};
+
+export const hasUserReviewed = async (courseId: string, userId: string): Promise<boolean> => {
+    // Check in database for all courses (including local_ ones)
+    const { resolvedCourseId } = await ensureCourseExistsForReview(courseId);
+    const targetCourseId = resolvedCourseId || courseId;
+>>>>>>> Stashed changes
 
     const { count, error } = await supabase
         .from('course_reviews')
         .select('*', { count: 'exact', head: true })
+<<<<<<< Updated upstream
         .in('course_id', candidateCourseIds)
+=======
+        .eq('course_id', targetCourseId)
+>>>>>>> Stashed changes
         .eq('author_id', userId)
         .not('rating', 'is', null);
 
