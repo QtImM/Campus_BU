@@ -1,11 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-<<<<<<< Updated upstream
 import { Check, ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, Tag, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
-=======
-import { ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, Tag, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
->>>>>>> Stashed changes
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -29,11 +25,7 @@ import { TranslatableText } from '../../components/common/TranslatableText';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import storage from '../../lib/storage';
 import { getCurrentUser } from '../../services/auth';
-<<<<<<< Updated upstream
 import { addReview, deleteReview, getCourseById, getReviewsAndHasReviewed, likeReview } from '../../services/courses';
-=======
-import { addReview, deleteReview, getCourseById, getReviews, hasUserReviewed, likeReview } from '../../services/courses';
->>>>>>> Stashed changes
 import { supabase } from '../../services/supabase';
 import { deleteTeamingRequest, fetchTeamingComments, fetchTeamingRequests, postTeamingComment, postTeamingRequest, toggleTeamingLike } from '../../services/teaming';
 import { ContactMethod, Course, CourseTeaming, Review, TeamingComment } from '../../types';
@@ -537,34 +529,12 @@ export default function CourseDetailScreen() {
         return b.createdAt.getTime() - a.createdAt.getTime();
     });
 
-<<<<<<< Updated upstream
     // Helper: rating → left-bar color
     const ratingBarColor = (rating?: number) => {
         if (!rating) return '#D1D5DB';
         if (rating >= 4) return '#10B981';
         if (rating === 3) return '#3B82F6';
         return '#F59E0B';
-=======
-    const handleDeleteReview = (reviewId: string) => {
-        Alert.alert(
-            '删除评价',
-            '确定要删除这条评价吗？此操作不可撤销。',
-            [
-                { text: '取消', style: 'cancel' },
-                {
-                    text: '删除', style: 'destructive',
-                    onPress: async () => {
-                        const { success, error } = await deleteReview(reviewId);
-                        if (success) {
-                            setReviews(prev => prev.filter(r => r.id !== reviewId));
-                        } else {
-                            Alert.alert('Error', `Failed to delete review: ${error}`);
-                        }
-                    }
-                }
-            ]
-        );
->>>>>>> Stashed changes
     };
 
     const renderReviewItem = ({ item }: { item: Review }) => (
@@ -620,19 +590,15 @@ export default function CourseDetailScreen() {
 
             <View style={styles.reviewFooter}>
                 <Text style={styles.date}>{item.createdAt.toLocaleDateString()}</Text>
-<<<<<<< Updated upstream
                 <View style={styles.reviewActions}>
-=======
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     {user && item.authorId === user.uid && (
                         <TouchableOpacity
-                            onPress={() => handleDeleteReview(item.id)}
+                            onPress={() => handleDeleteReview(item)}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                         >
                             <Trash2 size={14} color="#EF4444" />
                         </TouchableOpacity>
                     )}
->>>>>>> Stashed changes
                     <TouchableOpacity
                         style={styles.likeButton}
                         onPress={() => handleLike(item.id)}
@@ -649,15 +615,11 @@ export default function CourseDetailScreen() {
                             {item.likes}
                         </Text>
                     </TouchableOpacity>
-<<<<<<< Updated upstream
-
                     {item.authorId === user?.uid && (
                         <TouchableOpacity style={styles.deleteTag} onPress={() => handleDeleteReview(item)}>
                             <Trash2 size={12} color="#B91C1C" />
                         </TouchableOpacity>
                     )}
-=======
->>>>>>> Stashed changes
                 </View>
             </View>
         </View>

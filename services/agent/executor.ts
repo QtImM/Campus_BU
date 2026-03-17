@@ -5,16 +5,13 @@ import { fetchTeamingRequests } from '../teaming';
 import { getUserScheduleEntries, UserScheduleEntry } from '../schedule';
 import { LIBRARY_SCRIPTS } from './automation/library';
 import { agentBridge } from './bridge';
-<<<<<<< Updated upstream
 import {
     formatBuildingInfo,
     formatNearbyPlaceInfo,
     isBuildingInfoQuery,
     isNearbyPlaceQuery,
 } from './campus_queries';
-=======
-import { CozeService } from './coze';
->>>>>>> Stashed changes
+// import { CozeService } from './coze';
 import { callDeepSeekStream } from './llm';
 import { getAllUserFacts, saveMemoryFact } from './memory';
 import { TOOLS } from './tools';
@@ -484,6 +481,7 @@ export class AgentExecutor {
                         return "I can't see any available slots on the current page. Please make sure you are on the correct library booking page.";
                     }
 
+                    /*
                     // 3. Call Coze (Brain) for intelligent selection
                     console.log('[Agent] Consulting Coze brain for:', input.time);
                     const cozeResult = await CozeService.runWorkflow({
@@ -495,6 +493,7 @@ export class AgentExecutor {
                     const targetSlot = slots.find((s: any) => s.id === targetSlotId);
 
                     if (!targetSlot) {
+                    */
                         // Fallback to simple selection if Coze fails or doesn't find a match
                         const fallbackSlot = slots.find((s: any) =>
                             s.status === 'available' &&
@@ -502,17 +501,19 @@ export class AgentExecutor {
                         );
 
                         if (!fallbackSlot) {
-                            return `Coze and I couldn't find an available slot for ${input.time || 'your requested time'}. Would you like to check another time?`;
+                            return `I couldn't find an available slot for ${input.time || 'your requested time'}. Would you like to check another time?`;
                         }
 
                         agentBridge.execute(LIBRARY_SCRIPTS.BOOK_SLOT(fallbackSlot.id));
-                        return `Successfully initiated booking for ${fallbackSlot.title} (Local match). Please confirm on the screen!`;
+                        return `Successfully initiated booking for ${fallbackSlot.title}. Please confirm on the screen!`;
+                    /*
                     }
 
                     // 4. Execute the click (Hands)
                     agentBridge.execute(LIBRARY_SCRIPTS.BOOK_SLOT(targetSlot.id));
 
                     return `Successfully initiated booking for ${targetSlot.title} via Coze. Please check the library page to confirm the final submission!`;
+                    */
                 } catch (e: any) {
                     console.error('[Agent] Booking failed:', e);
                     return `Sorry, I encountered an error: ${e.message}. Please try manual booking on the library screen.`;

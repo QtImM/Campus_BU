@@ -383,24 +383,14 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
     };
 };
 
-<<<<<<< Updated upstream
 export const getReviews = async (courseId: string, courseCode?: string): Promise<Review[]> => {
     const candidateCourseIds = await buildReviewCourseIdCandidates(courseId, courseCode);
-=======
-export const getReviews = async (courseId: string): Promise<Review[]> => {
-    const { resolvedCourseId } = await ensureCourseExistsForReview(courseId);
-    const targetCourseId = resolvedCourseId || courseId;
->>>>>>> Stashed changes
 
     // Query Supabase for all courses (including local_ ones)
     const { data, error } = await supabase
         .from('course_reviews')
         .select('*, author:users!author_id(email, display_name, avatar_url)')
-<<<<<<< Updated upstream
         .in('course_id', candidateCourseIds)
-=======
-        .eq('course_id', targetCourseId)
->>>>>>> Stashed changes
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -429,39 +419,14 @@ export const getReviews = async (courseId: string): Promise<Review[]> => {
     });
 };
 
-<<<<<<< Updated upstream
+
 export const hasUserReviewed = async (courseId: string, userId: string, courseCode?: string): Promise<boolean> => {
     const candidateCourseIds = await buildReviewCourseIdCandidates(courseId, courseCode);
-=======
-export const deleteReview = async (reviewId: string) => {
-    const { error } = await supabase
-        .from('course_reviews')
-        .delete()
-        .eq('id', reviewId);
-
-    if (error) {
-        console.error('Error deleting review:', error);
-        return { success: false, error: error.message };
-    }
-    // Invalidate course list cache so review counts refresh on next load
-    invalidateCourseCache();
-    return { success: true, error: null };
-};
-
-export const hasUserReviewed = async (courseId: string, userId: string): Promise<boolean> => {
-    // Check in database for all courses (including local_ ones)
-    const { resolvedCourseId } = await ensureCourseExistsForReview(courseId);
-    const targetCourseId = resolvedCourseId || courseId;
->>>>>>> Stashed changes
 
     const { count, error } = await supabase
         .from('course_reviews')
         .select('*', { count: 'exact', head: true })
-<<<<<<< Updated upstream
         .in('course_id', candidateCourseIds)
-=======
-        .eq('course_id', targetCourseId)
->>>>>>> Stashed changes
         .eq('author_id', userId)
         .not('rating', 'is', null);
 

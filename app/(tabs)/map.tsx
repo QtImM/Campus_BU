@@ -2170,16 +2170,13 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         marginTop: 2,
         textAlign: 'center',
-<<<<<<< Updated upstream
+        lineHeight: 12,
     },
     iconButtonTextLong: {
         width: '100%',
         fontSize: 9,
         lineHeight: 11,
         marginTop: 3,
-=======
-        lineHeight: 12,
->>>>>>> Stashed changes
     },
     foodMapBadge: {
         flexDirection: 'row',

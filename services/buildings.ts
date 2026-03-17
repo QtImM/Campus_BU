@@ -1,11 +1,8 @@
 import { CampusLocation } from '../types';
 import { supabase } from './supabase';
 
-<<<<<<< Updated upstream
 const HIDDEN_BUILDING_IDS = new Set(['lam-woo', 'sc-lw']);
 
-export const getBuildings = async (): Promise<CampusLocation[]> => {
-=======
 let cachedBuildings: CampusLocation[] | null = null;
 let fetchBuildingsPromise: Promise<CampusLocation[]> | null = null;
 
@@ -29,7 +26,6 @@ export const getBuildings = async (forceRefresh = false): Promise<CampusLocation
 };
 
 const _getBuildingsInternal = async (): Promise<CampusLocation[]> => {
->>>>>>> Stashed changes
     const { data, error } = await supabase
         .from('buildings')
         .select('*')

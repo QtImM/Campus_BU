@@ -23,7 +23,6 @@ import {
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EduBadge } from '../../components/common/EduBadge';
 import { getCurrentUser } from '../../services/auth';
 import {
     deleteTeacherReview,
@@ -34,11 +33,8 @@ import {
 } from '../../services/teachers';
 import { Teacher, TeacherReview } from '../../types';
 import { isHKBUEmail } from '../../utils/userUtils';
-<<<<<<< Updated upstream
 import { EduBadge } from '../../components/common/EduBadge';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
-=======
->>>>>>> Stashed changes
 
 // 根据姓名生成首字母
 const getInitials = (name: string): string => {
@@ -78,10 +74,7 @@ export default function TeacherDetailScreen() {
     const [tags, setTags] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-<<<<<<< Updated upstream
     const { checkLogin } = useLoginPrompt();
-=======
->>>>>>> Stashed changes
 
     useEffect(() => {
         loadData();
