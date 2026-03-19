@@ -9,6 +9,7 @@ import {
     Dimensions,
     FlatList,
     Image,
+    Keyboard,
     KeyboardAvoidingView,
     Linking,
     Platform,
@@ -50,12 +51,21 @@ const formatMessageTime = (date: Date) => date.toLocaleTimeString([], {
     minute: '2-digit',
 });
 
+const getFileExtensionLabel = (fileName?: string) => {
+    const extension = fileName?.split('.').pop()?.trim();
+    if (!extension || extension === fileName) {
+        return 'FILE';
+    }
+    return extension.slice(0, 6).toUpperCase();
+};
+
 export default function ChatScreen() {
     const params = useLocalSearchParams<{ id?: string | string[] }>();
     const peerUserId = Array.isArray(params.id) ? params.id[0] : params.id;
     const { t } = useTranslation();
     const router = useRouter();
     const flatListRef = useRef<FlatList>(null);
+    const inputRef = useRef<TextInput>(null);
     const { refreshCount } = useNotifications();
 
     const [loading, setLoading] = useState(true);
@@ -76,6 +86,17 @@ export default function ChatScreen() {
             useNativeDriver: false,
         }).start();
     }, [attachmentAnim, showAttachmentMenu]);
+
+    useEffect(() => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const keyboardShowSubscription = Keyboard.addListener(showEvent, () => {
+            setShowAttachmentMenu(false);
+        });
+
+        return () => {
+            keyboardShowSubscription.remove();
+        };
+    }, []);
 
     const loadThread = useCallback(async (silent = false) => {
         if (!peerUserId) {
@@ -345,6 +366,21 @@ export default function ChatScreen() {
         }
     }, [conversationId, currentUser, inputText, loadThread, peerUserId, sending]);
 
+    const handleToggleAttachmentMenu = useCallback(() => {
+        setShowAttachmentMenu((previous) => {
+            const next = !previous;
+            if (next) {
+                inputRef.current?.blur();
+                Keyboard.dismiss();
+            }
+            return next;
+        });
+    }, []);
+
+    const handleInputFocus = useCallback(() => {
+        setShowAttachmentMenu(false);
+    }, []);
+
     const headerSubtitle = useMemo(() => {
         if (peer?.major) {
             return peer.major;
@@ -372,6 +408,7 @@ export default function ChatScreen() {
         const isImageMessage = isDirectImageContent(item.content) && !!imageUrl;
         const filePayload = getDirectMessageFilePayload(item.content);
         const isFileMessage = isDirectFileContent(item.content) && !!filePayload;
+        const fileExtensionLabel = filePayload ? getFileExtensionLabel(filePayload.name) : 'FILE';
 
         return (
             <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
@@ -399,27 +436,41 @@ export default function ChatScreen() {
                     ) : isFileMessage && filePayload ? (
                         <>
                             <TouchableOpacity
-                                style={styles.fileMessageButton}
+                                style={[styles.fileMessageButton, isMe ? styles.myFileMessageButton : styles.theirFileMessageButton]}
                                 activeOpacity={0.8}
                                 onPress={() => Linking.openURL(filePayload.url).catch((error) => {
                                     console.error('Error opening direct message file:', error);
                                 })}
                             >
-                                <View style={[styles.fileIconWrap, isMe ? styles.myFileIconWrap : styles.theirFileIconWrap]}>
-                                    <FileText size={18} color={isMe ? '#1E3A8A' : '#334155'} />
+                                <View style={styles.fileMessageTopRow}>
+                                    <View style={[styles.fileIconWrap, isMe ? styles.myFileIconWrap : styles.theirFileIconWrap]}>
+                                        <FileText size={20} color={isMe ? '#1E3A8A' : '#334155'} />
+                                    </View>
+                                    <View style={styles.fileMeta}>
+                                        <Text
+                                            style={[styles.fileName, isMe ? styles.myText : styles.theirText]}
+                                            numberOfLines={2}
+                                        >
+                                            {filePayload.name}
+                                        </Text>
+                                        <View style={styles.fileMetaRow}>
+                                            <View style={[styles.fileTypeBadge, isMe ? styles.myFileTypeBadge : styles.theirFileTypeBadge]}>
+                                                <Text style={[styles.fileTypeBadgeText, isMe ? styles.myFileTypeBadgeText : styles.theirFileTypeBadgeText]}>
+                                                    {fileExtensionLabel}
+                                                </Text>
+                                            </View>
+                                            <Text style={[styles.fileOpenHint, isMe ? styles.myFileOpenHint : styles.theirFileOpenHint]}>
+                                                点击打开
+                                            </Text>
+                                        </View>
+                                    </View>
                                 </View>
-                                <Text
-                                    style={[styles.fileName, isMe ? styles.myText : styles.theirText]}
-                                    numberOfLines={2}
-                                >
-                                    {filePayload.name}
-                                </Text>
+                                <View style={styles.fileTimeOverlay}>
+                                    <Text style={styles.fileTimeOverlayText}>
+                                        {formatMessageTime(item.createdAt)}
+                                    </Text>
+                                </View>
                             </TouchableOpacity>
-                            <View style={styles.textTimeRow}>
-                                <Text style={[styles.timeText, isMe ? styles.myTime : styles.theirTime]}>
-                                    {formatMessageTime(item.createdAt)}
-                                </Text>
-                            </View>
                         </>
                     ) : (
                         <>
@@ -510,16 +561,18 @@ export default function ChatScreen() {
                     <TouchableOpacity
                         style={[styles.attachButton, showAttachmentMenu && styles.attachButtonActive]}
                         activeOpacity={0.7}
-                        onPress={() => setShowAttachmentMenu((previous) => !previous)}
+                        onPress={handleToggleAttachmentMenu}
                     >
                         <Plus size={24} color={showAttachmentMenu ? '#1E3A8A' : '#9CA3AF'} />
                     </TouchableOpacity>
                     <View style={styles.inputContainer}>
                         <TextInput
+                            ref={inputRef}
                             style={styles.input}
                             placeholder={t('messages.input_placeholder')}
                             value={inputText}
                             onChangeText={setInputText}
+                            onFocus={handleInputFocus}
                             multiline
                             placeholderTextColor="#9CA3AF"
                         />
@@ -771,17 +824,29 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     fileMessageButton: {
+        maxWidth: 250,
+        minWidth: 210,
+        padding: 12,
+        borderRadius: 16,
+        position: 'relative',
+    },
+    myFileMessageButton: {
+        backgroundColor: 'rgba(255,255,255,0.12)',
+    },
+    theirFileMessageButton: {
+        backgroundColor: '#F8FAFC',
+    },
+    fileMessageTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        maxWidth: 220,
     },
     fileIconWrap: {
-        width: 34,
-        height: 34,
-        borderRadius: 10,
+        width: 42,
+        height: 42,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 10,
+        marginRight: 12,
     },
     myFileIconWrap: {
         backgroundColor: 'rgba(255,255,255,0.9)',
@@ -789,10 +854,65 @@ const styles = StyleSheet.create({
     theirFileIconWrap: {
         backgroundColor: '#E2E8F0',
     },
-    fileName: {
+    fileMeta: {
         flex: 1,
+        minWidth: 0,
+    },
+    fileName: {
         fontSize: 14,
-        lineHeight: 20,
+        lineHeight: 19,
+        fontWeight: '600',
+    },
+    fileMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    fileTypeBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+        marginRight: 8,
+    },
+    myFileTypeBadge: {
+        backgroundColor: 'rgba(255,255,255,0.18)',
+    },
+    theirFileTypeBadge: {
+        backgroundColor: '#E0E7FF',
+    },
+    fileTypeBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.4,
+    },
+    myFileTypeBadgeText: {
+        color: '#DBEAFE',
+    },
+    theirFileTypeBadgeText: {
+        color: '#1D4ED8',
+    },
+    fileOpenHint: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    myFileOpenHint: {
+        color: 'rgba(255,255,255,0.72)',
+    },
+    theirFileOpenHint: {
+        color: '#64748B',
+    },
+    fileTimeOverlay: {
+        position: 'absolute',
+        right: 10,
+        bottom: 10,
+        backgroundColor: 'rgba(17, 24, 39, 0.45)',
+        borderRadius: 10,
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+    },
+    fileTimeOverlayText: {
+        color: '#fff',
+        fontSize: 11,
         fontWeight: '600',
     },
     timeText: {
