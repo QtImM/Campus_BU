@@ -602,7 +602,8 @@ export default function ProfileScreen() {
                         )}
                     </View>
 
-                    {/* Social Tags */}
+                    {/*
+                    Social Tags are temporarily hidden.
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>{t('profile.social_tags')}</Text>
                         <Text style={styles.sectionSubtitle}>{t('profile.select_tags')}</Text>
@@ -626,6 +627,7 @@ export default function ProfileScreen() {
                             ))}
                         </View>
                     </View>
+                    */}
 
 
                     {/* Language Switcher */}

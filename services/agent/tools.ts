@@ -58,36 +58,6 @@ export const TOOLS: ToolDefinition[] = [
         }
     },
     {
-        name: 'check_library_availability',
-        description: 'Query availability. If libraryName is provided but roomType is not, it returns available Room Types. If both are provided, it returns available Time Slots.',
-        parameters: {
-            type: 'object',
-            properties: {
-                libraryName: {
-                    type: 'string',
-                    description: 'Name of the library (Main Library, Shek Mun Campus Library, AAB Learning Commons)'
-                },
-                roomType: {
-                    type: 'string',
-                    description: 'Type of room (Group Study Rooms, Individual Study Rooms, Multipurpose Rooms)'
-                }
-            },
-            required: ['libraryName']
-        }
-    },
-    {
-        name: 'book_library_seat',
-        description: 'Book a seat in the library. Requires user confirmation step.',
-        parameters: {
-            type: 'object',
-            properties: {
-                seatId: { type: 'string', description: 'ID of the seat to book' },
-                time: { type: 'string', description: 'Booking time (e.g., 14:00)' }
-            },
-            required: ['seatId', 'time']
-        }
-    },
-    {
         name: 'get_user_profile',
         description: 'Get user preferences like major, residence hall, and favorite food. Used for semantic memory.',
         parameters: {
