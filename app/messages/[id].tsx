@@ -423,7 +423,12 @@ export default function ChatScreen() {
                         </View>
                     )
                 )}
-                <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble, isImageMessage && styles.imageBubble]}>
+                <View style={[
+                    styles.bubble,
+                    isMe ? styles.myBubble : styles.theirBubble,
+                    isImageMessage && styles.imageBubble,
+                    isFileMessage && styles.fileBubble,
+                ]}>
                     {isImageMessage ? (
                         <Pressable onPress={() => openImagePreview(item.id)} style={styles.imageMessagePressable}>
                             <Image source={{ uri: imageUrl }} style={styles.messageImage} />
@@ -459,16 +464,11 @@ export default function ChatScreen() {
                                                     {fileExtensionLabel}
                                                 </Text>
                                             </View>
-                                            <Text style={[styles.fileOpenHint, isMe ? styles.myFileOpenHint : styles.theirFileOpenHint]}>
-                                                点击打开
+                                            <Text style={[styles.fileInlineTime, isMe ? styles.myFileInlineTime : styles.theirFileInlineTime]}>
+                                                {formatMessageTime(item.createdAt)}
                                             </Text>
                                         </View>
                                     </View>
-                                </View>
-                                <View style={styles.fileTimeOverlay}>
-                                    <Text style={styles.fileTimeOverlayText}>
-                                        {formatMessageTime(item.createdAt)}
-                                    </Text>
                                 </View>
                             </TouchableOpacity>
                         </>
@@ -809,6 +809,11 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 18,
     },
+    fileBubble: {
+        paddingHorizontal: 5,
+        paddingVertical: 4,
+        borderRadius: 15,
+    },
     messageText: {
         fontSize: 16,
         lineHeight: 22,
@@ -824,10 +829,13 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     fileMessageButton: {
-        maxWidth: 250,
-        minWidth: 210,
-        padding: 12,
-        borderRadius: 16,
+        maxWidth: 222,
+        minWidth: 176,
+        paddingTop: 7,
+        paddingLeft: 8,
+        paddingRight: 8,
+        paddingBottom: 8,
+        borderRadius: 12,
         position: 'relative',
     },
     myFileMessageButton: {
@@ -838,15 +846,15 @@ const styles = StyleSheet.create({
     },
     fileMessageTopRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
     },
     fileIconWrap: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
+        width: 34,
+        height: 34,
+        borderRadius: 9,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
+        marginRight: 8,
     },
     myFileIconWrap: {
         backgroundColor: 'rgba(255,255,255,0.9)',
@@ -859,20 +867,20 @@ const styles = StyleSheet.create({
         minWidth: 0,
     },
     fileName: {
-        fontSize: 14,
-        lineHeight: 19,
+        fontSize: 12,
+        lineHeight: 15,
         fontWeight: '600',
     },
     fileMetaRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
+        justifyContent: 'space-between',
+        marginTop: 4,
     },
     fileTypeBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
         borderRadius: 999,
-        marginRight: 8,
     },
     myFileTypeBadge: {
         backgroundColor: 'rgba(255,255,255,0.18)',
@@ -881,9 +889,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#E0E7FF',
     },
     fileTypeBadgeText: {
-        fontSize: 10,
+        fontSize: 8,
         fontWeight: '700',
-        letterSpacing: 0.4,
+        letterSpacing: 0.2,
     },
     myFileTypeBadgeText: {
         color: '#DBEAFE',
@@ -891,29 +899,16 @@ const styles = StyleSheet.create({
     theirFileTypeBadgeText: {
         color: '#1D4ED8',
     },
-    fileOpenHint: {
-        fontSize: 12,
-        fontWeight: '500',
-    },
-    myFileOpenHint: {
-        color: 'rgba(255,255,255,0.72)',
-    },
-    theirFileOpenHint: {
-        color: '#64748B',
-    },
-    fileTimeOverlay: {
-        position: 'absolute',
-        right: 10,
-        bottom: 10,
-        backgroundColor: 'rgba(17, 24, 39, 0.45)',
-        borderRadius: 10,
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-    },
-    fileTimeOverlayText: {
-        color: '#fff',
-        fontSize: 11,
+    fileInlineTime: {
+        fontSize: 9,
         fontWeight: '600',
+        marginLeft: 8,
+    },
+    myFileInlineTime: {
+        color: 'rgba(255,255,255,0.78)',
+    },
+    theirFileInlineTime: {
+        color: '#94A3B8',
     },
     timeText: {
         fontSize: 10,
