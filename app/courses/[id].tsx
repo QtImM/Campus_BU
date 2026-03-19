@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
+    Animated,
     Alert,
     FlatList,
     Image,
@@ -23,6 +24,7 @@ import {
 import { EduBadge } from '../../components/common/EduBadge';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import storage from '../../lib/storage';
 import { getCurrentUser } from '../../services/auth';
 import { addReview, deleteReview, getCourseById, getReviewsAndHasReviewed, likeReview } from '../../services/courses';
@@ -102,6 +104,10 @@ export default function CourseDetailScreen() {
     const [newTeamingComment, setNewTeamingComment] = useState('');
     const [teamingReplyTarget, setTeamingReplyTarget] = useState<TeamingComment | null>(null);
     const teamingCommentInputRef = useRef<TextInput>(null);
+    const ugcActions = useUgcEntryActions({
+        currentUserId: user?.uid,
+        ensureLoggedIn: () => !!checkLogin(user),
+    });
 
     const roomId = `course_${id}`;
 
@@ -538,7 +544,24 @@ export default function CourseDetailScreen() {
     };
 
     const renderReviewItem = ({ item }: { item: Review }) => (
-        <View style={[styles.reviewCard, { borderLeftColor: ratingBarColor(item.rating) }]}>
+        <Animated.View
+            style={[
+                styles.reviewCard,
+                { borderLeftColor: ratingBarColor(item.rating) },
+                ugcActions.getHighlightStyle(item.id),
+            ]}
+        >
+            <TouchableOpacity
+                activeOpacity={0.96}
+                onLongPress={() => ugcActions.openActions({
+                    id: item.id,
+                    targetId: item.id,
+                    targetType: 'comment',
+                    authorId: item.isAnonymous ? undefined : item.authorId,
+                    authorName: item.authorName,
+                    isAnonymous: item.isAnonymous,
+                })}
+            >
             <View style={styles.reviewHeader}>
                 <View style={styles.authorInfo}>
                     <View style={styles.avatarContainer}>
@@ -622,11 +645,22 @@ export default function CourseDetailScreen() {
                     )}
                 </View>
             </View>
-        </View>
+            </TouchableOpacity>
+        </Animated.View>
     );
 
     const renderTeamingItem = ({ item }: { item: CourseTeaming }) => (
-        <View style={styles.teamingCard}>
+        <Animated.View style={[styles.teamingCard, ugcActions.getHighlightStyle(item.id)]}>
+            <TouchableOpacity
+                activeOpacity={0.97}
+                onLongPress={() => ugcActions.openActions({
+                    id: item.id,
+                    targetId: item.id,
+                    targetType: 'post',
+                    authorId: item.userId,
+                    authorName: item.userName,
+                })}
+            >
             <View style={styles.teamingHeader}>
                 <View style={styles.authorInfo}>
                     <View style={styles.avatarContainer}>
@@ -708,7 +742,8 @@ export default function CourseDetailScreen() {
                     </TouchableOpacity>
                 </View>
             </View>
-        </View>
+            </TouchableOpacity>
+        </Animated.View>
     );
 
     if (!course) return null;
@@ -1285,7 +1320,7 @@ export default function CourseDetailScreen() {
                                     data={organizedTeamingComments}
                                     keyExtractor={(item) => item.id}
                                     renderItem={({ item }) => (
-                                        <View style={styles.teamingCommentContainer}>
+                                        <Animated.View style={[styles.teamingCommentContainer, ugcActions.getHighlightStyle(item.id)]}>
                                             <View style={styles.teamingCommentRow}>
                                                 {isImageUrl(item.authorAvatar) ? (
                                                     <Image
@@ -1295,7 +1330,17 @@ export default function CourseDetailScreen() {
                                                 ) : (
                                                     <Text style={styles.teamingCommentAvatarEmoji}>{item.authorAvatar || '👤'}</Text>
                                                 )}
-                                                <View style={styles.teamingCommentInfo}>
+                                                <TouchableOpacity
+                                                    style={styles.teamingCommentInfo}
+                                                    activeOpacity={0.95}
+                                                    onLongPress={() => ugcActions.openActions({
+                                                        id: item.id,
+                                                        targetId: item.id,
+                                                        targetType: 'comment',
+                                                        authorId: item.authorId,
+                                                        authorName: item.authorName,
+                                                    })}
+                                                >
                                                     <View style={styles.teamingCommentHeader}>
                                                         <View style={styles.commentAuthorRow}>
                                                             <Text style={styles.commentAuthorName}>{item.authorName}</Text>
@@ -1312,14 +1357,14 @@ export default function CourseDetailScreen() {
                                                     <Text style={styles.teamingCommentTime}>
                                                         {new Date(item.createdAt).toLocaleString()}
                                                     </Text>
-                                                </View>
+                                                </TouchableOpacity>
                                             </View>
 
                                             {/* Replies */}
                                             {item.replies && item.replies.length > 0 && (
                                                 <View style={styles.teamingNestedReplies}>
                                                     {item.replies.map((reply: TeamingComment) => (
-                                                        <View key={reply.id} style={styles.teamingCommentRowSmall}>
+                                                        <Animated.View key={reply.id} style={[styles.teamingCommentRowSmall, ugcActions.getHighlightStyle(reply.id)]}>
                                                             {isImageUrl(reply.authorAvatar) ? (
                                                                 <Image
                                                                     source={{ uri: reply.authorAvatar }}
@@ -1328,7 +1373,17 @@ export default function CourseDetailScreen() {
                                                             ) : (
                                                                 <Text style={styles.teamingCommentAvatarEmojiSmall}>{reply.authorAvatar || '👤'}</Text>
                                                             )}
-                                                            <View style={styles.teamingCommentInfoSmall}>
+                                                            <TouchableOpacity
+                                                                style={styles.teamingCommentInfoSmall}
+                                                                activeOpacity={0.95}
+                                                                onLongPress={() => ugcActions.openActions({
+                                                                    id: reply.id,
+                                                                    targetId: reply.id,
+                                                                    targetType: 'comment',
+                                                                    authorId: reply.authorId,
+                                                                    authorName: reply.authorName,
+                                                                })}
+                                                            >
                                                                 <View style={styles.teamingCommentHeader}>
                                                                     <View style={styles.commentAuthorRow}>
                                                                         <Text style={styles.commentAuthorName}>{reply.authorName}</Text>
@@ -1347,12 +1402,12 @@ export default function CourseDetailScreen() {
                                                                 <Text style={styles.teamingCommentTimeSmall}>
                                                                     {new Date(reply.createdAt).toLocaleString()}
                                                                 </Text>
-                                                            </View>
-                                                        </View>
+                                                            </TouchableOpacity>
+                                                        </Animated.View>
                                                     ))}
                                                 </View>
                                             )}
-                                        </View>
+                                        </Animated.View>
                                     )}
                                     contentContainerStyle={{ paddingBottom: 20 }}
                                     ListEmptyComponent={
@@ -1419,6 +1474,7 @@ export default function CourseDetailScreen() {
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
+            {ugcActions.ActionSheet}
         </View >
     );
 }

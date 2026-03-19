@@ -23,6 +23,7 @@ import React, {
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
+    Animated,
     Alert,
     FlatList,
     Image,
@@ -40,6 +41,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import { getCurrentUser } from '../../services/auth';
 import { deleteExchange, fetchExchangeComments, fetchExchanges, postExchange, postExchangeComment, toggleExchangeLike } from '../../services/exchange';
 import { ContactMethod, CourseExchange, ExchangeComment, ExchangeCourseDetail } from '../../types';
@@ -72,6 +74,10 @@ export default function ExchangeScreen() {
     const [loadingComments, setLoadingComments] = useState(false);
     const [replyTarget, setReplyTarget] = useState<ExchangeComment | null>(null);
     const commentInputRef = useRef<TextInput>(null);
+    const ugcActions = useUgcEntryActions({
+        currentUserId,
+        ensureLoggedIn: () => !!checkLogin(currentUserId),
+    });
 
     // Post Form State
     const [haveCourse, setHaveCourse] = useState('');
@@ -361,7 +367,17 @@ export default function ExchangeScreen() {
     );
 
     const renderExchangeItem = ({ item }: { item: CourseExchange }) => (
-        <View style={styles.exchangeCard}>
+        <Animated.View style={[styles.exchangeCard, ugcActions.getHighlightStyle(item.id)]}>
+            <TouchableOpacity
+                activeOpacity={0.97}
+                onLongPress={() => ugcActions.openActions({
+                    id: item.id,
+                    targetId: item.id,
+                    targetType: 'post',
+                    authorId: item.userId,
+                    authorName: item.userName,
+                })}
+            >
             <View style={styles.cardHeader}>
                 <View style={styles.userInfo}>
                     {renderAvatar(item.userAvatar, styles.userAvatar)}
@@ -434,19 +450,28 @@ export default function ExchangeScreen() {
                     <Text style={styles.contactBtnText}>{t('exchange.contact_btn')}</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+            </TouchableOpacity>
+        </Animated.View>
     );
 
     const renderCompactItem = ({ item }: { item: CourseExchange }) => (
-        <TouchableOpacity
-            style={styles.compactCard}
-            onPress={() => {
-                if (checkLogin(currentUserId)) {
-                    setSelectedExchange(item);
-                    setIsContactModalVisible(true);
-                }
-            }}
-        >
+        <Animated.View style={[styles.compactCard, ugcActions.getHighlightStyle(item.id)]}>
+            <TouchableOpacity
+                style={{ flex: 1 }}
+                onPress={() => {
+                    if (checkLogin(currentUserId)) {
+                        setSelectedExchange(item);
+                        setIsContactModalVisible(true);
+                    }
+                }}
+                onLongPress={() => ugcActions.openActions({
+                    id: item.id,
+                    targetId: item.id,
+                    targetType: 'post',
+                    authorId: item.userId,
+                    authorName: item.userName,
+                })}
+            >
             <View style={styles.compactCourseRow}>
                 <View style={[styles.compactBlock, { backgroundColor: '#F5F3FF' }]}>
                     <Text style={styles.compactCode}>{item.haveCourse}</Text>
@@ -473,7 +498,8 @@ export default function ExchangeScreen() {
                     </TouchableOpacity>
                 </View>
             </View>
-        </TouchableOpacity>
+            </TouchableOpacity>
+        </Animated.View>
     );
 
     return (
@@ -809,10 +835,20 @@ export default function ExchangeScreen() {
                                     data={organizedComments}
                                     keyExtractor={(item) => item.id}
                                     renderItem={({ item }) => (
-                                        <View style={styles.commentContainer}>
+                                        <Animated.View style={[styles.commentContainer, ugcActions.getHighlightStyle(item.id)]}>
                                             <View style={styles.commentRow}>
                                                 {renderAvatar(item.authorAvatar, styles.commentAvatar)}
-                                                <View style={styles.commentInfo}>
+                                                <TouchableOpacity
+                                                    style={styles.commentInfo}
+                                                    activeOpacity={0.95}
+                                                    onLongPress={() => ugcActions.openActions({
+                                                        id: item.id,
+                                                        targetId: item.id,
+                                                        targetType: 'comment',
+                                                        authorId: item.authorId,
+                                                        authorName: item.authorName,
+                                                    })}
+                                                >
                                                     <View style={styles.commentHeaderInternal}>
                                                         <Text style={styles.commentAuthor}>{item.authorName}</Text>
                                                         <TouchableOpacity onPress={() => {
@@ -824,16 +860,26 @@ export default function ExchangeScreen() {
                                                     </View>
                                                     <TranslatableText style={styles.commentText} text={item.content} />
                                                     <Text style={styles.commentTime}>{new Date(item.createdAt).toLocaleString()}</Text>
-                                                </View>
+                                                </TouchableOpacity>
                                             </View>
 
                                             {/* Replies */}
                                             {item.replies && item.replies.length > 0 && (
                                                 <View style={styles.nestedReplies}>
                                                     {item.replies.map((reply: ExchangeComment) => (
-                                                        <View key={reply.id} style={styles.commentRowSmall}>
+                                                        <Animated.View key={reply.id} style={[styles.commentRowSmall, ugcActions.getHighlightStyle(reply.id)]}>
                                                             {renderAvatar(reply.authorAvatar, styles.commentAvatarSmall)}
-                                                            <View style={styles.commentInfoSmall}>
+                                                            <TouchableOpacity
+                                                                style={styles.commentInfoSmall}
+                                                                activeOpacity={0.95}
+                                                                onLongPress={() => ugcActions.openActions({
+                                                                    id: reply.id,
+                                                                    targetId: reply.id,
+                                                                    targetType: 'comment',
+                                                                    authorId: reply.authorId,
+                                                                    authorName: reply.authorName,
+                                                                })}
+                                                            >
                                                                 <View style={styles.commentHeaderInternal}>
                                                                     <Text style={styles.commentAuthorSmall}>{reply.authorName}</Text>
                                                                     {reply.replyToName && (
@@ -851,12 +897,12 @@ export default function ExchangeScreen() {
                                                                 </View>
                                                                 <TranslatableText style={styles.commentTextSmall} text={reply.content} />
                                                                 <Text style={styles.commentTimeSmall}>{new Date(reply.createdAt).toLocaleString()}</Text>
-                                                            </View>
-                                                        </View>
+                                                            </TouchableOpacity>
+                                                        </Animated.View>
                                                     ))}
                                                 </View>
                                             )}
-                                        </View>
+                                        </Animated.View>
                                     )}
                                     contentContainerStyle={{ padding: 20 }}
                                     ListEmptyComponent={<Text style={{ textAlign: 'center', color: '#9CA3AF', margin: 40 }}>No comments yet.</Text>}
@@ -933,6 +979,7 @@ export default function ExchangeScreen() {
                     </View>
                 </View>
             </Modal>
+            {ugcActions.ActionSheet}
         </View>
     );
 }

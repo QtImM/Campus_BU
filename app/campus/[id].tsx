@@ -35,6 +35,7 @@ import { EduBadge } from '../../components/common/EduBadge';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { ZoomableImageCarousel } from '../../components/common/ZoomableImageCarousel';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import { getCurrentUser } from '../../services/auth';
 import {
     addPostComment,
@@ -167,6 +168,30 @@ export default function PostDetailScreen() {
     const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
     const commentInputRef = useRef<TextInput>(null);
     const commentFlashAnim = useRef(new Animated.Value(0)).current;
+    const triggerCommentFlash = (commentId: string) => {
+        setHighlightedCommentId(commentId);
+        commentFlashAnim.stopAnimation();
+        commentFlashAnim.setValue(0);
+        Animated.sequence([
+            Animated.timing(commentFlashAnim, {
+                toValue: 1,
+                duration: 140,
+                useNativeDriver: false,
+            }),
+            Animated.timing(commentFlashAnim, {
+                toValue: 0,
+                duration: 260,
+                useNativeDriver: false,
+            }),
+        ]).start(() => {
+            setHighlightedCommentId(current => (current === commentId ? null : current));
+        });
+    };
+    const ugcActions = useUgcEntryActions({
+        currentUserId: currentUser?.uid,
+        ensureLoggedIn: () => !!checkLogin(currentUser),
+        onFlash: triggerCommentFlash,
+    });
 
     // Fire zoom animation immediately on mount
     useEffect(() => {
@@ -228,23 +253,7 @@ export default function PostDetailScreen() {
 
     const triggerReply = (comment: PostComment) => {
         setReplyTarget(comment);
-        setHighlightedCommentId(comment.id);
-        commentFlashAnim.stopAnimation();
-        commentFlashAnim.setValue(0);
-        Animated.sequence([
-            Animated.timing(commentFlashAnim, {
-                toValue: 1,
-                duration: 140,
-                useNativeDriver: false,
-            }),
-            Animated.timing(commentFlashAnim, {
-                toValue: 0,
-                duration: 260,
-                useNativeDriver: false,
-            }),
-        ]).start(() => {
-            setHighlightedCommentId(current => (current === comment.id ? null : current));
-        });
+        triggerCommentFlash(comment.id);
         setTimeout(() => commentInputRef.current?.focus(), 100);
     };
 
@@ -708,6 +717,14 @@ export default function PostDetailScreen() {
                                         style={styles.commentBody}
                                         activeOpacity={0.75}
                                         onPress={() => triggerReply(comment)}
+                                        onLongPress={() => ugcActions.openActions({
+                                            id: comment.id,
+                                            targetId: comment.id,
+                                            targetType: 'comment',
+                                            authorId: comment.isAnonymous ? undefined : comment.authorId,
+                                            authorName: comment.authorName,
+                                            isAnonymous: comment.isAnonymous,
+                                        })}
                                     >
                                         <View style={styles.commentHeader}>
                                             <Text style={styles.commentAuthor}>{comment.authorName}</Text>
@@ -773,6 +790,14 @@ export default function PostDetailScreen() {
                                                     style={styles.commentBody}
                                                     activeOpacity={0.75}
                                                     onPress={() => triggerReply(reply)}
+                                                    onLongPress={() => ugcActions.openActions({
+                                                        id: reply.id,
+                                                        targetId: reply.id,
+                                                        targetType: 'comment',
+                                                        authorId: reply.isAnonymous ? undefined : reply.authorId,
+                                                        authorName: reply.authorName,
+                                                        isAnonymous: reply.isAnonymous,
+                                                    })}
                                                 >
                                                     <View style={styles.commentHeader}>
                                                         <Text style={styles.commentAuthorSmall}>{reply.authorName}</Text>
@@ -954,6 +979,7 @@ export default function PostDetailScreen() {
                     type={toast.type}
                     onHide={() => setToast(prev => ({ ...prev, visible: false }))}
                 />
+                {ugcActions.ActionSheet}
             </Animated.View>
         </KeyboardAvoidingView>
     );
