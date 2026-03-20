@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AnimatedTabIcon } from '../../components/common/AnimatedTabIcon';
+import { useCourseActivity } from '../../context/CourseActivityContext';
 import { useNotifications } from '../../context/NotificationContext';
 
 const AgentTabIcon = ({ color, focused }: { color: string; focused: boolean }) => (
@@ -26,6 +27,7 @@ export default function TabLayout() {
   // Custom TabBar Component to handle the sliding indicator
   const CustomTabBar = ({ state, descriptors, navigation }: any) => {
     const { hasAnyUnread, totalUnreadCount } = useNotifications();
+    const { hasAnyUnread: hasCourseActivityUnread } = useCourseActivity();
     // Filter out tabs that should be hidden (href: null) OR don't have an icon
     const visibleRoutes = state.routes.filter((r: any) => {
       const { options } = descriptors[r.key];
@@ -105,6 +107,9 @@ export default function TabLayout() {
                   focused: isFocused
                 })}
                 {route.name === 'profile' && (hasAnyUnread || totalUnreadCount > 0) && (
+                  <View style={styles.unreadDot} />
+                )}
+                {route.name === 'course' && hasCourseActivityUnread && (
                   <View style={styles.unreadDot} />
                 )}
                 <Text style={[styles.tabLabel, { color: isFocused ? '#1E3A8A' : '#8E8E93' }]}>

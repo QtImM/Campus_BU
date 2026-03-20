@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, Camera, FileText, Image as ImageIcon, MoreVertical, Plus, Send } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,10 +27,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ZoomableImageCarousel } from '../../components/common/ZoomableImageCarousel';
 import { useNotifications } from '../../context/NotificationContext';
 import { getCurrentUser } from '../../services/auth';
+import { reportContent, ReportReason } from '../../services/moderation';
 import {
     createDirectFileMessageContent,
     createDirectImageMessageContent,
+    deleteDirectMessage,
     fetchDirectMessages,
+    getDirectMessageCopyText,
     getDirectMessageFilePayload,
     getDirectMessageImageUrl,
     isDirectFileContent,
@@ -78,6 +82,13 @@ export default function ChatScreen() {
     const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
     const [previewIndex, setPreviewIndex] = useState<number | null>(null);
     const attachmentAnim = useRef(new Animated.Value(0)).current;
+    const REPORT_REASONS: Array<{ label: string; value: ReportReason }> = [
+        { label: '垃圾内容', value: 'spam' },
+        { label: '骚扰辱骂', value: 'harassment' },
+        { label: '仇恨/歧视', value: 'hate_speech' },
+        { label: '色情低俗', value: 'sexual_content' },
+        { label: '其他', value: 'other' },
+    ];
 
     useEffect(() => {
         Animated.timing(attachmentAnim, {
@@ -402,6 +413,98 @@ export default function ChatScreen() {
         }
     }, [previewImages]);
 
+    const handleReportDirectMessage = useCallback((message: DirectMessage, reason: ReportReason) => {
+        if (!currentUser?.uid) {
+            return;
+        }
+
+        reportContent({
+            reporterId: currentUser.uid,
+            targetId: message.id,
+            targetType: 'comment',
+            reason,
+        }).then(() => {
+            Alert.alert('已举报', '感谢你帮助维护社区安全。我们将核实此内容。');
+        }).catch((error) => {
+            console.error('Error reporting direct message:', error);
+            Alert.alert('举报失败', '请稍后再试。');
+        });
+    }, [currentUser?.uid]);
+
+    const promptReportDirectMessage = useCallback((message: DirectMessage) => {
+        Alert.alert(
+            '举报内容',
+            '你为什么要举报这个消息？',
+            [
+                ...REPORT_REASONS.map((reason) => ({
+                    text: reason.label,
+                    onPress: () => handleReportDirectMessage(message, reason.value),
+                })),
+                { text: '取消', style: 'cancel' as const },
+            ],
+        );
+    }, [handleReportDirectMessage]);
+
+    const handleRecallDirectMessage = useCallback(async (message: DirectMessage) => {
+        if (!currentUser?.uid || message.senderId !== currentUser.uid) {
+            return;
+        }
+
+        try {
+            setMessages((previous) => previous.filter((item) => item.id !== message.id));
+            await deleteDirectMessage(message.id, currentUser.uid);
+        } catch (error) {
+            console.error('Error recalling direct message:', error);
+            await loadThread(true);
+            Alert.alert('撤回失败', '请稍后再试。');
+        }
+    }, [currentUser?.uid, loadThread]);
+
+    const openDirectMessageActions = useCallback((message: DirectMessage) => {
+        const copyText = getDirectMessageCopyText(message.content);
+        const actions: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }> = [
+            {
+                text: '复制',
+                onPress: () => {
+                    Clipboard.setStringAsync(copyText).then(() => {
+                        Alert.alert('已复制', '内容已复制到剪贴板。');
+                    }).catch((error) => {
+                        console.error('Error copying direct message:', error);
+                        Alert.alert('复制失败', '请稍后再试。');
+                    });
+                },
+            },
+            {
+                text: '举报',
+                onPress: () => promptReportDirectMessage(message),
+            },
+        ];
+
+        if (message.senderId === currentUser?.uid) {
+            actions.push({
+                text: '撤回',
+                style: 'destructive',
+                onPress: () => {
+                    Alert.alert(
+                        '撤回消息',
+                        '确定撤回这条消息吗？撤回即删除消息。',
+                        [
+                            { text: '取消', style: 'cancel' },
+                            {
+                                text: '撤回',
+                                style: 'destructive',
+                                onPress: () => { void handleRecallDirectMessage(message); },
+                            },
+                        ],
+                    );
+                },
+            });
+        }
+
+        actions.push({ text: '取消', style: 'cancel' });
+        Alert.alert('消息操作', '请选择操作', actions);
+    }, [currentUser?.uid, handleRecallDirectMessage, promptReportDirectMessage]);
+
     const renderMessage = ({ item }: { item: DirectMessage }) => {
         const isMe = item.senderId === currentUser?.uid;
         const imageUrl = getDirectMessageImageUrl(item.content);
@@ -429,6 +532,7 @@ export default function ChatScreen() {
                     isImageMessage && styles.imageBubble,
                     isFileMessage && styles.fileBubble,
                 ]}>
+                    <Pressable onLongPress={() => openDirectMessageActions(item)}>
                     {isImageMessage ? (
                         <Pressable onPress={() => openImagePreview(item.id)} style={styles.imageMessagePressable}>
                             <Image source={{ uri: imageUrl }} style={styles.messageImage} />
@@ -484,6 +588,7 @@ export default function ChatScreen() {
                             </View>
                         </>
                     )}
+                    </Pressable>
                 </View>
             </View>
         );

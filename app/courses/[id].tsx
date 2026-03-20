@@ -23,11 +23,13 @@ import {
 } from 'react-native';
 import { EduBadge } from '../../components/common/EduBadge';
 import { TranslatableText } from '../../components/common/TranslatableText';
+import { useCourseActivity } from '../../context/CourseActivityContext';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import storage from '../../lib/storage';
 import { getCurrentUser } from '../../services/auth';
 import { addReview, deleteReview, getCourseById, getReviewsAndHasReviewed, likeReview } from '../../services/courses';
+import { reportContent, ReportReason } from '../../services/moderation';
 import { supabase } from '../../services/supabase';
 import { deleteTeamingRequest, fetchTeamingComments, fetchTeamingRequests, postTeamingComment, postTeamingRequest, toggleTeamingLike } from '../../services/teaming';
 import { ContactMethod, Course, CourseTeaming, Review, TeamingComment } from '../../types';
@@ -37,6 +39,11 @@ const isImageUrl = (str: string): boolean => {
     if (!str) return false;
     return str.startsWith('http://') || str.startsWith('https://');
 };
+
+const normalizeChatUser = (userData?: { display_name?: string; avatar_url?: string; email?: string } | null) => ({
+    ...userData,
+    avatar_url: userData?.avatar_url || '',
+});
 
 // Mock Data
 const MOCK_REVIEWS: Review[] = [
@@ -60,7 +67,9 @@ export default function CourseDetailScreen() {
     const { t } = useTranslation();
     const router = useRouter();
     const { checkLogin } = useLoginPrompt();
+    const { unreadByCourse, markCourseSeen, refresh: refreshCourseActivity } = useCourseActivity();
     const { id } = useLocalSearchParams();
+    const courseUnread = typeof id === 'string' ? unreadByCourse[id] : undefined;
     const [activeTab, setActiveTab] = useState<'reviews' | 'chat' | 'teaming'>('reviews');
     const [course, setCourse] = useState<Course | null>(null);
     const [reviews, setReviews] = useState<Review[]>([]);
@@ -110,14 +119,24 @@ export default function CourseDetailScreen() {
     });
 
     const roomId = `course_${id}`;
+    const REPORT_REASONS: Array<{ label: string; value: ReportReason }> = [
+        { label: '垃圾内容', value: 'spam' },
+        { label: '骚扰辱骂', value: 'harassment' },
+        { label: '仇恨/歧视', value: 'hate_speech' },
+        { label: '色情低俗', value: 'sexual_content' },
+        { label: '其他', value: 'other' },
+    ];
 
     useEffect(() => {
         loadData();
         setupRealtime();
+        if (typeof id === 'string') {
+            void markCourseSeen(id);
+        }
         return () => {
             supabase.channel(roomId).unsubscribe();
         };
-    }, [id]);
+    }, [id, markCourseSeen]);
 
     const loadData = async () => {
         // ── Phase 1: get user + liked reviews from local cache (instant) ──
@@ -144,7 +163,12 @@ export default function CourseDetailScreen() {
         if (courseData) setCourse(courseData);
         else console.warn('Course not found for ID:', id);
 
-        if (messagesResult.data) setMessages(messagesResult.data);
+        if (messagesResult.data) {
+            setMessages(messagesResult.data.map((message: any) => ({
+                ...message,
+                users: normalizeChatUser(message.users),
+            })));
+        }
 
         // ── Phase 3: reviews + hasReviewed in one round-trip ──
         if (isMockId) {
@@ -205,7 +229,7 @@ export default function CourseDetailScreen() {
 
                 const messageWithUser = {
                     ...payload.new,
-                    users: userData
+                    users: normalizeChatUser(userData),
                 };
 
                 setMessages(prev => {
@@ -213,6 +237,14 @@ export default function CourseDetailScreen() {
                     if (prev.find(m => m.id === payload.new.id)) return prev;
                     return [...prev, messageWithUser];
                 });
+            })
+            .on('postgres_changes', {
+                event: 'DELETE',
+                schema: 'public',
+                table: 'messages',
+                filter: `course_id=eq.${id}`
+            }, (payload) => {
+                setMessages(prev => prev.filter(message => message.id !== payload.old.id));
             })
             .subscribe();
     };
@@ -247,7 +279,103 @@ export default function CourseDetailScreen() {
             };
             setMessages(prev => [...prev, optimisticMsg]);
             setNewMessage('');
+            void refreshCourseActivity();
         }
+    };
+
+    const handleDeleteChatMessage = async (messageId: string) => {
+        if (!user?.uid) return;
+
+        const previousMessages = messages;
+        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+
+        const { error } = await supabase
+            .from('messages')
+            .delete()
+            .eq('id', messageId)
+            .eq('sender_id', user.uid);
+
+        if (error) {
+            console.error('Error deleting course chat message:', error);
+            setMessages(previousMessages);
+            Alert.alert('撤回失败', '请稍后再试。');
+        }
+    };
+
+    const handleReportCourseMessage = async (messageId: string, reason: ReportReason) => {
+        if (!user?.uid) return;
+
+        try {
+            await reportContent({
+                reporterId: user.uid,
+                targetId: messageId,
+                targetType: 'comment',
+                reason,
+            });
+            Alert.alert('已举报', '感谢你帮助维护社区安全。我们将核实此内容。');
+        } catch (error) {
+            console.error('Error reporting course chat message:', error);
+            Alert.alert('举报失败', '请稍后再试。');
+        }
+    };
+
+    const openCourseChatMessageActions = (msg: any) => {
+        const copyText = String(msg.content || '').trim();
+        const isOwnMessage = msg.sender_id === user?.uid;
+
+        const actions: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }> = [
+            {
+                text: '复制',
+                onPress: () => {
+                    Clipboard.setStringAsync(copyText).then(() => {
+                        Alert.alert('已复制', '内容已复制到剪贴板。');
+                    }).catch((error) => {
+                        console.error('Error copying course chat message:', error);
+                        Alert.alert('复制失败', '请稍后再试。');
+                    });
+                },
+            },
+            {
+                text: '举报',
+                onPress: () => {
+                    Alert.alert(
+                        '举报内容',
+                        '你为什么要举报这个消息？',
+                        [
+                            ...REPORT_REASONS.map((reason) => ({
+                                text: reason.label,
+                                onPress: () => { void handleReportCourseMessage(msg.id, reason.value); },
+                            })),
+                            { text: '取消', style: 'cancel' as const },
+                        ],
+                    );
+                },
+            },
+        ];
+
+        if (isOwnMessage) {
+            actions.push({
+                text: '撤回',
+                style: 'destructive',
+                onPress: () => {
+                    Alert.alert(
+                        '撤回消息',
+                        '确定撤回这条消息吗？撤回即删除消息。',
+                        [
+                            { text: '取消', style: 'cancel' },
+                            {
+                                text: '撤回',
+                                style: 'destructive',
+                                onPress: () => { void handleDeleteChatMessage(msg.id); },
+                            },
+                        ],
+                    );
+                },
+            });
+        }
+
+        actions.push({ text: '取消', style: 'cancel' });
+        Alert.alert('消息操作', '请选择操作', actions);
     };
 
     const handleAddReview = async () => {
@@ -318,6 +446,7 @@ export default function CourseDetailScreen() {
             getReviewsAndHasReviewed(id as string, user.uid, course?.code).then(({ reviews, hasReviewed }) => {
                 setReviews(reviews);
                 setHasReviewed(hasReviewed);
+                void refreshCourseActivity();
             }).catch(() => { });
         }
     };
@@ -371,6 +500,7 @@ export default function CourseDetailScreen() {
                     setReviews(prev => prev.filter(r => r.id !== review.id));
                     setHasReviewed(false);
                     loadData();
+                    void refreshCourseActivity();
                 }
             }
         ]);
@@ -435,6 +565,7 @@ export default function CourseDetailScreen() {
                 setIsTeamingModalVisible(false);
                 resetTeamingForm();
                 Alert.alert('Success', 'Teaming request posted!');
+                void refreshCourseActivity();
             } else {
                 Alert.alert('Error', error || 'Failed to post teaming request');
             }
@@ -809,6 +940,7 @@ export default function CourseDetailScreen() {
                             style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
                             onPress={() => setActiveTab('reviews')}
                         >
+                            {!!courseUnread?.reviews && <View style={styles.tabUnreadDot} />}
                             <MessageSquare size={18} color={activeTab === 'reviews' ? '#4B0082' : '#6B7280'} />
                             <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>Reviews</Text>
                         </TouchableOpacity>
@@ -816,6 +948,7 @@ export default function CourseDetailScreen() {
                             style={[styles.tab, activeTab === 'chat' && styles.activeTab]}
                             onPress={() => setActiveTab('chat')}
                         >
+                            {!!courseUnread?.chat && <View style={styles.tabUnreadDot} />}
                             <MessageCircle size={18} color={activeTab === 'chat' ? '#4B0082' : '#6B7280'} />
                             <Text style={[styles.tabText, activeTab === 'chat' && styles.activeTabText]}>Chatroom</Text>
                         </TouchableOpacity>
@@ -823,6 +956,7 @@ export default function CourseDetailScreen() {
                             style={[styles.tab, activeTab === 'teaming' && styles.activeTab]}
                             onPress={() => setActiveTab('teaming')}
                         >
+                            {!!courseUnread?.teaming && <View style={styles.tabUnreadDot} />}
                             <UserPlus size={18} color={activeTab === 'teaming' ? '#4B0082' : '#6B7280'} />
                             <Text style={[styles.tabText, activeTab === 'teaming' && styles.activeTabText]}>Teaming</Text>
                         </TouchableOpacity>
@@ -880,12 +1014,25 @@ export default function CourseDetailScreen() {
                                         msg.sender_id === user?.uid ? styles.myMessageRow : styles.otherMessageRow
                                     ]}>
                                         {msg.sender_id !== user?.uid && (
-                                            <Text style={styles.chatAvatar}>{msg.users?.avatar_url || '👤'}</Text>
+                                            isImageUrl(msg.users?.avatar_url || '') ? (
+                                                <Image
+                                                    source={{ uri: msg.users?.avatar_url }}
+                                                    style={styles.chatAvatarImage}
+                                                />
+                                            ) : (
+                                                <View style={styles.chatAvatarFallback}>
+                                                    <Text style={styles.chatAvatarFallbackText}>👤</Text>
+                                                </View>
+                                            )
                                         )}
-                                        <View style={[
-                                            styles.messageBubble,
-                                            msg.sender_id === user?.uid ? styles.myBubble : styles.otherBubble
-                                        ]}>
+                                        <TouchableOpacity
+                                            activeOpacity={0.9}
+                                            onLongPress={() => openCourseChatMessageActions(msg)}
+                                            style={[
+                                                styles.messageBubble,
+                                                msg.sender_id === user?.uid ? styles.myBubble : styles.otherBubble
+                                            ]}
+                                        >
                                             <View style={styles.messageAuthorRow}>
                                                 <Text style={msg.sender_id === user?.uid ? styles.myMessageAuthor : styles.messageAuthor}>
                                                     {msg.users?.display_name || 'Student'}
@@ -899,7 +1046,7 @@ export default function CourseDetailScreen() {
                                             <Text style={msg.sender_id === user?.uid ? styles.myMessageText : styles.messageText}>
                                                 {msg.content}
                                             </Text>
-                                        </View>
+                                        </TouchableOpacity>
                                     </View>
                                 ))
                             )}
@@ -1598,6 +1745,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderWidth: 1,
         borderColor: '#E5E7EB',
+        position: 'relative',
     },
     activeTab: {
         backgroundColor: '#F3E8FF',
@@ -1610,6 +1758,15 @@ const styles = StyleSheet.create({
         color: '#6B7280',
     },
     activeTabText: { color: '#4B0082' },
+    tabUnreadDot: {
+        position: 'absolute',
+        top: 8,
+        right: 10,
+        width: 8,
+        height: 8,
+        borderRadius: 999,
+        backgroundColor: '#EF4444',
+    },
 
     // Reviews
     sectionHeader: {
@@ -1719,7 +1876,27 @@ const styles = StyleSheet.create({
     messageRow: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
     myMessageRow: { justifyContent: 'flex-end' },
     otherMessageRow: { justifyContent: 'flex-start' },
-    chatAvatar: { fontSize: 20, marginRight: 8, marginBottom: 4 },
+    chatAvatarImage: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        marginRight: 8,
+        marginBottom: 4,
+        backgroundColor: '#E5E7EB',
+    },
+    chatAvatarFallback: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        marginRight: 8,
+        marginBottom: 4,
+        backgroundColor: '#E5E7EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    chatAvatarFallbackText: {
+        fontSize: 14,
+    },
     messageBubble: { maxWidth: '80%', padding: 12, borderRadius: 16 },
     myBubble: { backgroundColor: '#4B0082', borderBottomRightRadius: 4 },
     otherBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#E5E7EB' },

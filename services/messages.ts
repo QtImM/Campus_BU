@@ -98,6 +98,23 @@ export const getDirectMessagePreviewText = (content?: string | null): string => 
     return content;
 };
 
+export const getDirectMessageCopyText = (content?: string | null): string => {
+    if (!content) {
+        return '';
+    }
+
+    if (content.startsWith(DIRECT_IMAGE_PREFIX)) {
+        return getDirectMessageImageUrl(content);
+    }
+
+    const filePayload = parseDirectFilePayload(content);
+    if (filePayload) {
+        return `${filePayload.name}\n${filePayload.url}`;
+    }
+
+    return content;
+};
+
 export const createDirectImageMessageContent = (imageUrl: string): string =>
     `${DIRECT_IMAGE_PREFIX}${imageUrl}`;
 
@@ -413,6 +430,26 @@ export const sendDirectMessage = async (
     };
 };
 
+export const deleteDirectMessage = async (
+    messageId: string,
+    senderId: string,
+): Promise<void> => {
+    if (!messageId || !isUuid(senderId)) {
+        throw new Error('Invalid direct message deletion request');
+    }
+
+    const { error } = await supabase
+        .from(MESSAGES_TABLE)
+        .delete()
+        .eq('id', messageId)
+        .eq('sender_id', senderId);
+
+    if (error) {
+        console.error('Error deleting direct message:', error);
+        throw error;
+    }
+};
+
 export const uploadDirectMessageImage = async (uri: string): Promise<string> => {
     const arrayBuffer: ArrayBuffer = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -510,6 +547,12 @@ export const subscribeToDirectConversation = (
         }, onChange)
         .on('postgres_changes', {
             event: 'UPDATE',
+            schema: 'public',
+            table: MESSAGES_TABLE,
+            filter: `conversation_id=eq.${conversationId}`,
+        }, onChange)
+        .on('postgres_changes', {
+            event: 'DELETE',
             schema: 'public',
             table: MESSAGES_TABLE,
             filter: `conversation_id=eq.${conversationId}`,

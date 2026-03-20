@@ -4,7 +4,7 @@ import { ArrowLeft, Bot, Send, Sparkles, User } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
+    Animated,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -23,6 +23,61 @@ import { GuestLoginModal } from '../common/GuestLoginModal';
 
 interface AgentChatScreenProps {
     showBackButton?: boolean;
+}
+
+function TypingDots() {
+    const dot1 = useRef(new Animated.Value(0.35)).current;
+    const dot2 = useRef(new Animated.Value(0.35)).current;
+    const dot3 = useRef(new Animated.Value(0.35)).current;
+
+    useEffect(() => {
+        const makeLoop = (target: Animated.Value, delay: number) => Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(target, {
+                    toValue: 1,
+                    duration: 360,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(target, {
+                    toValue: 0.35,
+                    duration: 360,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+
+        const animations = [
+            makeLoop(dot1, 0),
+            makeLoop(dot2, 140),
+            makeLoop(dot3, 280),
+        ];
+
+        animations.forEach(animation => animation.start());
+        return () => animations.forEach(animation => animation.stop());
+    }, [dot1, dot2, dot3]);
+
+    return (
+        <View style={styles.typingDots}>
+            {[dot1, dot2, dot3].map((value, index) => (
+                <Animated.View
+                    key={index}
+                    style={[
+                        styles.typingDot,
+                        {
+                            opacity: value,
+                            transform: [{
+                                translateY: value.interpolate({
+                                    inputRange: [0.35, 1],
+                                    outputRange: [2, -2],
+                                }),
+                            }],
+                        },
+                    ]}
+                />
+            ))}
+        </View>
+    );
 }
 
 const shouldUseCurrentLocation = (input: string): boolean => {
@@ -254,7 +309,7 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                                 <View style={styles.messageContentWrapper}>
                                     {msg.role === 'assistant' ? (
                                         msg.content === '' ? (
-                                            <ActivityIndicator size="small" color="#1E3A8A" style={{ alignSelf: 'flex-start', marginVertical: 4 }} />
+                                            <TypingDots />
                                         ) : (
                                             <TextInput
                                                 style={styles.assistantSelectableText}
@@ -556,6 +611,19 @@ const styles = StyleSheet.create({
         padding: 0,
         margin: 0,
         includeFontPadding: false,
+    },
+    typingDots: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        minHeight: 24,
+        paddingVertical: 2,
+    },
+    typingDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 999,
+        backgroundColor: '#1E3A8A',
     },
 });
 
