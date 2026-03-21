@@ -106,10 +106,10 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     const [deviceLocation, setDeviceLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const { t } = useTranslation();
     const scrollViewRef = useRef<ScrollView>(null);
-    const agentRef = useRef<AgentExecutor>(new AgentExecutor('demo-user'));
+    const agentRef = useRef<AgentExecutor>(new AgentExecutor('guest-session'));
 
     useEffect(() => {
-        const userId = currentUser?.uid || 'demo-user';
+        const userId = currentUser?.uid || 'guest-session';
         agentRef.current = new AgentExecutor(userId);
         agentRef.current.setDeviceLocation(deviceLocation);
     }, [currentUser?.uid]);

@@ -84,9 +84,25 @@ const getImportItemTitle = (item: ScheduleImportItemRecord, t: any) => {
 export default function MyScheduleCard({ userId }: { userId: string | null }) {
     const router = useRouter();
     const { t } = useTranslation();
-    const scheduleT = (path: string, fallback: string) => {
-        const patchedValue = t(`schedule_profile_patch.schedule.${path}`, fallback);
-        return t(`profile.schedule.${path}`, patchedValue);
+    const translateText = (key: string, options?: Record<string, unknown>) => {
+        const value = t(key, options as any);
+        return typeof value === 'string' ? value : String(value);
+    };
+    const scheduleT = (
+        path: string,
+        fallbackOrOptions?: string | Record<string, unknown>,
+        maybeOptions?: Record<string, unknown>
+    ): string => {
+        const defaultValue = typeof fallbackOrOptions === 'string' ? fallbackOrOptions : undefined;
+        const options = typeof fallbackOrOptions === 'string'
+            ? (maybeOptions || {})
+            : (fallbackOrOptions || {});
+        const patchOptions = defaultValue ? { ...options, defaultValue } : options;
+        const patchedValue = translateText(`schedule_profile_patch.schedule.${path}`, patchOptions);
+        return translateText(`profile.schedule.${path}`, {
+            ...options,
+            defaultValue: patchedValue,
+        });
     };
     const [entries, setEntries] = useState<UserScheduleEntry[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);

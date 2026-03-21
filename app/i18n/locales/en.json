@@ -1,8 +1,8 @@
 {
     "tabs": {
-        "home": "Home",
-        "map": "Nearby",
-        "course": "Course",
+        "home": "Campus",
+        "map": "Map",
+        "course": "Courses",
         "agent": "Agent",
         "classroom": "Classroom",
         "messages": "Messages",

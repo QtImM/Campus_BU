@@ -15,29 +15,6 @@ export const createPost = async (
     geoPoint: { latitude: number; longitude: number },
     images: string[] = []
 ) => {
-    // Check for Demo Mode (if authorId is demo_user)
-    if (authorId === 'demo_user') {
-        // Mock a successful post creation
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve({
-                    id: 'mock_post_' + Date.now(),
-                    authorId,
-                    authorName,
-                    authorTags,
-                    authorAvatar,
-                    content,
-                    type,
-                    images,
-                    locationTag,
-                    geoPoint: { latitude: geoPoint.latitude || 22.3380, longitude: geoPoint.longitude || 114.1813 },
-                    timestamp: new Date(),
-                    likes: 0,
-                });
-            }, 1000);
-        });
-    }
-
     // Insert into Supabase
     // We assume table columns: id, author_id, author_name, content, ...
     const postData = {

@@ -278,6 +278,17 @@ export default function RegisterScreen() {
                         )}
                     </TouchableOpacity>
 
+                    <View style={[styles.footer, { marginTop: 18, marginBottom: 4 }]}>
+                        <Text style={styles.footerText}>{t('auth.agreement_prefix', '登录即代表同意 ')}</Text>
+                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                            <Text style={styles.link}>{t('auth.user_agreement', '用户协议')}</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.footerText}> {t('auth.and', '与')} </Text>
+                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
+                            <Text style={styles.link}>{t('auth.privacy_policy', '隐私政策')}</Text>
+                        </TouchableOpacity>
+                    </View>
+
                     <View style={styles.footer}>
                         <Text style={styles.footerText}>{t('auth.go_to_login_prefix', 'Already have an account?')}</Text>
                         <TouchableOpacity onPress={() => router.push('/(auth)/login')}>

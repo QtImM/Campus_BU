@@ -1,4 +1,3 @@
-import { APP_CONFIG } from '../constants/Config';
 import { supabase } from './supabase';
 
 export type ReportReason = 'spam' | 'harassment' | 'hate_speech' | 'sexual_content' | 'other';
@@ -31,11 +30,6 @@ export const reportContent = async (params: {
     reason: ReportReason;
     details?: string;
 }) => {
-    // Skip real DB call in demo mode to avoid RLS error
-    if (params.reporterId === APP_CONFIG.demoCredentials.uid) {
-        return { success: true, id: 'mock_report_' + Date.now() };
-    }
-
     const { data, error } = await supabase
         .from('reports')
         .insert({
@@ -55,8 +49,7 @@ export const reportContent = async (params: {
         } else {
             console.error('Error reporting content:', error);
         }
-        // Fallback for demo mode
-        return { success: true, id: 'mock_report_' + Date.now() };
+        throw error;
     }
 
     return { success: true, id: data.id };
@@ -66,12 +59,7 @@ export const reportContent = async (params: {
  * Block a user
  */
 export const blockUser = async (blockerId: string, blockedId: string) => {
-    // Skip real DB call in demo mode to avoid RLS error
-    if (blockerId === APP_CONFIG.demoCredentials.uid) {
-        return { success: true };
-    }
-
-    const { data, error } = await supabase
+    const { error } = await supabase
         .from('user_blocks')
         .insert({
             blocker_id: blockerId,
@@ -82,8 +70,7 @@ export const blockUser = async (blockerId: string, blockedId: string) => {
 
     if (error) {
         console.error('Error blocking user:', error);
-        // Fallback for demo mode or existing block
-        return { success: true };
+        throw error;
     }
 
     return { success: true };

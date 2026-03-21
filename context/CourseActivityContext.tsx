@@ -37,7 +37,7 @@ export const CourseActivityProvider: React.FC<{ children: React.ReactNode }> = (
                 return;
             }
 
-            const favoriteCourseIds = await loadCourseFavorites(resolvedUserId, !user?.isDemo);
+            const favoriteCourseIds = await loadCourseFavorites(resolvedUserId, true);
             const unreadMap = await getFavoriteCourseCommunityUnreadMap(resolvedUserId, favoriteCourseIds);
             setUnreadByCourse(unreadMap);
         } catch (error) {

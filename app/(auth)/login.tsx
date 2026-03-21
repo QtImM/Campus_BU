@@ -231,9 +231,13 @@ export default function LoginScreen() {
 
                     <View style={styles.footer}>
                         <Text style={styles.footerText}>{t('auth.agreement_prefix', '登录即代表同意 ')}</Text>
-                        <Text style={styles.link}>{t('auth.user_agreement', '用户协议')}</Text>
+                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                            <Text style={styles.link}>{t('auth.user_agreement', '用户协议')}</Text>
+                        </TouchableOpacity>
                         <Text style={styles.footerText}> {t('auth.and', '与')} </Text>
-                        <Text style={styles.link}>{t('auth.privacy_policy', '隐私政策')}</Text>
+                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
+                            <Text style={styles.link}>{t('auth.privacy_policy', '隐私政策')}</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </ScrollView>

@@ -1,6 +1,6 @@
 import { formatDistanceToNow } from 'date-fns';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Bell, Camera, ChevronRight, Copy, Edit3, Globe, Heart as HeartIcon, HelpCircle, LogOut, Mail, MessageSquare, Sparkles, X } from 'lucide-react-native';
+import { Bell, Camera, ChevronRight, Copy, Edit3, Globe, Heart as HeartIcon, HelpCircle, LogOut, Mail, MessageSquare, Shield, Sparkles, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Animated, Dimensions, FlatList, Image, InteractionManager, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
@@ -9,7 +9,6 @@ import { EduBadge } from '../../components/common/EduBadge';
 import MyScheduleCard from '../../components/profile/MyScheduleCard';
 import { useNotifications } from '../../context/NotificationContext';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
-import storage from '../../lib/storage';
 import { createUserProfile, getCurrentUser, getUserProfile, signOut, deleteAccount, uploadAndUpdateAvatar } from '../../services/auth';
 import { fetchNotifications, markAllAsRead, markAsRead, Notification, subscribeToNotifications } from '../../services/notifications';
 import { getPushNotificationsEnabled, setPushNotificationsEnabled as updatePushNotificationsEnabled } from '../../services/push_notifications';
@@ -22,7 +21,6 @@ import { ProfileTabs, ProfileTabType } from '../../components/profile/ProfileTab
 import { fetchAnonymousPostsByAuthor, fetchLikedPosts, fetchPostsByAuthor, togglePostLike } from '../../services/campus';
 import { Post, SOCIAL_TAGS, User as UserProfile } from '../../types';
 import { isAdmin, isHKBUEmail } from '../../utils/userUtils';
-const DEMO_MODE_KEY = 'hkcampus_demo_mode';
 
 // Helper to check if avatar URL is valid (not a local file path)
 const isValidAvatarUrl = (url?: string) => {
@@ -229,7 +227,6 @@ export default function ProfileScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         await signOut();
-                        await storage.removeItem(DEMO_MODE_KEY);
                         router.replace('/(auth)/login');
                     }
                 }
@@ -740,6 +737,14 @@ export default function ProfileScreen() {
 
                     {/* Settings */}
                     <View style={styles.section}>
+                        <TouchableOpacity
+                            style={styles.menuItem}
+                            onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}
+                        >
+                            <Shield size={20} color="#6B7280" />
+                            <Text style={styles.menuText}>{t('profile.privacy')}</Text>
+                            <ChevronRight size={20} color="#9CA3AF" />
+                        </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.menuItem}
                             onPress={() => setShowHelp(true)}

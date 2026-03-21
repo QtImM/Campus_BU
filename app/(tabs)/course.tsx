@@ -174,7 +174,7 @@ export default function CoursesScreen() {
     const loadFavorites = async () => {
         try {
             const user = await getCurrentUser();
-            const canRemote = !!user?.uid && !user?.isDemo;
+            const canRemote = !!user?.uid;
             setCurrentUserId(canRemote ? user.uid : null);
             setAllowRemoteFavorites(canRemote);
 

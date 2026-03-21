@@ -64,9 +64,9 @@ const ensureCourseExistsForTeaming = async (courseId?: string): Promise<{ resolv
         return { resolvedCourseId: existing.id };
     }
 
-    // Demo course doesn't exist in DB and should not be posted to FK-backed tables.
+    // Placeholder courses do not exist in the database and cannot be posted to FK-backed tables.
     if (courseId === '1') {
-        return { error: 'Demo course does not support teaming posts. Please choose a real course.' };
+        return { error: 'This course cannot accept teaming posts yet. Please choose a real course.' };
     }
 
     // Auto-create for local courses so FK remains valid.

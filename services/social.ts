@@ -1,45 +1,6 @@
 import { Message, User } from '../types';
 import { supabase } from './supabase';
 
-// Mock users for demo
-export const MOCK_USERS: Omit<User, 'createdAt'>[] = [
-    {
-        uid: 'user-1',
-        displayName: '小明',
-        socialTags: ['Library Ghost 📚', 'Coffee Addict ☕'],
-        major: 'MSc AI & ML',
-        avatarUrl: '',
-    },
-    {
-        uid: 'user-2',
-        displayName: 'Sarah',
-        socialTags: ['Canteen Philosopher 🍜', 'Night Owl 🦉'],
-        major: 'BBA Marketing',
-        avatarUrl: '',
-    },
-    {
-        uid: 'user-3',
-        displayName: '阿杰',
-        socialTags: ['Shaw Campus Runner 🏃', 'Morning Bird 🐦'],
-        major: 'Music Performance',
-        avatarUrl: '',
-    },
-    {
-        uid: 'user-4',
-        displayName: 'Emily',
-        socialTags: ['Milk Tea Connoisseur 🧋', 'Group Project Leader 👑'],
-        major: 'Communication',
-        avatarUrl: '',
-    },
-    {
-        uid: 'user-5',
-        displayName: '志豪',
-        socialTags: ['Deadline Fighter ⏰', 'Solo Warrior 🗡️'],
-        major: 'Computer Science',
-        avatarUrl: '',
-    },
-];
-
 // Get users for discovery (excluding current user)
 export const getDiscoverableUsers = async (currentUserId: string): Promise<Omit<User, 'createdAt'>[]> => {
     try {
@@ -50,8 +11,8 @@ export const getDiscoverableUsers = async (currentUserId: string): Promise<Omit<
             .limit(50);
 
         if (error) {
-            console.warn('Falling back to mock discoverable users:', error.message);
-            return MOCK_USERS.filter(user => user.uid !== currentUserId);
+            console.warn('Failed to load discoverable users:', error.message);
+            return [];
         }
 
         return (data || [])
@@ -65,8 +26,8 @@ export const getDiscoverableUsers = async (currentUserId: string): Promise<Omit<
                 email: row.email || undefined,
             }));
     } catch (error) {
-        console.warn('Failed to load discoverable users, using mock fallback:', error);
-        return MOCK_USERS.filter(user => user.uid !== currentUserId);
+        console.warn('Failed to load discoverable users:', error);
+        return [];
     }
 };
 
@@ -89,9 +50,6 @@ export const sendInteraction = async (
     type: InteractionType,
     message?: string
 ): Promise<string> => {
-    // Determine if we are in demo mode (could import isDemoMode, but here we can just check ID or fail gracefully)
-    // For now, implement Supabase logic but fallback safely
-
     try {
         const { data, error } = await supabase
             .from('interactions')
@@ -106,13 +64,12 @@ export const sendInteraction = async (
             .single();
 
         if (error) {
-            // If table doesn't exist (Supabase RLS/Schema issue), just mock success for Demo
-            console.warn('Supabase interaction failed, mocking success:', error.message);
-            return 'mock_interaction_' + Date.now();
+            console.warn('Supabase interaction failed:', error.message);
+            throw error;
         }
         return data.id;
     } catch (e) {
-        return 'mock_interaction_' + Date.now();
+        throw e;
     }
 };
 
@@ -169,12 +126,11 @@ export const sendMessage = async (
             .single();
 
         if (error) {
-            // Mock success
-            return 'mock_msg_' + Date.now();
+            throw error;
         }
         return data.id;
     } catch (e) {
-        return 'mock_msg_' + Date.now();
+        throw e;
     }
 };
 
@@ -214,12 +170,9 @@ export const subscribeToMessages = (
                 }));
                 callback(messages);
             } else {
-                callback([]); // Mock Empty
+                callback([]);
             }
         });
-
-    // Mock initial message for demo if empty
-    // callback([]);
 
     return () => {
         supabase.removeChannel(channel);

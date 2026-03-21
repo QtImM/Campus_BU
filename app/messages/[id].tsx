@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, Camera, FileText, Image as ImageIcon, MoreVertical, Plus, Send } from 'lucide-react-native';
@@ -29,7 +28,6 @@ import { useNotifications } from '../../context/NotificationContext';
 import { getCurrentUser } from '../../services/auth';
 import { reportContent, ReportReason } from '../../services/moderation';
 import {
-    createDirectFileMessageContent,
     createDirectImageMessageContent,
     deleteDirectMessage,
     fetchDirectMessages,
@@ -41,7 +39,6 @@ import {
     markConversationAsRead,
     sendDirectMessage,
     subscribeToDirectConversation,
-    uploadDirectMessageFile,
     uploadDirectMessageImage,
 } from '../../services/messages';
 import { DirectMessage, DirectMessagePeer } from '../../types';
@@ -298,47 +295,6 @@ export default function ChatScreen() {
             );
         } catch (error) {
             console.error('Error taking direct message photo:', error);
-        }
-    }, [conversationId, currentUser, peerUserId, sendOptimisticMessage, sending]);
-
-    const handlePickFile = useCallback(async () => {
-        if (!currentUser?.uid || !peerUserId || sending) {
-            return;
-        }
-
-        setShowAttachmentMenu(false);
-
-        try {
-            const result = await DocumentPicker.getDocumentAsync({
-                multiple: false,
-                copyToCacheDirectory: true,
-                type: '*/*',
-            });
-
-            if (result.canceled || !result.assets[0]?.uri) {
-                return;
-            }
-
-            const file = result.assets[0];
-            const uploadedFile = await uploadDirectMessageFile(file.uri, file.name, file.mimeType);
-            const optimisticMessage: DirectMessage = {
-                id: `temp-file-${Date.now()}`,
-                conversationId: conversationId || 'pending',
-                senderId: currentUser.uid,
-                receiverId: peerUserId,
-                content: createDirectFileMessageContent(uploadedFile),
-                createdAt: new Date(),
-                readAt: null,
-                senderName: currentUser.displayName || 'Me',
-                senderAvatar: currentUser.avatarUrl || currentUser.photoURL || '',
-            };
-
-            await sendOptimisticMessage(
-                optimisticMessage,
-                createDirectFileMessageContent(uploadedFile),
-            );
-        } catch (error) {
-            console.error('Error picking direct message file:', error);
         }
     }, [conversationId, currentUser, peerUserId, sendOptimisticMessage, sending]);
 
@@ -700,7 +656,7 @@ export default function ChatScreen() {
                         {
                             maxHeight: attachmentAnim.interpolate({
                                 inputRange: [0, 1],
-                                outputRange: [0, 184],
+                                outputRange: [0, 132],
                             }),
                             opacity: attachmentAnim,
                             paddingTop: attachmentAnim.interpolate({
@@ -739,16 +695,6 @@ export default function ChatScreen() {
                                 <Camera size={22} color="#475569" />
                             </View>
                             <Text style={styles.attachmentOptionText}>拍照</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.attachmentOption}
-                            activeOpacity={0.8}
-                            onPress={handlePickFile}
-                        >
-                            <View style={[styles.attachmentOptionIcon, styles.attachmentOptionIconBlue]}>
-                                <FileText size={22} color="#0284C7" />
-                            </View>
-                            <Text style={styles.attachmentOptionText}>文件</Text>
                         </TouchableOpacity>
                     </View>
                 </Animated.View>

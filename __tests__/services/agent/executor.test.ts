@@ -84,7 +84,7 @@ const mockFrom = jest.fn((table: string) => {
 
 jest.mock('../../../services/supabase', () => ({
     supabase: {
-        from: (...args: any[]) => mockFrom(...args),
+        from: (table: string) => mockFrom(table),
     },
 }));
 

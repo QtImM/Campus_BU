@@ -487,7 +487,7 @@ export const getReviewsAndHasReviewed = async (
 
 
 const resolveCourseIdForReviewQueries = async (courseId: string): Promise<string> => {
-    // Normal DB IDs and demo IDs can be queried directly.
+    // Normal database IDs and seeded placeholder IDs can be queried directly.
     if (!courseId || !courseId.startsWith('local_')) {
         return courseId;
     }
@@ -824,10 +824,10 @@ export const likeReview = async (reviewId: string, courseId: string, isUnlike: b
         }
     }
 
-    // Fallback if RPC not setup
+    // Fallback if RPC is not available
     if (error) {
         console.warn(`RPC ${rpcName} failed, falling back to manual update:`, error);
-        // Note: Manual update is less safe against concurrent likes but works for prototype
+        // Manual update is less safe against concurrent likes, but keeps the action usable.
         const { data } = await supabase.from('course_reviews').select('likes').eq('id', reviewId).single();
         const currentLikes = data?.likes || 0;
         const { error: updateError } = await supabase

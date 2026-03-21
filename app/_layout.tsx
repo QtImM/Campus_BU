@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -10,27 +9,16 @@ import { CourseActivityProvider } from '../context/CourseActivityContext';
 import { LoginPromptProvider } from '../context/LoginPromptContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import '../global.css';
-import { getUserProfile, isDemoMode, onAuthChange, shouldSkipAuthRedirect } from '../services/auth';
+import { getUserProfile, onAuthChange, shouldSkipAuthRedirect } from '../services/auth';
 import { prefetchBuildings } from '../services/buildings';
 import { prefetchLocalCourses } from '../services/courses';
 import './i18n/i18n'; // Initialize i18n
 import { i18nPromise } from './i18n/i18n';
 
-const DEMO_MODE_KEY = 'hkcampus_demo_mode';
-
 // Keep native splash visible until RootLayout mounts, then hide it without transition.
 void SplashScreen.preventAutoHideAsync().catch(() => {
   // ignore when splash screen is already controlled by the runtime
 });
-
-// Helper to set demo mode
-export const setDemoMode = async (enabled: boolean) => {
-  if (enabled) {
-    await AsyncStorage.setItem(DEMO_MODE_KEY, 'true');
-  } else {
-    await AsyncStorage.removeItem(DEMO_MODE_KEY);
-  }
-};
 
 export default function RootLayout() {
   const router = useRouter();
@@ -58,17 +46,6 @@ export default function RootLayout() {
     const checkAuth = async () => {
       // Ensure i18n is initialized
       await i18nPromise;
-
-      // Check for demo mode first
-      const demoMode = await isDemoMode();
-      if (demoMode) {
-        const inAuthGroup = segmentsRef.current[0] === '(auth)';
-        if (inAuthGroup) {
-          router.replace('/(tabs)/campus');
-        }
-        setLoading(false);
-        return;
-      }
 
       // Normal auth check
       const unsubscribe = onAuthChange(async (user) => {

@@ -1,14 +1,8 @@
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { APP_CONFIG } from '../constants/Config';
-import storage from '../lib/storage';
 import { User } from '../types';
 import { supabase } from './supabase';
-
-const DEMO_MODE_KEY = 'hkcampus_demo_mode';
-const BIOMETRIC_KEY = 'hkcampus_biometric_enabled';
-const BIOMETRIC_CRED_KEY = 'hkcampus_user_credentials';
 
 // Global flag to skip auth redirects during password reset flow
 let skipAuthRedirect = false;
@@ -18,16 +12,6 @@ export const setSkipAuthRedirect = (skip: boolean) => {
 };
 
 export const shouldSkipAuthRedirect = () => skipAuthRedirect;
-
-// Helper to check if we are in demo mode
-export const isDemoMode = async () => {
-    // Priority 1: Check global production config
-    if (!APP_CONFIG.useDemoAuth) return false;
-
-    // Priority 2: Check local persistence (for switching modes inside app)
-    const value = await storage.getItem(DEMO_MODE_KEY);
-    return value === 'true';
-};
 
 // Helper to generate a random Bustar nickname
 export const generateDefaultNickname = () => {
@@ -113,30 +97,11 @@ export const signUp = async (email: string, password: string) => {
 // Sign in
 export const signIn = async (email: string, password: string) => {
     const normalizedEmail = email.toLowerCase().trim();
-    // Check for our special Demo Credentials first
-    if (APP_CONFIG.useDemoAuth &&
-        normalizedEmail === APP_CONFIG.demoCredentials.email.toLowerCase() &&
-        password === APP_CONFIG.demoCredentials.password) {
-        const demoUser = {
-            id: APP_CONFIG.demoCredentials.uid,
-            uid: APP_CONFIG.demoCredentials.uid,
-            email: normalizedEmail,
-            displayName: 'Demo Admin',
-            isDemo: true
-        };
-        // Persist demo mode
-        await storage.setItem(DEMO_MODE_KEY, 'true');
-        return demoUser;
-    }
-
     const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password,
     });
     if (error) throw error;
-
-    // Clear demo mode if logging into a real account
-    await storage.removeItem(DEMO_MODE_KEY);
 
     return data.user ? { ...data.user, uid: data.user.id } : null;
 };
@@ -144,7 +109,6 @@ export const signIn = async (email: string, password: string) => {
 // Sign out
 export const signOut = async () => {
     await supabase.auth.signOut();
-    await storage.removeItem(DEMO_MODE_KEY);
 };
 
 // Delete account
@@ -287,24 +251,8 @@ export const onAuthChange = (callback: (user: any | null) => void) => {
     return () => data.subscription.unsubscribe();
 };
 
-// Get current user (Abstracted for Demo vs Real)
+// Get current user from the active Supabase session
 export const getCurrentUser = async () => {
-    const isDemo = await isDemoMode();
-    if (isDemo) {
-        const demoAvatar = 'https://ui-avatars.com/api/?name=Demo+Student&background=random';
-        return {
-            uid: APP_CONFIG.demoCredentials.uid,
-            displayName: 'Demo Student',
-            major: 'HKBU Student',
-            avatarUrl: demoAvatar,
-            photoURL: demoAvatar, // Backwards compatibility
-            isAnonymous: false,
-            isDemo: true,
-            email: APP_CONFIG.demoCredentials.email
-        };
-    }
-
-    // For Supabase, check session
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
         const user = session.user;

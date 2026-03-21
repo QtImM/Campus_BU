@@ -391,11 +391,10 @@ export default function CourseDetailScreen() {
             return;
         }
 
-        // Block only the demo ID '1'
-        const isDemoId = id === '1';
+        const isPlaceholderCourse = id === '1';
 
-        if (isDemoId) {
-            Alert.alert('Demo Mode', 'This course is for demonstration. To enable real reviews, please add this course through the "Add Course" menu first.');
+        if (isPlaceholderCourse) {
+            Alert.alert('Unavailable', 'Reviews are not available for this course yet. Please add the course from the "Add Course" menu first.');
             return;
         }
 

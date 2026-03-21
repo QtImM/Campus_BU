@@ -141,7 +141,7 @@ export default function AddFoodScreen() {
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
-                    {/* Fallback input if not in chips, simplified for demo */}
+                    {/* Fallback input when the preset chips do not fit */}
                 </View>
 
                 <View style={styles.formGroup}>
