@@ -1,4 +1,5 @@
 import { ForumCategory, ForumComment, ForumPost, ForumSort } from '../types';
+import { compressImageForUpload } from '../utils/image';
 import { getFollowingUserIds } from './follows';
 import { supabase } from './supabase';
 
@@ -307,12 +308,14 @@ export const deleteForumComment = async (commentId: string, postId: string) => {
 
 // ── Upload image (reuses campus Storage bucket under forum/ prefix) ────────────
 export const uploadForumImage = async (uri: string): Promise<string> => {
+    const compressedUri = await compressImageForUpload(uri, 'feed');
+
     const arrayBuffer: ArrayBuffer = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.onload = () => resolve(xhr.response);
         xhr.onerror = () => reject(new TypeError('Network request failed'));
         xhr.responseType = 'arraybuffer';
-        xhr.open('GET', uri, true);
+        xhr.open('GET', compressedUri, true);
         xhr.send(null);
     });
 

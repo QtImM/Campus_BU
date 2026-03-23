@@ -2,6 +2,7 @@ import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { User } from '../types';
+import { compressImageForUpload } from '../utils/image';
 import { supabase } from './supabase';
 
 // Global flag to skip auth redirects during password reset flow
@@ -296,6 +297,8 @@ const isLocalFilePath = (uri: string): boolean => {
  */
 export const uploadUserAvatar = async (userId: string, imageUri: string): Promise<string> => {
     try {
+        const compressedUri = await compressImageForUpload(imageUri, 'avatar');
+
         // Create a unique filename: userId/timestamp.jpg
         const timestamp = Date.now();
         const fileName = `${userId}/avatar_${timestamp}.jpg`;
@@ -318,7 +321,7 @@ export const uploadUserAvatar = async (userId: string, imageUri: string): Promis
         }
 
         // Read the file as base64 using expo-file-system (most reliable in React Native)
-        const base64Data = await FileSystem.readAsStringAsync(imageUri, {
+        const base64Data = await FileSystem.readAsStringAsync(compressedUri, {
             encoding: 'base64',
         });
 

@@ -25,3 +25,33 @@ export const compressImage = async (uri: string) => {
         return uri; // Fallback to original URI if compression fails
     }
 };
+
+type ImageCompressionPreset = 'avatar' | 'feed' | 'detail';
+
+const PRESET_CONFIG: Record<ImageCompressionPreset, { width: number; compress: number }> = {
+    avatar: { width: 256, compress: 0.6 },
+    feed: { width: 1280, compress: 0.68 },
+    detail: { width: 1600, compress: 0.75 },
+};
+
+export const compressImageForUpload = async (
+    uri: string,
+    preset: ImageCompressionPreset = 'feed'
+): Promise<string> => {
+    try {
+        const config = PRESET_CONFIG[preset];
+        const result = await ImageManipulator.manipulateAsync(
+            uri,
+            [{ resize: { width: config.width } }],
+            {
+                compress: config.compress,
+                format: ImageManipulator.SaveFormat.JPEG,
+            }
+        );
+
+        return result.uri;
+    } catch (error) {
+        console.error(`Image compression failed for preset "${preset}":`, error);
+        return uri;
+    }
+};

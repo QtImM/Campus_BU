@@ -1,4 +1,5 @@
 import { Post, PostCategory, PostComment, PostType } from '../types';
+import { compressImageForUpload } from '../utils/image';
 import { getFollowingUserIds } from './follows';
 import { getBlockedUserIds } from './moderation';
 import { supabase } from './supabase';
@@ -455,7 +456,8 @@ export const createPost = async (postData: {
  */
 export const uploadPostImage = async (uri: string): Promise<string> => {
     try {
-        console.log('Starting image upload for URI:', uri);
+        const compressedUri = await compressImageForUpload(uri, 'feed');
+        console.log('Starting image upload for URI:', compressedUri);
 
         // Use ArrayBuffer for more reliable binary handling in some RN environments
         const arrayBuffer: ArrayBuffer = await new Promise((resolve, reject) => {
@@ -468,7 +470,7 @@ export const uploadPostImage = async (uri: string): Promise<string> => {
                 reject(new TypeError('Network request failed'));
             };
             xhr.responseType = 'arraybuffer';
-            xhr.open('GET', uri, true);
+            xhr.open('GET', compressedUri, true);
             xhr.send(null);
         });
 
