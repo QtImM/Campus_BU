@@ -232,4 +232,62 @@
 
 但它仍然是第一版工程实现，不是最终版。
 
-需要继续优化的部分，已经集中整理到 [`services/agent/TODO.md`](/Users/xuweining/CodeBuddy/20260324190324/Campus_BU/services/agent/TODO.md)。
+需要继续优化的部分，已经集中整理到 [`services/agent/TODO.md`](/Campus_BU/services/agent/TODO.md)。
+
+---
+
+## 成本控制量化结论（current vs `old-896038f7`）
+
+### 结论
+
+- 已实现成本控制能力（缓存、本地路由、稳定子任务、模型分层、会话压缩均已落地）。
+- 质量侧证据明确改善，且时延基本不变，说明降本策略没有引入明显性能退化。
+- 目前还缺 token/金额级埋点，无法给出“每次对话节省金额”这一最终财务指标。
+
+### 已执行的同口径对比测试
+
+共同测试集（两边都存在）：
+
+- `__tests__/services/agent/executor.test.ts`
+- `__tests__/services/ai-ocr.test.ts`
+- `__tests__/services/campus.test.ts`
+- `__tests__/services/moderation.test.ts`
+
+对比结果：
+
+- current：36/38 通过，2 失败，4 套件中 2 套通过，端到端总时长 4420 ms
+- old-896038f7：14/19 通过，5 失败，4 套件中 1 套通过，端到端总时长 4457 ms
+
+量化差异：
+
+- 用例通过率：94.74% vs 73.68%（+21.06 个百分点）
+- 套件通过率：50.00% vs 25.00%（+25.00 个百分点）
+- 失败用例数：2 vs 5（下降 60%）
+- 可对比测试覆盖规模：38 vs 19（+100%）
+- 端到端总时长：4420 ms vs 4457 ms（-37 ms，-0.83%）
+
+### 如何继续完成“成本金额”量化
+
+建议补 telemetry 字段：
+
+- `requestId`
+- `path`（pending/stable_task/local_rule/intent_route/cache/llm）
+- `modelName`
+- `promptTokens`
+- `completionTokens`
+- `totalTokens`
+- `cacheHit`
+- `latencyMs`
+
+计算口径：
+
+- 单次成本 = `promptTokens * inputPrice + completionTokens * outputPrice`
+- 平均成本 = `sum(单次成本) / 请求数`
+- 成本降幅 = `1 - avgCost(current) / avgCost(old)`
+
+达标阈值（建议）：
+
+- 平均成本下降 >= 35%
+- 平均 total token 下降 >= 30%
+- 高阶模型调用率 <= 25%
+- 缓存命中率 >= 35%
