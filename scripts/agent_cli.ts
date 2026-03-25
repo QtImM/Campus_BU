@@ -4,6 +4,7 @@ import Module from 'module';
 import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import { getAgentCacheStats } from '../services/agent/cache';
+import { AGENT_CONFIG } from '../services/agent/config';
 import { classifyIntent } from '../services/agent/router';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -30,6 +31,7 @@ const printDivider = () => {
 
 const formatStep = (step: any, index: number) => {
     const parts = [`[${index + 1}]`];
+    if (step.path) parts.push(`path=${step.path}`);
     if (step.modelTier) parts.push(`tier=${step.modelTier}`);
     if (step.modelName) parts.push(`model=${step.modelName}`);
     if (step.routeReason) parts.push(`route=${step.routeReason}`);
@@ -38,6 +40,18 @@ const formatStep = (step: any, index: number) => {
     if (step.observation) parts.push(`observation=${String(step.observation).slice(0, 160)}`);
     if (step.reply) parts.push(`reply=${String(step.reply).slice(0, 160)}`);
     return parts.join(' | ');
+};
+
+const summarizeDebugFlags = (steps: any[]) => {
+    const hasPath = (path: string) => steps.some(step => step.path === path);
+    return {
+        localRuleHit: hasPath('local_rule'),
+        stableTaskHit: hasPath('stable_task'),
+        cacheHit: hasPath('cache'),
+        pendingFlowHit: hasPath('pending'),
+        intentRouteHit: hasPath('intent_route'),
+        llmHit: hasPath('llm'),
+    };
 };
 
 async function main() {
@@ -53,6 +67,11 @@ async function main() {
     console.log('Agent CLI 调试模式');
     console.log('输入问题后回车。输入 /exit 退出，/stats 查看缓存统计。');
     console.log(`当前 userId: ${userId}`);
+    console.log('当前模型配置:', {
+        fast: AGENT_CONFIG.FAST_MODEL,
+        reasoning: AGENT_CONFIG.REASONING_MODEL,
+        deepseekEnabled: AGENT_CONFIG.DEEPSEEK_ENABLED,
+    });
 
     const runPrompt = async (prompt: string) => {
         const routeDecision = classifyIntent(prompt);
@@ -85,6 +104,9 @@ async function main() {
                 console.log(formatStep(step, index));
             });
         }
+
+        printDivider();
+        console.log('调试标记:', summarizeDebugFlags(response.steps));
 
         printDivider();
         console.log('缓存统计:', getAgentCacheStats());

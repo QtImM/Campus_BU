@@ -18,7 +18,7 @@ import { buildResponseCacheKey, buildToolCacheKey } from './cache_keys';
 import { classifyIntent, selectModelRoute } from './router';
 import { createInitialSessionState, formatSessionState, updateSessionStateWithTurn } from './session_state';
 import { inferStableTask } from './stable_tasks';
-import { summarizeHistory } from './summarizer';
+import { refineHistorySummary, summarizeHistory } from './summarizer';
 import { TOOLS } from './tools';
 import { AgentContext, AgentGeoPoint, AgentResponse, AgentStep } from './types';
 import { ContactMethod, Course, CourseTeaming, Review } from '../../types';
@@ -471,6 +471,7 @@ export class AgentExecutor {
     } as const;
     private pendingCourseAction: PendingCourseAction | null = null;
     private pendingWriteAction: PendingWriteAction | null = null;
+    private turnsSinceSummaryRefresh = 0;
 
     constructor(userId: string) {
         this.context = {
@@ -491,13 +492,36 @@ export class AgentExecutor {
         const item = { role, content } as const;
         this.context.history.push(item);
         this.context.sessionState = updateSessionStateWithTurn(this.context.sessionState, item);
+        if (role === 'user' && this.context.historySummary) {
+            this.turnsSinceSummaryRefresh += 1;
+        }
         if (this.context.history.length > AgentExecutor.MAX_HISTORY_ITEMS) {
             const summarized = summarizeHistory(this.context.history, {
                 keepRecent: AgentExecutor.MAX_RECENT_HISTORY_ITEMS,
             });
             this.context.historySummary = [this.context.historySummary, summarized.summary].filter(Boolean).join('\n');
+            this.context.sessionState.summary = this.context.historySummary;
             this.context.history = summarized.recentHistory;
         }
+    }
+
+    private async maybeRefreshHistorySummary(): Promise<void> {
+        if (!this.context.historySummary || this.turnsSinceSummaryRefresh < 2) {
+            return;
+        }
+
+        const refinedSummary = await refineHistorySummary({
+            historySummary: this.context.historySummary,
+            recentHistory: this.context.history,
+            sessionStateText: formatSessionState(this.context.sessionState),
+        });
+
+        if (refinedSummary) {
+            this.context.historySummary = refinedSummary;
+            this.context.sessionState.summary = refinedSummary;
+        }
+
+        this.turnsSinceSummaryRefresh = 0;
     }
 
     private getRecentConversationContext(): string {
@@ -520,6 +544,7 @@ export class AgentExecutor {
      */
     async process(prompt: string, onUpdate?: (text: string) => void): Promise<AgentResponse> {
         this.pushHistory('user', prompt);
+        await this.maybeRefreshHistorySummary();
 
         const pendingWriteResponse = await this.continuePendingWriteAction(prompt);
         if (pendingWriteResponse) {
@@ -587,12 +612,13 @@ export class AgentExecutor {
             if (cachedReply) {
                 this.pushHistory('assistant', cachedReply);
                 return {
-                    steps: [{
-                        thought: '命中低风险回复缓存',
-                        reply: cachedReply,
-                    }],
-                    finalAnswer: cachedReply,
-                };
+                steps: [{
+                    thought: '命中低风险回复缓存',
+                    reply: cachedReply,
+                    path: 'cache',
+                }],
+                finalAnswer: cachedReply,
+            };
             }
         }
 
@@ -654,7 +680,8 @@ export class AgentExecutor {
             return {
                 steps: [{
                     thought: '本地命中课程社区发布请求',
-                    reply: response
+                    reply: response,
+                    path: 'local_rule',
                 }],
                 finalAnswer: response
             };
@@ -665,7 +692,8 @@ export class AgentExecutor {
             return {
                 steps: [{
                     thought: '本地命中日期查询',
-                    reply: observation
+                    reply: observation,
+                    path: 'local_rule',
                 }],
                 finalAnswer: observation
             };
@@ -681,7 +709,8 @@ export class AgentExecutor {
                         input: { query: prompt }
                     },
                     observation,
-                    reply: observation
+                    reply: observation,
+                    path: 'local_rule',
                 }],
                 finalAnswer: observation
             };
@@ -697,7 +726,8 @@ export class AgentExecutor {
                         input: { query: prompt }
                     },
                     observation,
-                    reply: observation
+                    reply: observation,
+                    path: 'local_rule',
                 }],
                 finalAnswer: observation
             };
@@ -713,7 +743,8 @@ export class AgentExecutor {
                         input: { query: prompt }
                     },
                     observation,
-                    reply: observation
+                    reply: observation,
+                    path: 'local_rule',
                 }],
                 finalAnswer: observation
             };
@@ -729,7 +760,8 @@ export class AgentExecutor {
                         input: { query: prompt }
                     },
                     observation,
-                    reply: observation
+                    reply: observation,
+                    path: 'local_rule',
                 }],
                 finalAnswer: observation
             };
@@ -745,7 +777,8 @@ export class AgentExecutor {
                         input: { query: prompt }
                     },
                     observation,
-                    reply: observation
+                    reply: observation,
+                    path: 'local_rule',
                 }],
                 finalAnswer: observation
             };
@@ -766,6 +799,7 @@ export class AgentExecutor {
                     thought: '命中稳定子任务：记忆写入',
                     reply,
                     routeReason: decision.reason,
+                    path: 'stable_task',
                 }],
                 finalAnswer: reply,
             };
@@ -788,8 +822,27 @@ export class AgentExecutor {
                     thought: '命中稳定子任务：记忆读取',
                     reply,
                     routeReason: decision.reason,
+                    path: 'stable_task',
                 }],
                 finalAnswer: reply,
+            };
+        }
+
+        if (decision.type === 'faq_lookup' && !hasCompositeIntent) {
+            const observation = await this.executeTool('search_campus_faq', { query: decision.normalizedQuery });
+            return {
+                steps: [{
+                    thought: `命中稳定子任务：FAQ 查询规范化 (${decision.topic})`,
+                    routeReason: decision.reason,
+                    action: {
+                        tool: 'search_campus_faq',
+                        input: { query: decision.normalizedQuery },
+                    },
+                    observation,
+                    reply: observation,
+                    path: 'stable_task',
+                }],
+                finalAnswer: observation,
             };
         }
 
@@ -812,6 +865,7 @@ export class AgentExecutor {
                 },
                 observation,
                 reply: observation,
+                path: 'intent_route',
             }],
             finalAnswer: observation,
         };
@@ -820,7 +874,9 @@ export class AgentExecutor {
     private async continuePendingWriteAction(prompt: string): Promise<AgentResponse | null> {
         if (!this.pendingWriteAction) return null;
 
-        if (isCancelActionQuery(prompt)) {
+        const stableDecision = inferStableTask(prompt);
+
+        if (stableDecision.type === 'write_confirmation' && stableDecision.intent === 'cancel') {
             this.pendingWriteAction = null;
             this.pendingCourseAction = null;
             const reply = '已取消这次写入操作。你如果想改内容，直接重新告诉我，我会先给你确认稿。';
@@ -828,17 +884,21 @@ export class AgentExecutor {
                 steps: [{
                     thought: '用户取消待确认写入',
                     reply,
+                    routeReason: stableDecision.reason,
+                    path: 'pending',
                 }],
                 finalAnswer: reply,
             };
         }
 
-        if (isConfirmActionQuery(prompt)) {
+        if (stableDecision.type === 'write_confirmation' && stableDecision.intent === 'confirm') {
             const reply = await this.executePendingWriteAction();
             return {
                 steps: [{
                     thought: '用户确认执行写入',
                     reply,
+                    routeReason: stableDecision.reason,
+                    path: 'pending',
                 }],
                 finalAnswer: reply,
             };
@@ -854,6 +914,7 @@ export class AgentExecutor {
                 steps: [{
                     thought: '用户修改待确认内容',
                     reply: response,
+                    path: 'pending',
                 }],
                 finalAnswer: response,
             };
@@ -865,6 +926,7 @@ export class AgentExecutor {
             steps: [{
                 thought: '待确认记忆写入被改写',
                 reply,
+                path: 'pending',
             }],
             finalAnswer: reply,
         };
@@ -873,12 +935,16 @@ export class AgentExecutor {
     private async continuePendingCourseAction(prompt: string): Promise<AgentResponse | null> {
         if (!this.pendingCourseAction) return null;
 
-        if (isCancelActionQuery(prompt)) {
+        const stableDecision = inferStableTask(prompt);
+
+        if (stableDecision.type === 'write_confirmation' && stableDecision.intent === 'cancel') {
             this.pendingCourseAction = null;
             return {
                 steps: [{
                     thought: '用户取消了待发布操作',
-                    reply: '已取消这次发布操作。你之后随时告诉我课程和内容，我再帮你发。'
+                    reply: '已取消这次发布操作。你之后随时告诉我课程和内容，我再帮你发。',
+                    routeReason: stableDecision.reason,
+                    path: 'pending',
                 }],
                 finalAnswer: '已取消这次发布操作。你之后随时告诉我课程和内容，我再帮你发。'
             };
@@ -888,7 +954,8 @@ export class AgentExecutor {
         return {
             steps: [{
                 thought: '继续补全课程社区发布信息',
-                reply: response
+                reply: response,
+                path: 'pending',
             }],
             finalAnswer: response
         };
@@ -1592,6 +1659,7 @@ Model route:
                 modelTier: modelRoute.tier,
                 modelName,
                 routeReason: modelRoute.reason,
+                path: 'llm',
             };
         } catch (e) {
             console.error('[Agent] Real LLM call failed, falling back to basic mock.', e);
@@ -1600,6 +1668,7 @@ Model route:
                 modelTier: modelRoute.tier,
                 modelName,
                 routeReason: modelRoute.reason,
+                path: 'llm',
             };
         }
     }

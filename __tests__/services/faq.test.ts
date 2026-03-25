@@ -1,7 +1,24 @@
+jest.mock('../../services/agent/embeddings', () => ({
+    embedText: jest.fn(),
+}));
+
+jest.mock('../../services/supabase', () => ({
+    supabase: {
+        rpc: jest.fn(),
+        from: jest.fn(),
+    },
+}));
+
 import { FAQService } from '../../services/faq';
+import { embedText } from '../../services/agent/embeddings';
 import { rerankKnowledgeBaseResults } from '../../services/agent/retrieval';
+import { supabase } from '../../services/supabase';
 
 describe('FAQ retrieval formatting', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
     it('reranks knowledge base rows by query relevance', () => {
         const ranked = rerankKnowledgeBaseResults('GPA 怎么算', [
             {
@@ -63,5 +80,51 @@ describe('FAQ retrieval formatting', () => {
 
         expect(answer).toContain('结论：Semester GPA is calculated');
         expect(answer).not.toContain('结论：这是图书馆介绍。');
+    });
+
+    it('uses vector rpc retrieval when embedding is available', async () => {
+        (embedText as jest.Mock).mockResolvedValue([0.1, 0.2, 0.3]);
+        (supabase.rpc as jest.Mock).mockResolvedValue({
+            data: [
+                {
+                    content: 'Semester GPA is calculated by total grade points divided by total credits attempted.',
+                    metadata: { h2: '评分制度与GPA' },
+                    similarity: 0.92,
+                },
+            ],
+            error: null,
+        });
+
+        const results = await FAQService.searchKnowledgeBase('GPA 怎么算？');
+
+        expect(embedText).toHaveBeenCalledWith('GPA 怎么算？');
+        expect(supabase.rpc).toHaveBeenCalledWith('match_knowledge_base', {
+            query_embedding: [0.1, 0.2, 0.3],
+            match_threshold: 0.55,
+            match_count: 8,
+        });
+        expect(results[0].content).toContain('Semester GPA');
+    });
+
+    it('falls back to keyword search when vector rpc is unavailable', async () => {
+        (embedText as jest.Mock).mockRejectedValue(new Error('embedding unavailable'));
+        const limit = jest.fn().mockResolvedValue({
+            data: [
+                {
+                    content: 'Library opening hours vary by semester.',
+                    metadata: { h2: 'Library' },
+                },
+            ],
+            error: null,
+        });
+        const or = jest.fn(() => ({ limit }));
+        const select = jest.fn(() => ({ or }));
+        (supabase.from as jest.Mock).mockReturnValue({ select });
+
+        const results = await FAQService.searchKnowledgeBase('图书馆几点开门？');
+
+        expect(supabase.rpc).not.toHaveBeenCalled();
+        expect(supabase.from).toHaveBeenCalledWith('agent_knowledge_base');
+        expect(results[0].content).toContain('Library opening hours');
     });
 });

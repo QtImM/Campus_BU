@@ -219,9 +219,29 @@ export const FAQService = {
      * Uses ILIKE for fast keyword matching on the 73 ingested chunks.
      */
     async searchKnowledgeBase(query: string) {
-        const { supabase } = await import('./supabase');
-        const searchTerms = expandRetrievalTerms(query);
+        const { supabase } = require('./supabase');
+        try {
+            const { embedText } = require('./agent/embeddings');
+            const queryEmbedding = await embedText(query);
 
+            if (queryEmbedding.length > 0) {
+                const { data, error } = await supabase.rpc('match_knowledge_base', {
+                    query_embedding: queryEmbedding,
+                    match_threshold: 0.55,
+                    match_count: 8,
+                });
+
+                if (error) {
+                    console.error('[FAQService] match_knowledge_base rpc error:', error);
+                } else if (Array.isArray(data) && data.length > 0) {
+                    return rerankKnowledgeBaseResults(query, data);
+                }
+            }
+        } catch (error) {
+            console.warn('[FAQService] Vector knowledge base retrieval unavailable, falling back to keyword search.', error);
+        }
+
+        const searchTerms = expandRetrievalTerms(query);
         let dbQuery = supabase
             .from('agent_knowledge_base')
             .select('content, metadata');

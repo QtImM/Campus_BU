@@ -11,6 +11,9 @@
 - 模型分层
 - 会话压缩
 - FAQ / 知识库标准化检索
+- 向量召回 + 轻量重排
+- 轻量模型摘要
+- CLI 调试显式化
 
 当前主执行顺序大致为：
 
@@ -158,6 +161,42 @@
 
 ---
 
+## 第七阶段完成内容
+
+目标：补齐检索、摘要和调试链路，让 agent 更接近真实可运维状态。
+
+已完成：
+
+- Supabase 侧补充 `match_knowledge_base` RPC 加固 SQL
+- FAQ 检索改为优先走 pgvector RPC，再做本地轻量重排
+- 向量检索不可用时自动回退到关键词检索，避免线上直接失效
+- 规则式长对话摘要升级为：
+  - 规则摘要保底
+  - fast model 定期生成结构化摘要
+- 稳定子任务扩展到：
+  - FAQ query 规范化
+  - 写操作确认 / 取消识别
+- CLI 增加显式调试信息：
+  - path 命中路径
+  - 本地规则 / 稳定子任务 / 缓存 / pending / intent route / llm 命中标记
+  - 当前模型配置
+- 增加对应 FAQ / 执行器回归测试
+
+主要涉及文件：
+
+- `supabase/migrations/20260325_agent_kb_rpc_hardening.sql`
+- `services/faq.ts`
+- `services/agent/embeddings.ts`
+- `services/agent/summarizer.ts`
+- `services/agent/stable_tasks.ts`
+- `services/agent/executor.ts`
+- `services/agent/types.ts`
+- `scripts/agent_cli.ts`
+- `__tests__/services/faq.test.ts`
+- `__tests__/services/agent/executor.test.ts`
+
+---
+
 ## 测试与调试
 
 已完成：
@@ -165,6 +204,8 @@
 - 回归测试覆盖执行器主流程
 - FAQ 检索层单测
 - 终端临时调试脚本
+- 向量 RPC / 回退检索测试
+- 轻量模型摘要测试
 
 当前可用命令：
 
@@ -185,7 +226,9 @@
 - 模型分层
 - 会话压缩
 - 检索标准化
+- 向量召回接入
 - 稳定子任务本地化
+- 显式调试路径输出
 
 但它仍然是第一版工程实现，不是最终版。
 

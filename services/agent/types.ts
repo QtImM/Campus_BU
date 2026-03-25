@@ -20,6 +20,7 @@ export type AgentStep = {
     modelTier?: 'fast' | 'reasoning';
     modelName?: string;
     routeReason?: string;
+    path?: 'pending' | 'stable_task' | 'local_rule' | 'intent_route' | 'cache' | 'llm';
     action?: {
         tool: string;
         input: any;

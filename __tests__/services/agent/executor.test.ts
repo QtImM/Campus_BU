@@ -1,10 +1,12 @@
 import { AgentExecutor } from '../../../services/agent/executor';
 import { FAQService } from '../../../services/faq';
-import { callDeepSeekStream } from '../../../services/agent/llm';
+import { AGENT_CONFIG } from '../../../services/agent/config';
+import { callDeepSeek, callDeepSeekStream } from '../../../services/agent/llm';
 import { clearAgentCache, getAgentCacheStats } from '../../../services/agent/cache';
 import { getMemoryFact } from '../../../services/agent/memory';
 
 jest.mock('../../../services/agent/llm', () => ({
+    callDeepSeek: jest.fn(),
     callDeepSeekStream: jest.fn(),
     resolveModelName: jest.fn((tier: 'fast' | 'reasoning') => tier === 'fast' ? 'mock-fast-model' : 'mock-reasoning-model'),
 }));
@@ -124,6 +126,8 @@ describe('AgentExecutor course publishing flow', () => {
         mockFetchTeamingRequests.mockResolvedValue([]);
         mockPostTeamingRequest.mockResolvedValue({ success: true, data: { id: 'team-1' } });
         mockInsert.mockResolvedValue({ error: null });
+        (callDeepSeek as jest.Mock).mockReset();
+        AGENT_CONFIG.DEEPSEEK_ENABLED = false;
     });
 
     it('asks for course code when user says 我想组队 without usable context', async () => {
@@ -520,6 +524,21 @@ describe('AgentExecutor course publishing flow', () => {
         expect(executor.getRecentConversationContext()).toContain('Structured session state');
     });
 
+    it('upgrades long-conversation summary with fast model when available', async () => {
+        AGENT_CONFIG.DEEPSEEK_ENABLED = true;
+        (callDeepSeek as jest.Mock).mockResolvedValue('{"summary":"User previously discussed COMP3015 and still has an unresolved course question."}');
+        const executor = new AgentExecutor('user-1') as any;
+
+        for (let i = 0; i < 14; i += 1) {
+            executor.pushHistory('user', `message-${i}`);
+        }
+
+        await executor.process('HKBU 是哪一年成立的？');
+
+        expect(callDeepSeek).toHaveBeenCalled();
+        expect(executor.context.historySummary).toContain('Model conversation summary');
+    });
+
     it('tracks referenced course in session state', async () => {
         const executor = new AgentExecutor('user-1') as any;
 
@@ -570,6 +589,28 @@ describe('AgentExecutor course publishing flow', () => {
 
         expect(response.finalAnswer).toContain('Computer Science');
         expect(response.steps[0].routeReason).toContain('memory read');
+        expect(callDeepSeekStream).not.toHaveBeenCalled();
+    });
+
+    it('handles normalized FAQ lookup via stable subtask without calling the LLM', async () => {
+        const executor = new AgentExecutor('user-1');
+        (FAQService.searchFAQs as jest.Mock).mockReturnValue([
+            {
+                id: 'faq-main-lib',
+                question: 'When does the library open?',
+                question_zh: '图书馆几点开门？',
+                answer: 'Check opening hours.',
+                answer_zh: '图书馆开放时间会按学期调整。',
+                keywords: ['library', '图书馆'],
+            },
+        ]);
+        (FAQService.searchKnowledgeBase as jest.Mock).mockResolvedValue([]);
+
+        const response = await executor.process('main lib 开门时间');
+
+        expect(response.steps[0].path).toBe('stable_task');
+        expect(response.steps[0].action?.tool).toBe('search_campus_faq');
+        expect(response.steps[0].routeReason).toContain('stable faq lookup');
         expect(callDeepSeekStream).not.toHaveBeenCalled();
     });
 
