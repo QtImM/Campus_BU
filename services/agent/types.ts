@@ -17,6 +17,9 @@ export type ToolDefinition = {
 export type AgentStep = {
     thought?: string;
     reply?: string;
+    modelTier?: 'fast' | 'reasoning';
+    modelName?: string;
+    routeReason?: string;
     action?: {
         tool: string;
         input: any;
@@ -31,6 +34,22 @@ export type AgentResponse = {
     quickReplies?: string[];
 };
 
+export type AgentHistoryItem = {
+    role: 'user' | 'assistant' | 'tool';
+    content: string;
+};
+
+export type AgentSessionState = {
+    goal?: string;
+    activeTask?: string;
+    facts: Record<string, string>;
+    recentDecisions: string[];
+    openLoops: string[];
+    referencedCourse?: string;
+    referencedBuilding?: string;
+    summary?: string;
+};
+
 export interface AgentGeoPoint {
     latitude: number;
     longitude: number;
@@ -39,6 +58,8 @@ export interface AgentGeoPoint {
 export interface AgentContext {
     userId: string;
     sessionId: string;
-    history: { role: 'user' | 'assistant' | 'tool'; content: string }[];
+    history: AgentHistoryItem[];
+    historySummary?: string;
+    sessionState: AgentSessionState;
     deviceLocation?: AgentGeoPoint | null;
 }

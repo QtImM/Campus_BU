@@ -11,8 +11,14 @@ import {
     isNearbyPlaceQuery,
 } from './campus_queries';
 // import { CozeService } from './coze';
-import { callDeepSeekStream } from './llm';
-import { getAllUserFacts, saveMemoryFact } from './memory';
+import { callDeepSeekStream, resolveModelName } from './llm';
+import { getAllUserFacts, getMemoryFact, saveMemoryFact } from './memory';
+import { getCachedValue, getOrSetCachedValue, setCachedValue } from './cache';
+import { buildResponseCacheKey, buildToolCacheKey } from './cache_keys';
+import { classifyIntent, selectModelRoute } from './router';
+import { createInitialSessionState, formatSessionState, updateSessionStateWithTurn } from './session_state';
+import { inferStableTask } from './stable_tasks';
+import { summarizeHistory } from './summarizer';
 import { TOOLS } from './tools';
 import { AgentContext, AgentGeoPoint, AgentResponse, AgentStep } from './types';
 import { ContactMethod, Course, CourseTeaming, Review } from '../../types';
@@ -200,6 +206,24 @@ const isCourseCommunityQuery = (query: string): boolean => {
     const hasCourseIdentity = Boolean(extractCourseCode(query)) || /这门课|這門課|这堂课|這堂課|课程|課程/.test(query);
     const hasCommunityIntent = /评价|評價|点评|點評|review|reviews|聊天室|群聊|chatroom|chat|message|teaming|组队|組隊|队友|隊友|口碑|怎么样|怎麼樣|如何|值得上吗|值得上嗎|好不好|活跃吗|活躍嗎/.test(query);
     return hasCommunityIntent && hasCourseIdentity;
+};
+
+const isCampusFaqQuery = (query: string): boolean => {
+    return /图书馆|圖書館|library|main lib|gpa|绩点|績點|平均分|校历|校曆|academic calendar|calendar|add\/drop|add drop|选课|選課|reg course|注册|註冊|学费|學費|tuition|fee|奖学金|獎學金|financial aid|资助|資助|宿舍|住宿|hall\b|residence|wifi|eduroam|internet|网络|網絡|it service|it support|ito|邮箱|郵箱|email|成绩单|成績單|transcript|student handbook|handbook|学生手册|學生手冊|admission|入学|入學|accept offer|录取|錄取|签证|簽證|visa|iang/i.test(query);
+};
+
+const isPersonalizedPrompt = (query: string): boolean => {
+    return /我的|我嘅|my\b|me\b|帮我|幫我|替我|我的课表|我的課表|我今天|我明天|我的成绩|我的成績|我的课程|我的課程/.test(query.toLowerCase());
+};
+
+const isLowRiskResponseCacheable = (query: string, historyLength: number): boolean => {
+    if (historyLength !== 1) return false;
+    if (isPersonalizedPrompt(query)) return false;
+    if (detectCoursePublishIntent(query)) return false;
+    if (isScheduleQuery(query) || isCourseCommunityQuery(query) || isNearbyPlaceQuery(query) || isBuildingInfoQuery(query)) {
+        return false;
+    }
+    return query.trim().length > 0;
 };
 
 const detectCoursePublishIntent = (query: string): CoursePublishIntent | null => {
@@ -435,7 +459,16 @@ const buildCourseCommunityIdCandidates = async (course: Course, query: string): 
  */
 export class AgentExecutor {
     private context: AgentContext;
-    private static readonly MAX_HISTORY_ITEMS = 16;
+    private static readonly MAX_HISTORY_ITEMS = 12;
+    private static readonly MAX_RECENT_HISTORY_ITEMS = 6;
+    private static readonly CACHE_TTLS = {
+        read_user_schedule: 60 * 1000,
+        read_campus_building: 10 * 60 * 1000,
+        find_nearby_place: 90 * 1000,
+        read_course_community: 2 * 60 * 1000,
+        search_campus_faq: 10 * 60 * 1000,
+        direct_llm_reply: 10 * 60 * 1000,
+    } as const;
     private pendingCourseAction: PendingCourseAction | null = null;
     private pendingWriteAction: PendingWriteAction | null = null;
 
@@ -444,6 +477,8 @@ export class AgentExecutor {
             userId,
             sessionId: `session_${Date.now()}`,
             history: [],
+            historySummary: '',
+            sessionState: createInitialSessionState(),
             deviceLocation: null,
         };
     }
@@ -453,21 +488,31 @@ export class AgentExecutor {
     }
 
     private pushHistory(role: 'user' | 'assistant' | 'tool', content: string) {
-        this.context.history.push({ role, content });
+        const item = { role, content } as const;
+        this.context.history.push(item);
+        this.context.sessionState = updateSessionStateWithTurn(this.context.sessionState, item);
         if (this.context.history.length > AgentExecutor.MAX_HISTORY_ITEMS) {
-            this.context.history = this.context.history.slice(-AgentExecutor.MAX_HISTORY_ITEMS);
+            const summarized = summarizeHistory(this.context.history, {
+                keepRecent: AgentExecutor.MAX_RECENT_HISTORY_ITEMS,
+            });
+            this.context.historySummary = [this.context.historySummary, summarized.summary].filter(Boolean).join('\n');
+            this.context.history = summarized.recentHistory;
         }
     }
 
     private getRecentConversationContext(): string {
-        if (this.context.history.length === 0) {
-            return 'No prior conversation.';
-        }
+        const parts = [
+            `Structured session state:\n${formatSessionState(this.context.sessionState)}`,
+            this.context.historySummary ? this.context.historySummary : '',
+            this.context.history.length > 0
+                ? this.context.history
+                    .slice(-AgentExecutor.MAX_RECENT_HISTORY_ITEMS)
+                    .map(item => `${item.role}: ${item.content}`)
+                    .join('\n')
+                : 'No prior conversation.'
+        ].filter(Boolean);
 
-        return this.context.history
-            .slice(-12)
-            .map(item => `${item.role}: ${item.content}`)
-            .join('\n');
+        return parts.join('\n\n');
     }
 
     /**
@@ -500,6 +545,18 @@ export class AgentExecutor {
             return pendingResponse;
         }
 
+        const stableTaskResponse = await this.tryStableTaskRoute(prompt);
+        if (stableTaskResponse) {
+            if (stableTaskResponse.finalAnswer) {
+                const normalizedAnswer = normalizeAssistantReply(stableTaskResponse.finalAnswer);
+                if (normalizedAnswer) {
+                    stableTaskResponse.finalAnswer = normalizedAnswer;
+                    this.pushHistory('assistant', normalizedAnswer);
+                }
+            }
+            return stableTaskResponse;
+        }
+
         const routed = await this.tryLocalRoute(prompt);
         if (routed) {
             if (routed.finalAnswer) {
@@ -512,13 +569,49 @@ export class AgentExecutor {
             return routed;
         }
 
+        const intentRouted = await this.tryIntentRoute(prompt);
+        if (intentRouted) {
+            if (intentRouted.finalAnswer) {
+                const normalizedAnswer = normalizeAssistantReply(intentRouted.finalAnswer);
+                if (normalizedAnswer) {
+                    intentRouted.finalAnswer = normalizedAnswer;
+                    this.pushHistory('assistant', normalizedAnswer);
+                }
+            }
+            return intentRouted;
+        }
+
+        const responseCacheKey = this.getResponseCacheKey(prompt);
+        if (responseCacheKey) {
+            const cachedReply = getCachedValue<string>(responseCacheKey);
+            if (cachedReply) {
+                this.pushHistory('assistant', cachedReply);
+                return {
+                    steps: [{
+                        thought: '命中低风险回复缓存',
+                        reply: cachedReply,
+                    }],
+                    finalAnswer: cachedReply,
+                };
+            }
+        }
+
+        const intentDecision = classifyIntent(prompt);
         let currentStep = 0;
         const maxSteps = 5;
         const steps: AgentStep[] = [];
 
         while (currentStep < maxSteps) {
+            const modelRoute = selectModelRoute(prompt, {
+                intentDecision,
+                historyLength: this.context.history.length,
+                hasPendingWrite: Boolean(this.pendingWriteAction),
+                hasPendingCourseAction: Boolean(this.pendingCourseAction),
+                previousSteps: steps,
+            });
+
             // 1. Ask real LLM for next step
-            const decision = await this.realDeepSeekCall(prompt, steps, onUpdate);
+            const decision = await this.realDeepSeekCall(prompt, steps, modelRoute, onUpdate);
             steps.push(decision);
 
             if (!decision.action) {
@@ -537,6 +630,15 @@ export class AgentExecutor {
         const finalAnswer = normalizeAssistantReply(steps[steps.length - 1].reply || steps[steps.length - 1].thought);
         if (finalAnswer) {
             this.pushHistory('assistant', finalAnswer);
+            const shouldCacheDirectReply = Boolean(
+                responseCacheKey
+                && steps.length === 1
+                && !steps[0].action
+                && steps[0].reply
+            );
+            if (shouldCacheDirectReply) {
+                setCachedValue(responseCacheKey!, finalAnswer, AgentExecutor.CACHE_TTLS.direct_llm_reply);
+            }
         }
 
         return {
@@ -570,7 +672,7 @@ export class AgentExecutor {
         }
 
         if (isScheduleQuery(prompt)) {
-            const observation = await this.readUserSchedule(prompt);
+            const observation = await this.executeTool('read_user_schedule', { query: prompt });
             return {
                 steps: [{
                     thought: '本地命中课表查询',
@@ -586,7 +688,7 @@ export class AgentExecutor {
         }
 
         if (isNearbyPlaceQuery(prompt)) {
-            const observation = await this.findNearbyPlace(prompt);
+            const observation = await this.executeTool('find_nearby_place', { query: prompt });
             return {
                 steps: [{
                     thought: '本地命中附近地点查询',
@@ -602,7 +704,7 @@ export class AgentExecutor {
         }
 
         if (isBuildingInfoQuery(prompt)) {
-            const observation = await this.readCampusBuilding(prompt);
+            const observation = await this.executeTool('read_campus_building', { query: prompt });
             return {
                 steps: [{
                     thought: '本地命中建筑信息查询',
@@ -618,7 +720,7 @@ export class AgentExecutor {
         }
 
         if (isCourseCommunityQuery(prompt)) {
-            const observation = await this.readCourseCommunity(prompt);
+            const observation = await this.executeTool('read_course_community', { query: prompt });
             return {
                 steps: [{
                     thought: '本地命中课程社区查询',
@@ -633,7 +735,86 @@ export class AgentExecutor {
             };
         }
 
+        if (isCampusFaqQuery(prompt)) {
+            const observation = await this.executeTool('search_campus_faq', { query: prompt });
+            return {
+                steps: [{
+                    thought: '本地命中校园 FAQ 查询',
+                    action: {
+                        tool: 'search_campus_faq',
+                        input: { query: prompt }
+                    },
+                    observation,
+                    reply: observation
+                }],
+                finalAnswer: observation
+            };
+        }
+
         return null;
+    }
+
+    private async tryStableTaskRoute(prompt: string): Promise<AgentResponse | null> {
+        const decision = inferStableTask(prompt);
+
+        const hasCompositeIntent = /，|,|顺便|順便|另外|另外再|同时|同時|and also|also/i.test(prompt);
+
+        if (decision.type === 'memory_write' && !hasCompositeIntent) {
+            const reply = this.prepareMemoryWrite(decision.key, decision.value);
+            return {
+                steps: [{
+                    thought: '命中稳定子任务：记忆写入',
+                    reply,
+                    routeReason: decision.reason,
+                }],
+                finalAnswer: reply,
+            };
+        }
+
+        if (decision.type === 'memory_read' && !hasCompositeIntent) {
+            const fact = await getMemoryFact(this.context.userId, decision.key);
+            const keyLabels: Record<string, string> = {
+                major: '专业',
+                hall: '宿舍',
+                favorite_food: '喜欢的食物',
+                nickname: '称呼',
+                language_preference: '语言偏好',
+            };
+            const reply = fact
+                ? `我记得你的${keyLabels[decision.key] || decision.key}是：${String(fact)}。`
+                : `我现在还没有记住你的${keyLabels[decision.key] || decision.key}。如果你愿意，我可以现在记下来。`;
+            return {
+                steps: [{
+                    thought: '命中稳定子任务：记忆读取',
+                    reply,
+                    routeReason: decision.reason,
+                }],
+                finalAnswer: reply,
+            };
+        }
+
+        return null;
+    }
+
+    private async tryIntentRoute(prompt: string): Promise<AgentResponse | null> {
+        const decision = classifyIntent(prompt);
+        if (!decision.useLocalRoute || !decision.useTool || decision.confidence < 0.7) {
+            return null;
+        }
+
+        const observation = await this.executeTool(decision.useTool, { query: prompt });
+        return {
+            steps: [{
+                thought: `意图路由命中：${decision.intent}`,
+                action: {
+                    tool: decision.useTool,
+                    input: { query: prompt }
+                },
+                observation,
+                reply: observation,
+            }],
+            finalAnswer: observation,
+        };
     }
 
     private async continuePendingWriteAction(prompt: string): Promise<AgentResponse | null> {
@@ -726,13 +907,21 @@ export class AgentExecutor {
         // Real and Mock tool implementations
         switch (toolName) {
             case 'read_user_schedule':
-                return this.readUserSchedule(input?.query || '');
+                return this.executeCachedReadonlyTool('read_user_schedule', { query: input?.query || '' }, () => this.readUserSchedule(input?.query || ''));
             case 'read_campus_building':
-                return this.readCampusBuilding(input?.query || '');
+                return this.executeCachedReadonlyTool('read_campus_building', { query: input?.query || '' }, () => this.readCampusBuilding(input?.query || ''));
             case 'find_nearby_place':
-                return this.findNearbyPlace(input?.query || '');
+                return this.executeCachedReadonlyTool(
+                    'find_nearby_place',
+                    {
+                        query: input?.query || '',
+                        latitude: this.context.deviceLocation?.latitude ?? 'none',
+                        longitude: this.context.deviceLocation?.longitude ?? 'none',
+                    },
+                    () => this.findNearbyPlace(input?.query || '')
+                );
             case 'read_course_community':
-                return this.readCourseCommunity(input?.query || '');
+                return this.executeCachedReadonlyTool('read_course_community', { query: input?.query || '' }, () => this.readCourseCommunity(input?.query || ''));
             case 'post_course_review':
                 return this.startCourseAction(
                     `${input?.courseCode || input?.courseId || ''} ${input?.rating || ''}星 ${input?.content || ''}`.trim(),
@@ -762,33 +951,34 @@ export class AgentExecutor {
             case 'book_library_seat':
                 return '图书馆自动化预约功能已下线，当前助手仅提供问答服务。';
             case 'search_campus_faq':
-                // 1. Search local legacy FAQs
-                const localResults = FAQService.searchFAQs(input.query);
-
-                // 2. Search new Supabase Knowledge Base (73 chunks)
-                const kbResults = await FAQService.searchKnowledgeBase(input.query);
-
-                if (localResults.length === 0 && kbResults.length === 0) {
-                    return "I couldn't find a specific answer in the official documents for that query. You might want to check the HKBU website directly.";
-                }
-
-                let responseText = "Here is what I found in the official HKBU records:\n\n";
-
-                if (kbResults.length > 0) {
-                    responseText += "### Official Student Handbook & Knowledge Base:\n";
-                    responseText += kbResults.map((kb: any) => `- ${kb.content}`).join('\n\n');
-                    responseText += "\n\n";
-                }
-
-                if (localResults.length > 0) {
-                    responseText += "### Quick FAQ Reference:\n";
-                    responseText += localResults.map(f => `Q: ${f.question_zh}\nA: ${f.answer_zh}`).join('\n\n');
-                }
-
-                return responseText;
+                return this.executeCachedReadonlyTool('search_campus_faq', { query: input?.query || '' }, () => this.readCampusFaq(input?.query || ''));
             default:
                 return `Error: Tool ${toolName} not found.`;
         }
+    }
+
+    private async executeCachedReadonlyTool(
+        toolName: keyof typeof AgentExecutor.CACHE_TTLS,
+        payload: Record<string, unknown>,
+        loader: () => Promise<string>
+    ): Promise<string> {
+        const cacheKey = buildToolCacheKey(toolName, payload, {
+            userId: toolName === 'read_user_schedule' ? this.context.userId : undefined,
+            version: 'phase2_v1',
+        });
+
+        return getOrSetCachedValue(cacheKey, AgentExecutor.CACHE_TTLS[toolName], loader);
+    }
+
+    private getResponseCacheKey(prompt: string): string | null {
+        if (!isLowRiskResponseCacheable(prompt, this.context.history.length)) {
+            return null;
+        }
+
+        return buildResponseCacheKey(
+            { prompt },
+            { model: resolveModelName('fast'), version: 'phase2_v1' }
+        );
     }
 
     private prepareMemoryWrite(key?: string, value?: any): string {
@@ -902,6 +1092,12 @@ export class AgentExecutor {
     }
 
     private async resolveCourseFromRecentContext(): Promise<Course | null> {
+        const stateCourse = this.context.sessionState.referencedCourse;
+        if (stateCourse) {
+            const resolved = await this.resolveCourseFromQuery(stateCourse);
+            if (resolved) return resolved;
+        }
+
         const recent = [...this.context.history]
             .slice(-10)
             .reverse()
@@ -1319,44 +1515,54 @@ export class AgentExecutor {
         }
     }
 
-    private async realDeepSeekCall(prompt: string, previousSteps: AgentStep[], onUpdate?: (text: string) => void): Promise<AgentStep> {
-        const systemPrompt = `You are "HKCampus Assistant" (浸大领航员), the exclusive AI assistant for Hong Kong Baptist University (HKBU) students.
+    private async readCampusFaq(query: string): Promise<string> {
+        try {
+            const localResults = FAQService.searchFAQs(query);
+            const kbResults = await FAQService.searchKnowledgeBase(query);
+            return FAQService.buildCampusFaqAnswer(query, localResults, kbResults);
+        } catch (error) {
+            console.error('[Agent] Failed to read campus FAQ:', error);
+            return '我暂时没法读取校园 FAQ 或知识库内容，请稍后再试。';
+        }
+    }
 
-## Your Persona & Tone:
-1. You are a friendly, knowledgeable, and enthusiastic senior student at HKBU.
-2. You speak naturally, concisely, and use emojis where appropriate.
-3. Your primary language for replies is Chinese, but you can understand English perfectly. You may mix in common HKBU English slang (e.g., "Reg course", "AAB", "Main Lib", "Canteen").
+    private async realDeepSeekCall(
+        prompt: string,
+        previousSteps: AgentStep[],
+        modelRoute: ReturnType<typeof selectModelRoute>,
+        onUpdate?: (text: string) => void
+    ): Promise<AgentStep> {
+        const modelName = resolveModelName(modelRoute.tier);
+        const systemPrompt = `你是 HKCampus Assistant，仅处理 HKBU 校园生活、学业、校园设施、学生服务与 HKCampus app 相关问题。
 
-## Core Rules & Boundaries:
-1. EXCLUSIVE DOMAIN: You ONLY answer questions related to HKBU campus life, academic affairs, campus facilities (library, canteens, classrooms, dorms), student activities, and the HKCampus app.
-2. REFUSAL POLICY: If a user asks a question completely unrelated to HKBU or university life (e.g., "Write a script", "Who is the US president", "Explain physics"), you MUST politely decline and steer the conversation back to campus topics.
-   Example: "哈哈，这个问题超纲啦！作为你的专属校园助手，我更擅长带你吃遍浸大、找空闲课室或者抢图书馆座位哦。校园生活有什么需要帮忙的吗？🎓"
-3. HONESTY: Do not hallucinate facts. If you do not know the answer, use a tool to find it.
-4. PERSONAL SCHEDULE: If the user asks about their own classes, timetable, next class, or classes on a certain day, you MUST use the "read_user_schedule" tool.
-5. COURSE COMMUNITY: If the user asks about a course's reviews, chatroom, teaming posts, or overall community status, you MUST use the "read_course_community" tool.
-6. COURSE COMMUNITY POSTING: If the user wants to publish a course review, a teaming post, or a course chatroom message, first infer the course from recent conversation if possible. If still missing, ask for the course code. Once enough information is available, you MUST use the relevant posting tool instead of only giving instructions.
-6. BUILDINGS: If the user asks where a building is, what a building code means, or asks about a campus building, you MUST use the "read_campus_building" tool.
-7. NEARBY PLACES: If the user asks what is near them, where they are now, or which building/restaurant is closest, you MUST use the "find_nearby_place" tool.
+规则：
+1. 不要编造事实；不确定就用工具。
+2. 用户问个人课表/下一节课/某天课程，必须用 read_user_schedule。
+3. 用户问课程评价、聊天室、组队情况，必须用 read_course_community。
+4. 用户要发布课程评价、组队帖、聊天室消息，信息足够时必须调用对应工具；课程不明确时先追问课程代码。
+5. 用户问建筑位置或建筑简称，必须用 read_campus_building。
+6. 用户问附近地点、最近建筑、最近餐厅、当前位置，必须用 find_nearby_place。
+7. 用户问校园 FAQ、学生手册、图书馆、GPA、校历、住宿、IT 服务、学费等问题，优先用 search_campus_faq。
+8. 若问题明显与 HKBU/校园生活无关，礼貌拒绝并引回校园话题。
 
-Available Tools:
-${JSON.stringify(TOOLS, null, 2)}
+可用工具：
+${JSON.stringify(TOOLS)}
 
-ReAct Protocol & Optimization:
-1. If you NEED to use a tool, output ONLY "thought" (max 10 words) and "action".
-2. If you CAN answer directly, output ONLY "reply" (generate this immediately so the user can see it streaming). DO NOT output "thought".
+输出要求：
+1. 需要用工具时，只输出 JSON：{"thought":"简短判断","action":{"tool":"tool_name","input":{}}}
+2. 可以直接回答时，只输出 JSON：{"reply":"中文回答"}
+3. 不要输出额外解释，不要输出 Markdown 代码块。
 
-Response Format (JSON only):
-{
-  "thought": "Brief reasoning ONLY IF using a tool",
-  "action": { "tool": "tool_name", "input": { "param": "value" } }, // ONLY IF using a tool
-  "reply": "Your final response in Chinese (ONLY IF NOT using a tool)"
-}
-
-Current context:
-- Recent conversation:
+上下文：
+Recent conversation:
 ${this.getRecentConversationContext()}
-- User Prompt: ${prompt}
-- Progress so far: ${JSON.stringify(previousSteps)}`;
+User Prompt: ${prompt}
+Progress so far: ${JSON.stringify(previousSteps)}
+Model route:
+- tier: ${modelRoute.tier}
+- reason: ${modelRoute.reason}
+- complexity: ${modelRoute.complexity}
+- directResponsePreferred: ${modelRoute.directResponsePreferred}`;
 
         try {
             const llmOutput = await callDeepSeekStream([
@@ -1373,7 +1579,7 @@ ${this.getRecentConversationContext()}
                         } catch (e) { }
                     }
                 }
-            });
+            }, { model: modelName });
 
             // Clean up potentially backticked JSON
             const jsonStr = llmOutput.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -1382,11 +1588,19 @@ ${this.getRecentConversationContext()}
             return {
                 thought: result.thought,
                 reply: result.reply,
-                action: result.action
+                action: result.action,
+                modelTier: modelRoute.tier,
+                modelName,
+                routeReason: modelRoute.reason,
             };
         } catch (e) {
             console.error('[Agent] Real LLM call failed, falling back to basic mock.', e);
-            return { thought: "抱歉，由于网络或 API 问题，我暂时无法进行深度推理。请稍后再试。" };
+            return {
+                thought: "抱歉，由于网络或 API 问题，我暂时无法进行深度推理。请稍后再试。",
+                modelTier: modelRoute.tier,
+                modelName,
+                routeReason: modelRoute.reason,
+            };
         }
     }
 }

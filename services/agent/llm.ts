@@ -8,6 +8,12 @@ export type LLMResponse = {
     stop_reason: string;
 };
 
+export type AgentModelTier = 'fast' | 'reasoning';
+
+export const resolveModelName = (tier: AgentModelTier): string => (
+    tier === 'fast' ? AGENT_CONFIG.FAST_MODEL : AGENT_CONFIG.REASONING_MODEL
+);
+
 function assertDeepSeekConfigured() {
     if (!AGENT_CONFIG.DEEPSEEK_ENABLED) {
         throw new Error(
@@ -19,8 +25,12 @@ function assertDeepSeekConfigured() {
 /**
  * DeepSeek LLM Service
  */
-export async function callDeepSeek(messages: { role: string, content: string }[]): Promise<string> {
+export async function callDeepSeek(
+    messages: { role: string, content: string }[],
+    options?: { model?: string }
+): Promise<string> {
     assertDeepSeekConfigured();
+    const model = options?.model || AGENT_CONFIG.FAST_MODEL;
     try {
         const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
             method: 'POST',
@@ -29,7 +39,7 @@ export async function callDeepSeek(messages: { role: string, content: string }[]
                 'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
             },
             body: JSON.stringify({
-                model: 'deepseek-chat',
+                model,
                 messages,
                 temperature: 0.7,
                 stream: false
@@ -49,11 +59,84 @@ export async function callDeepSeek(messages: { role: string, content: string }[]
     }
 }
 
-export function callDeepSeekStream(
+async function callDeepSeekStreamViaFetch(
     messages: { role: string, content: string }[],
+    model: string,
     onToken?: (text: string) => void
 ): Promise<string> {
+    const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify({
+            model,
+            messages,
+            temperature: 0.7,
+            stream: true
+        })
+    });
+
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`DeepSeek API error: ${response.status} - ${err}`);
+    }
+
+    if (!response.body) {
+        return callDeepSeek(messages, { model });
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let buffer = '';
+    const consumeSseLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ') || trimmed.includes('[DONE]')) return;
+
+        try {
+            const data = JSON.parse(trimmed.substring(6));
+            const chunk = data.choices[0]?.delta?.content || '';
+            fullText += chunk;
+            if (onToken) onToken(fullText);
+        } catch {
+            // Ignore malformed streaming fragments and continue parsing.
+        }
+    };
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+            consumeSseLine(line);
+        }
+    }
+
+    if (buffer.trim()) {
+        consumeSseLine(buffer);
+    }
+
+    return fullText;
+}
+
+export function callDeepSeekStream(
+    messages: { role: string, content: string }[],
+    onToken?: (text: string) => void,
+    options?: { model?: string }
+): Promise<string> {
     assertDeepSeekConfigured();
+    const model = options?.model || AGENT_CONFIG.FAST_MODEL;
+
+    if (typeof XMLHttpRequest === 'undefined') {
+        return callDeepSeekStreamViaFetch(messages, model, onToken);
+    }
+
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `${DEEPSEEK_BASE_URL}/chat/completions`);
@@ -96,7 +179,7 @@ export function callDeepSeekStream(
         xhr.onerror = () => reject(new Error("Network Error"));
 
         xhr.send(JSON.stringify({
-            model: 'deepseek-chat',
+            model,
             messages,
             temperature: 0.7,
             stream: true
