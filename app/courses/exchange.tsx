@@ -26,7 +26,6 @@ import {
     Animated,
     Alert,
     FlatList,
-    Image,
     KeyboardAvoidingView,
     Modal,
     Platform,
@@ -39,12 +38,14 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import { getCurrentUser } from '../../services/auth';
 import { deleteExchange, fetchExchangeComments, fetchExchanges, postExchange, postExchangeComment, toggleExchangeLike } from '../../services/exchange';
 import { ContactMethod, CourseExchange, ExchangeComment, ExchangeCourseDetail } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 const CONTACT_PLATFORMS = [
     { label: 'WeChat', value: 'WeChat', icon: '💬' },
@@ -349,9 +350,8 @@ export default function ExchangeScreen() {
 
     const renderAvatar = (avatar: string, style: any) => {
         if (!avatar) return <Text style={style}>👤</Text>;
-        const isUrl = typeof avatar === 'string' && (avatar.startsWith('http') || avatar.startsWith('https'));
-        if (isUrl) {
-            return <Image source={{ uri: avatar }} style={style} />;
+        if (isRemoteImageUrl(avatar)) {
+            return <CachedRemoteImage uri={avatar} style={style} />;
         }
         return <Text style={style}>{avatar}</Text>;
     };

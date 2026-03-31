@@ -4,7 +4,6 @@ import { Heart, MessageCircle } from 'lucide-react-native';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    Image as RNImage,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -16,7 +15,9 @@ import Animated, {
     withSpring,
 } from 'react-native-reanimated';
 import { Post } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isHKBUEmail } from '../../utils/userUtils';
+import { CachedRemoteImage } from '../common/CachedRemoteImage';
 import { EduBadge } from '../common/EduBadge';
 
 interface MasonryPostCardProps {
@@ -64,9 +65,6 @@ function getPalette(id: string) {
     return TEXT_CARD_PALETTES[Math.abs(hash) % TEXT_CARD_PALETTES.length];
 }
 
-const isValidUrl = (url?: string) =>
-    !!url && (url.startsWith('http://') || url.startsWith('https://'));
-
 export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
     ({ post, onPress, onLike, currentUserId: _currentUserId, onAuthorPress }) => {
         const { t } = useTranslation();
@@ -78,7 +76,7 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
             : post.imageUrl
                 ? [post.imageUrl]
                 : [];
-        const coverImage = images.find(img => isValidUrl(img));
+        const coverImage = images.find(img => isRemoteImageUrl(img));
         const isTextOnly = !coverImage;
 
         const palette = isTextOnly ? getPalette(post.id) : null;
@@ -110,11 +108,10 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                         {coverImage ? (
                             /* Real image cover */
                             <View style={styles.imageWrapper}>
-                                <Image
-                                    source={{ uri: coverImage }}
+                                <CachedRemoteImage
+                                    uri={coverImage}
                                     style={styles.coverImage}
                                     contentFit="cover"
-                                    cachePolicy="memory-disk"
                                     recyclingKey={coverImage}
                                 />
                                 {post.category && post.category !== 'All' && (
@@ -213,11 +210,8 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                             hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                         >
                             <View style={styles.avatarSmall}>
-                                {!post.isAnonymous && isValidUrl(post.authorAvatar) ? (
-                                    <RNImage
-                                        source={{ uri: post.authorAvatar! }}
-                                        style={styles.avatarImage}
-                                    />
+                                {!post.isAnonymous && isRemoteImageUrl(post.authorAvatar) ? (
+                                    <CachedRemoteImage uri={post.authorAvatar} style={styles.avatarImage} />
                                 ) : (
                                     <Text style={styles.avatarLetter}>
                                         {post.isAnonymous ? '?' : post.authorName.charAt(0).toUpperCase()}

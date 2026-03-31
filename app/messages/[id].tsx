@@ -23,6 +23,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { ZoomableImageCarousel } from '../../components/common/ZoomableImageCarousel';
 import { useNotifications } from '../../context/NotificationContext';
@@ -43,10 +44,9 @@ import {
 } from '../../services/messages';
 import { reportContent, ReportReason } from '../../services/moderation';
 import { DirectMessage, DirectMessagePeer } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-const isValidUrl = (value?: string) => !!value && (value.startsWith('http://') || value.startsWith('https://'));
 
 const formatMessageTime = (date: Date) => date.toLocaleTimeString([], {
     hour: '2-digit',
@@ -471,8 +471,8 @@ export default function ChatScreen() {
         return (
             <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.theirMessage]}>
                 {!isMe && (
-                    isValidUrl(item.senderAvatar) ? (
-                        <Image source={{ uri: item.senderAvatar }} style={styles.avatarMini} />
+                    isRemoteImageUrl(item.senderAvatar) ? (
+                        <CachedRemoteImage uri={item.senderAvatar} style={styles.avatarMini} />
                     ) : (
                         <View style={[styles.avatarMini, styles.avatarMiniFallback]}>
                             <Text style={styles.avatarMiniFallbackText}>
@@ -490,7 +490,7 @@ export default function ChatScreen() {
                     <Pressable onLongPress={() => openDirectMessageActions(item)}>
                     {isImageMessage ? (
                         <Pressable onPress={() => openImagePreview(item.id)} style={styles.imageMessagePressable}>
-                            <Image source={{ uri: imageUrl }} style={styles.messageImage} />
+                            <CachedRemoteImage uri={imageUrl} style={styles.messageImage} />
                             <View style={styles.imageTimeOverlay}>
                                 <Text style={styles.imageTimeText}>
                                     {formatMessageTime(item.createdAt)}
@@ -567,8 +567,8 @@ export default function ChatScreen() {
                         router.push({ pathname: '/profile/[id]' as any, params: { id: peer.id } });
                     }}
                 >
-                    {isValidUrl(peer?.avatar) ? (
-                        <Image source={{ uri: peer!.avatar }} style={styles.headerAvatar} />
+                    {isRemoteImageUrl(peer?.avatar) ? (
+                        <CachedRemoteImage uri={peer.avatar} style={styles.headerAvatar} />
                     ) : (
                         <View style={[styles.headerAvatar, styles.headerAvatarFallback]}>
                             <Text style={styles.headerAvatarFallbackText}>

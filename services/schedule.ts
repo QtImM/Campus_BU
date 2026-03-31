@@ -1,6 +1,7 @@
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Course } from '../types';
+import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { ExtractedScheduleItem, scanScheduleFromImage } from './ai-ocr';
 import { ensureCourseFavoriteForSchedule } from './favorites';
 import { supabase } from './supabase';
@@ -232,6 +233,7 @@ const uploadScheduleScreenshot = async (userId: string, imageUri: string): Promi
         .from(SCHEDULE_SCREENSHOT_BUCKET)
         .upload(filePath, arrayBuffer, {
             contentType,
+            cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
             upsert: false,
         });
 

@@ -1,6 +1,7 @@
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import { CourseTeaming, TeamingComment } from '../types';
+import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { getLocalCourses } from './courses';
 import { supabase } from './supabase';
 
@@ -139,6 +140,7 @@ const uploadTeamingAvatar = async (uri: string, prefix: string): Promise<string>
             .from(TEAMING_STORAGE_BUCKET)
             .upload(fileName, arrayBuffer, {
                 contentType: 'image/jpeg',
+                cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
                 upsert: true,
             });
 

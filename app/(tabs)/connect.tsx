@@ -4,22 +4,21 @@ import {
     ActivityIndicator,
     Alert,
     Dimensions,
-    Image,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { getCurrentUser } from '../../services/auth';
 import { getDiscoverableUsers } from '../../services/social';
 import { User } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 const { width } = Dimensions.get('window');
 
 type DiscoverableUser = Omit<User, 'createdAt'>;
-
-const isValidUrl = (value?: string) => !!value && (value.startsWith('http://') || value.startsWith('https://'));
 
 const getCardColor = (uid: string) => {
     const colors = ['#FF6B6B', '#4ECDC4', '#3B82F6', '#10B981', '#F59E0B', '#D97706'];
@@ -139,8 +138,8 @@ export default function ConnectScreen() {
                             activeOpacity={0.92}
                             onPress={() => handleOpenProfile(currentUser)}
                         >
-                            {isValidUrl(currentUser.avatarUrl) ? (
-                                <Image source={{ uri: currentUser.avatarUrl }} style={styles.avatarImage} />
+                            {isRemoteImageUrl(currentUser.avatarUrl) ? (
+                                <CachedRemoteImage uri={currentUser.avatarUrl} style={styles.avatarImage} />
                             ) : (
                                 <View style={styles.avatar}>
                                     <Text style={styles.avatarText}>{currentUser.displayName.charAt(0).toUpperCase()}</Text>

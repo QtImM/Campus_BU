@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     FlatList,
-    Image,
     KeyboardAvoidingView,
     Modal,
     Platform,
@@ -22,7 +21,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { getFollowersList, getFollowingList } from '../../services/follows';
 import { fetchDirectConversations } from '../../services/messages';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { generatePostShareMessage } from '../../utils/shareUtils';
+import { CachedRemoteImage } from '../common/CachedRemoteImage';
 
 interface ShareUser {
     uid: string;
@@ -61,9 +62,7 @@ export const SharePostModal: React.FC<SharePostModalProps> = ({
     const [sending, setSending] = useState(false);
 
     useEffect(() => {
-        console.log('[SharePostModal] visible changed:', visible);
         if (visible) {
-            console.log('[SharePostModal] Loading share users, currentUserId:', currentUserId);
             loadShareUsers();
         } else {
             // Reset state when modal closes
@@ -75,27 +74,19 @@ export const SharePostModal: React.FC<SharePostModalProps> = ({
 
     const loadShareUsers = async () => {
         if (!currentUserId) {
-            console.log('[SharePostModal] No currentUserId, skipping load');
             return;
         }
-        console.log('[SharePostModal] Starting to load share users...');
         setLoading(true);
         try {
             // Load users from three sources:
             // 1. Users I'm following
             // 2. Users who follow me
             // 3. Users I've messaged with
-            console.log('[SharePostModal] Fetching following, followers, and conversations...');
             const [followingList, followersList, conversations] = await Promise.all([
                 getFollowingList(currentUserId),
                 getFollowersList(currentUserId),
                 fetchDirectConversations(currentUserId),
             ]);
-            console.log('[SharePostModal] Loaded:', {
-                followingCount: followingList.length,
-                followersCount: followersList.length,
-                conversationsCount: conversations.length
-            });
 
             // Create a map to deduplicate users
             const userMap = new Map<string, ShareUser>();
@@ -135,7 +126,6 @@ export const SharePostModal: React.FC<SharePostModalProps> = ({
             const userList = Array.from(userMap.values()).sort((a, b) =>
                 a.displayName.localeCompare(b.displayName)
             );
-            console.log('[SharePostModal] Total unique users to share with:', userList.length);
 
             setUsers(userList);
         } catch (error) {
@@ -146,21 +136,17 @@ export const SharePostModal: React.FC<SharePostModalProps> = ({
     };
 
     const handleUserSelect = (user: ShareUser) => {
-        console.log('[SharePostModal] User selected:', { uid: user.uid, name: user.displayName });
         setSelectedUser(user);
         setShowMessageInput(true);
     };
 
     const handleSend = async () => {
         if (!selectedUser || sending) return;
-        console.log('[SharePostModal] Sending share to:', selectedUser.uid);
         setSending(true);
         try {
             // Create share message using utility function with environment-based URL
             const shareMessage = generatePostShareMessage(postId, messageText);
-            console.log('[SharePostModal] Share message:', shareMessage.substring(0, 100));
             await onShare(selectedUser.uid, shareMessage);
-            console.log('[SharePostModal] Share succeeded, closing modal');
             // Close modal after successful share
             onClose();
         } catch (error) {
@@ -182,8 +168,8 @@ export const SharePostModal: React.FC<SharePostModalProps> = ({
             onPress={() => handleUserSelect(item)}
             activeOpacity={0.7}
         >
-            {item.avatarUrl ? (
-                <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
+            {isRemoteImageUrl(item.avatarUrl) ? (
+                <CachedRemoteImage uri={item.avatarUrl} style={styles.avatar} />
             ) : (
                 <View style={[styles.avatar, styles.avatarPlaceholder]}>
                     <UserIcon size={20} color="#fff" />
@@ -262,8 +248,8 @@ export const SharePostModal: React.FC<SharePostModalProps> = ({
                                 {/* Selected User Header */}
                                 <View style={styles.selectedUserHeader}>
                                     <View style={styles.selectedUserInfo}>
-                                        {selectedUser.avatarUrl ? (
-                                            <Image source={{ uri: selectedUser.avatarUrl }} style={styles.selectedAvatar} />
+                                        {isRemoteImageUrl(selectedUser.avatarUrl) ? (
+                                            <CachedRemoteImage uri={selectedUser.avatarUrl} style={styles.selectedAvatar} />
                                         ) : (
                                             <View style={[styles.selectedAvatar, styles.avatarPlaceholder]}>
                                                 <UserIcon size={16} color="#fff" />

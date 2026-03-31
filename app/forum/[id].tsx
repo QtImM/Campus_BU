@@ -8,7 +8,6 @@ import {
     Animated,
     DeviceEventEmitter,
     Dimensions,
-    Image,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -22,6 +21,7 @@ import {
 } from 'react-native';
 import { ActionModal } from '../../components/campus/ActionModal';
 import { Toast, ToastType } from '../../components/campus/Toast';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { EduBadge } from '../../components/common/EduBadge';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { ZoomableImageCarousel } from '../../components/common/ZoomableImageCarousel';
@@ -37,14 +37,12 @@ import {
     toggleForumUpvote,
 } from '../../services/forum';
 import { ForumComment, ForumPost } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isHKBUEmail } from '../../utils/userUtils';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CONTENT_W = SCREEN_W - 32; // 16px padding each side
 const FORUM_IMAGE_HEIGHT = CONTENT_W;
-
-const isValidUrl = (url?: string) =>
-    !!url && (url.startsWith('http://') || url.startsWith('https://'));
 
 const categoryColor: Record<string, string> = {
     general: '#6366F1', activity: '#F59E0B', guide: '#10B981', lost_found: '#EF4444',
@@ -238,7 +236,7 @@ export default function ForumPostDetailScreen() {
         );
     }
 
-    const images = (post.images || []).filter(isValidUrl);
+    const images = (post.images || []).filter(isRemoteImageUrl);
 
     return (
         <KeyboardAvoidingView
@@ -289,8 +287,8 @@ export default function ForumPostDetailScreen() {
                         onPress={() => openPublicProfile(post.authorId)}
                         activeOpacity={0.7}
                     >
-                        {isValidUrl(post.authorAvatar) ? (
-                            <Image source={{ uri: post.authorAvatar }} style={styles.avatarImg} />
+                        {isRemoteImageUrl(post.authorAvatar) ? (
+                            <CachedRemoteImage uri={post.authorAvatar} style={styles.avatarImg} />
                         ) : (
                             <Text style={styles.avatarLetter}>{post.authorName.charAt(0).toUpperCase()}</Text>
                         )}
@@ -347,8 +345,8 @@ export default function ForumPostDetailScreen() {
                                 onPress={() => openPublicProfile(c.authorId)}
                                 activeOpacity={0.7}
                             >
-                                {isValidUrl(c.authorAvatar) ? (
-                                    <Image source={{ uri: c.authorAvatar! }} style={styles.avatarImg} />
+                                {isRemoteImageUrl(c.authorAvatar) ? (
+                                    <CachedRemoteImage uri={c.authorAvatar} style={styles.avatarImg} />
                                 ) : (
                                     <Text style={styles.avatarLetter}>{c.authorName.charAt(0).toUpperCase()}</Text>
                                 )}
@@ -405,8 +403,8 @@ export default function ForumPostDetailScreen() {
                                             onPress={() => openPublicProfile(reply.authorId)}
                                             activeOpacity={0.7}
                                         >
-                                            {isValidUrl(reply.authorAvatar) ? (
-                                                <Image source={{ uri: reply.authorAvatar! }} style={styles.avatarImg} />
+                                            {isRemoteImageUrl(reply.authorAvatar) ? (
+                                                <CachedRemoteImage uri={reply.authorAvatar} style={styles.avatarImg} />
                                             ) : (
                                                 <Text style={styles.avatarLetterSmall}>{reply.authorName.charAt(0).toUpperCase()}</Text>
                                             )}

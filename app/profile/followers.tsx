@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, ActivityIndicator, Text, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, FlatList, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, User as UserIcon } from 'lucide-react-native';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { getFollowersList, getFollowingList, FollowUserInfo } from '../../services/follows';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 type TabType = 'followers' | 'following';
 
@@ -45,8 +47,8 @@ export default function FollowersScreen() {
             onPress={() => router.push({ pathname: '/profile/[id]' as any, params: { id: item.uid } })}
             activeOpacity={0.7}
         >
-            {item.avatarUrl ? (
-                <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
+            {isRemoteImageUrl(item.avatarUrl) ? (
+                <CachedRemoteImage uri={item.avatarUrl} style={styles.avatar} />
             ) : (
                 <View style={[styles.avatar, styles.avatarPlaceholder]}>
                     <UserIcon size={20} color="#fff" />

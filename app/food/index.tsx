@@ -25,9 +25,11 @@ import Animated, {
     useSharedValue,
     withSpring
 } from 'react-native-reanimated';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { EduBadge } from '../../components/common/EduBadge';
 import { getCurrentUser } from '../../services/auth';
 import { addFoodReview, fetchFoodReviews, toggleFoodReviewLike, uploadFoodImage } from '../../services/food';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isHKBUEmail } from '../../utils/userUtils';
 
 const { width } = Dimensions.get('window');
@@ -441,7 +443,7 @@ export default function FoodScreen() {
                     <Text style={styles.cardContentText}>{String(item.content)}</Text>
                 </View>
 
-                {item.image && <Image source={{ uri: item.image }} style={styles.cardImage} />}
+                {isRemoteImageUrl(item.image) && <CachedRemoteImage uri={item.image} style={styles.cardImage} />}
 
                 <View style={styles.cardFooter}>
                     <View style={styles.footerInfo}>

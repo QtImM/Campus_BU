@@ -20,19 +20,13 @@ interface BottomSheetProps {
 }
 
 export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, children }) => {
-    console.log('[BottomSheet] Render - visible:', visible);
-
     // Start position: sheet is completely below the screen (hidden)
     // End position: sheet slides up to take 1/3 of screen
     const slideAnim = React.useRef(new Animated.Value(SHEET_HEIGHT)).current;
     const backdropOpacity = React.useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        console.log('[BottomSheet] useEffect triggered - visible:', visible);
         if (visible) {
-            console.log('[BottomSheet] Starting OPEN animation');
-            console.log('[BottomSheet] Initial slideAnim value:', SHEET_HEIGHT);
-            console.log('[BottomSheet] Target slideAnim value:', 0);
             // Animate up - move from bottom (SHEET_HEIGHT) to visible position (0)
             Animated.parallel([
                 Animated.timing(slideAnim, {
@@ -46,11 +40,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
                     duration: 300,
                     useNativeDriver: true,
                 }),
-            ]).start(() => {
-                console.log('[BottomSheet] OPEN animation completed');
-            });
+            ]).start();
         } else {
-            console.log('[BottomSheet] Starting CLOSE animation');
             // Animate down - move back to hidden position (SHEET_HEIGHT)
             Animated.parallel([
                 Animated.timing(slideAnim, {
@@ -64,42 +55,28 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
                     duration: 250,
                     useNativeDriver: true,
                 }),
-            ]).start(() => {
-                console.log('[BottomSheet] CLOSE animation completed');
-            });
+            ]).start();
         }
     }, [visible]);
 
     const panResponder = React.useRef(
         PanResponder.create({
-            onMoveShouldSetPanResponder: (_, gestureState) => {
-                const shouldSet = Math.abs(gestureState.dy) > 10;
-                console.log('[BottomSheet] PanResponder onMoveShouldSetPanResponder - dy:', gestureState.dy, 'shouldSet:', shouldSet);
-                return shouldSet;
-            },
-            onPanResponderGrant: (_, gestureState) => {
-                console.log('[BottomSheet] PanResponder onPanResponderGrant');
-                slideAnim.stopAnimation((value) => {
-                    console.log('[BottomSheet] Animation stopped at value:', value);
-                });
+            onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 10,
+            onPanResponderGrant: () => {
+                slideAnim.stopAnimation();
             },
             onPanResponderMove: (_, gestureState) => {
                 if (gestureState.dy > 0) {
                     // When dragging down, add to the base position (0 when open)
-                    const newValue = gestureState.dy;
-                    console.log('[BottomSheet] PanResponder onPanResponderMove - dy:', gestureState.dy, 'new translateY:', newValue);
-                    slideAnim.setValue(newValue);
+                    slideAnim.setValue(gestureState.dy);
                 }
             },
             onPanResponderRelease: (_, gestureState) => {
-                console.log('[BottomSheet] PanResponder onPanResponderRelease - dy:', gestureState.dy, 'vy:', gestureState.vy);
                 if (gestureState.dy > SHEET_HEIGHT / 3 || gestureState.vy > 0.5) {
                     // Swipe down enough to close - animate back to hidden position
-                    console.log('[BottomSheet] Closing from swipe');
                     handleClose();
                 } else {
                     // Snap back to top - animate back to visible position (0)
-                    console.log('[BottomSheet] Snapping back');
                     Animated.timing(slideAnim, {
                         toValue: 0,
                         duration: 250,
@@ -111,7 +88,6 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
     ).current;
 
     const handleClose = () => {
-        console.log('[BottomSheet] handleClose called');
         onClose();
     };
 

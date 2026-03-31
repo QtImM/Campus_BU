@@ -6,7 +6,9 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { auth, createUserProfile, getUserProfile, signOut, uploadAndUpdateAvatar } from '../../services/auth';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 export default function SetupScreen() {
     const router = useRouter();
@@ -223,7 +225,11 @@ export default function SetupScreen() {
                             <TouchableOpacity onPress={pickImage} style={[styles.avatarContainer, avatar ? styles.avatarOptionSelected : null]}>
                                 <View style={[styles.avatarCircle, avatar && styles.avatarCircleimage]}>
                                     {avatar ? (
-                                        <Image source={{ uri: avatar }} style={styles.avatarImage} />
+                                        isRemoteImageUrl(avatar) ? (
+                                            <CachedRemoteImage uri={avatar} style={styles.avatarImage} />
+                                        ) : (
+                                            <Image source={{ uri: avatar }} style={styles.avatarImage} />
+                                        )
                                     ) : (
                                         <Camera size={32} color="#CBD5E1" />
                                     )}

@@ -1,4 +1,5 @@
 import { DirectConversationSummary, DirectMessage, DirectMessagePeer } from '../types';
+import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { supabase } from './supabase';
 
 const CONVERSATIONS_TABLE = 'direct_conversations';
@@ -465,7 +466,11 @@ export const uploadDirectMessageImage = async (uri: string): Promise<string> => 
 
     const { error } = await supabase.storage
         .from('campus')
-        .upload(filePath, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+        .upload(filePath, arrayBuffer, {
+            contentType: 'image/jpeg',
+            cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
+            upsert: true,
+        });
 
     if (error) {
         console.error('Error uploading direct message image:', error);
@@ -497,6 +502,7 @@ export const uploadDirectMessageFile = async (
         .from('campus')
         .upload(filePath, arrayBuffer, {
             contentType: mimeType || 'application/octet-stream',
+            cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
             upsert: true,
         });
 

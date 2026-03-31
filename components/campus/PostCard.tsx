@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { ChevronRight, Flag, Heart, MapPin, MessageCircle, MoreVertical, Share2, Trash2, UserMinus, X } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Dimensions, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
     CurvedTransition,
     FadeIn,
@@ -17,8 +17,10 @@ import Animated, {
 import { sendDirectMessage } from '../../services/messages';
 import { blockUser, reportContent, ReportReason } from '../../services/moderation';
 import { Post } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isAdminSync, isHKBUEmail } from '../../utils/userUtils';
 import { AdminBadge } from '../common/AdminBadge';
+import { CachedRemoteImage } from '../common/CachedRemoteImage';
 import { EduBadge } from '../common/EduBadge';
 import { SharePostModal } from './SharePostModal';
 
@@ -43,12 +45,6 @@ export const PostCard: React.FC<PostCardProps> = React.memo(({ post, onLike, onC
     const timeAgo = formatDistanceToNow(post.createdAt, { addSuffix: true });
     const pressed = useSharedValue(1);
 
-    // Helper to check if avatar URL is valid (not a local file path)
-    const isValidAvatarUrl = (url?: string) => {
-        if (!url) return false;
-        return url.startsWith('http://') || url.startsWith('https://');
-    };
-
     const categoryColors: Record<string, string> = {
         'Events': '#FF6B6B',
         'Reviews': '#4ECDC4',
@@ -67,10 +63,9 @@ export const PostCard: React.FC<PostCardProps> = React.memo(({ post, onLike, onC
                     onPress={() => setZoomImage(images[0])}
                     activeOpacity={0.9}
                 >
-                    <Image
-                        source={{ uri: images[0] }}
+                    <CachedRemoteImage
+                        uri={images[0]}
                         style={styles.image}
-                        resizeMode="cover"
                     />
                 </TouchableOpacity>
             );
@@ -89,7 +84,7 @@ export const PostCard: React.FC<PostCardProps> = React.memo(({ post, onLike, onC
                         onPress={() => setZoomImage(img)}
                         activeOpacity={0.9}
                     >
-                        <Image source={{ uri: img }} style={styles.gridImage} resizeMode="cover" />
+                        <CachedRemoteImage uri={img} style={styles.gridImage} />
                     </TouchableOpacity>
                 ))}
             </View>
@@ -180,8 +175,8 @@ export const PostCard: React.FC<PostCardProps> = React.memo(({ post, onLike, onC
                 {/* Header */}
                 <View style={styles.header}>
                     <View style={styles.avatar}>
-                        {!post.isAnonymous && isValidAvatarUrl(post.authorAvatar) ? (
-                            <Image source={{ uri: post.authorAvatar }} style={styles.avatarImage} />
+                        {!post.isAnonymous && isRemoteImageUrl(post.authorAvatar) ? (
+                            <CachedRemoteImage uri={post.authorAvatar} style={styles.avatarImage} />
                         ) : (
                             <Text style={styles.avatarText}>
                                 {post.isAnonymous ? '?' : post.authorName.charAt(0)}
@@ -260,11 +255,11 @@ export const PostCard: React.FC<PostCardProps> = React.memo(({ post, onLike, onC
                         >
                             <X size={30} color="#fff" />
                         </TouchableOpacity>
-                        {zoomImage && (
-                            <Image
-                                source={{ uri: zoomImage }}
+                        {isRemoteImageUrl(zoomImage) && (
+                            <CachedRemoteImage
+                                uri={zoomImage}
                                 style={styles.modalImage}
-                                resizeMode="contain"
+                                contentFit="contain"
                             />
                         )}
                     </View>

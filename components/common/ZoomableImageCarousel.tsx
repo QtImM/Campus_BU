@@ -21,6 +21,7 @@ import Animated, {
     Extrapolate,
     SharedValue
 } from 'react-native-reanimated';
+import { normalizeRemoteImageUrl } from '../../utils/remoteImage';
 
 interface ZoomableImageCarouselProps {
     images: string[];
@@ -78,6 +79,7 @@ const PreviewImageItem: React.FC<PreviewImageItemProps> = ({
                         style={{ width, height }}
                         contentFit={contentFit}
                         cachePolicy="memory-disk"
+                        recyclingKey={uri}
                     />
                 </View>
             </TouchableOpacity>
@@ -216,6 +218,7 @@ const FullscreenImageItem: React.FC<FullscreenImageItemProps> = ({
                         contentFit="contain"
                         cachePolicy="memory-disk"
                         transition={200}
+                        recyclingKey={uri}
                     />
                 </Animated.View>
             </GestureDetector>
@@ -233,7 +236,12 @@ export const ZoomableImageCarousel: React.FC<ZoomableImageCarouselProps> = ({
     externalViewerIndex = null,
     onViewerRequestClose,
 }) => {
-    const imageList = useMemo(() => images.filter(Boolean), [images]);
+    const imageList = useMemo(
+        () => images
+            .map(image => normalizeRemoteImageUrl(image))
+            .filter((image): image is string => !!image),
+        [images]
+    );
     const viewerListRef = useRef<FlatList<string>>(null);
     const [viewerVisible, setViewerVisible] = useState(false);
     const [viewerIndex, setViewerIndex] = useState(0);

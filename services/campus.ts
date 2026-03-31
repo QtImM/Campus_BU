@@ -1,5 +1,6 @@
 import { Post, PostCategory, PostComment, PostType } from '../types';
 import { compressImageForUpload } from '../utils/image';
+import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { getFollowingUserIds } from './follows';
 import { getBlockedUserIds } from './moderation';
 import { supabase } from './supabase';
@@ -487,6 +488,7 @@ export const uploadPostImage = async (uri: string): Promise<string> => {
             .from('campus')
             .upload(filePath, arrayBuffer, {
                 contentType: 'image/jpeg',
+                cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
                 upsert: true
             });
 

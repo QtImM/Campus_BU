@@ -9,7 +9,6 @@ import {
     Animated,
     Alert,
     FlatList,
-    Image,
     KeyboardAvoidingView,
     Modal,
     Platform,
@@ -21,6 +20,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { EduBadge } from '../../components/common/EduBadge';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { useCourseActivity } from '../../context/CourseActivityContext';
@@ -33,12 +33,8 @@ import { reportContent, ReportReason } from '../../services/moderation';
 import { supabase } from '../../services/supabase';
 import { deleteTeamingRequest, fetchTeamingComments, fetchTeamingRequests, postTeamingComment, postTeamingRequest, toggleTeamingLike } from '../../services/teaming';
 import { ContactMethod, Course, CourseTeaming, Review, TeamingComment } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isHKBUEmail } from '../../utils/userUtils';
-// Helper function to check if string is a URL
-const isImageUrl = (str: string): boolean => {
-    if (!str) return false;
-    return str.startsWith('http://') || str.startsWith('https://');
-};
 
 const normalizeChatUser = (userData?: { display_name?: string; avatar_url?: string; email?: string } | null) => ({
     ...userData,
@@ -696,8 +692,8 @@ export default function CourseDetailScreen() {
             <View style={styles.reviewHeader}>
                 <View style={styles.authorInfo}>
                     <View style={styles.avatarContainer}>
-                        {item.authorAvatar && item.authorAvatar.length > 2 ? (
-                            <Image source={{ uri: item.authorAvatar }} style={styles.avatarImage} />
+                        {isRemoteImageUrl(item.authorAvatar) ? (
+                            <CachedRemoteImage uri={item.authorAvatar} style={styles.avatarImage} />
                         ) : (
                             <Text style={styles.avatarFallbackText}>{item.authorAvatar || '👤'}</Text>
                         )}
@@ -796,8 +792,8 @@ export default function CourseDetailScreen() {
             <View style={styles.teamingHeader}>
                 <View style={styles.authorInfo}>
                     <View style={styles.avatarContainer}>
-                        {isImageUrl(item.userAvatar) ? (
-                            <Image source={{ uri: item.userAvatar }} style={styles.avatarImage} />
+                        {isRemoteImageUrl(item.userAvatar) ? (
+                            <CachedRemoteImage uri={item.userAvatar} style={styles.avatarImage} />
                         ) : (
                             <Text style={styles.avatarFallbackText}>{item.userAvatar || '👤'}</Text>
                         )}
@@ -1013,11 +1009,8 @@ export default function CourseDetailScreen() {
                                         msg.sender_id === user?.uid ? styles.myMessageRow : styles.otherMessageRow
                                     ]}>
                                         {msg.sender_id !== user?.uid && (
-                                            isImageUrl(msg.users?.avatar_url || '') ? (
-                                                <Image
-                                                    source={{ uri: msg.users?.avatar_url }}
-                                                    style={styles.chatAvatarImage}
-                                                />
+                                            isRemoteImageUrl(msg.users?.avatar_url) ? (
+                                                <CachedRemoteImage uri={msg.users.avatar_url} style={styles.chatAvatarImage} />
                                             ) : (
                                                 <View style={styles.chatAvatarFallback}>
                                                     <Text style={styles.chatAvatarFallbackText}>👤</Text>
@@ -1470,11 +1463,8 @@ export default function CourseDetailScreen() {
                                     renderItem={({ item }) => (
                                         <Animated.View style={[styles.teamingCommentContainer, ugcActions.getHighlightStyle(item.id)]}>
                                             <View style={styles.teamingCommentRow}>
-                                                {isImageUrl(item.authorAvatar) ? (
-                                                    <Image
-                                                        source={{ uri: item.authorAvatar }}
-                                                        style={styles.teamingCommentAvatar}
-                                                    />
+                                                {isRemoteImageUrl(item.authorAvatar) ? (
+                                                    <CachedRemoteImage uri={item.authorAvatar} style={styles.teamingCommentAvatar} />
                                                 ) : (
                                                     <Text style={styles.teamingCommentAvatarEmoji}>{item.authorAvatar || '👤'}</Text>
                                                 )}
@@ -1514,11 +1504,8 @@ export default function CourseDetailScreen() {
                                                 <View style={styles.teamingNestedReplies}>
                                                     {item.replies.map((reply: TeamingComment) => (
                                                         <Animated.View key={reply.id} style={[styles.teamingCommentRowSmall, ugcActions.getHighlightStyle(reply.id)]}>
-                                                            {isImageUrl(reply.authorAvatar) ? (
-                                                                <Image
-                                                                    source={{ uri: reply.authorAvatar }}
-                                                                    style={styles.teamingCommentAvatarSmall}
-                                                                />
+                                                            {isRemoteImageUrl(reply.authorAvatar) ? (
+                                                                <CachedRemoteImage uri={reply.authorAvatar} style={styles.teamingCommentAvatarSmall} />
                                                             ) : (
                                                                 <Text style={styles.teamingCommentAvatarEmojiSmall}>{reply.authorAvatar || '👤'}</Text>
                                                             )}

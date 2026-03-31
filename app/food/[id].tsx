@@ -28,10 +28,12 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { EduBadge } from '../../components/common/EduBadge';
 import { ScreenWrapper } from '../../components/ui/ScreenWrapper';
 import { getCurrentUser } from '../../services/auth';
 import { addFoodReview, fetchFoodReviews, toggleFoodReviewLike, uploadFoodImage } from '../../services/food';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isHKBUEmail } from '../../utils/userUtils';
 
 const { width } = Dimensions.get('window');
@@ -407,7 +409,7 @@ export default function OutletDetailScreen() {
             {item.images.length > 0 && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewImages}>
                     {(item.images || []).map((img: string, idx: number) => (
-                        <Image key={idx} source={{ uri: img }} style={styles.reviewImage} />
+                        isRemoteImageUrl(img) ? <CachedRemoteImage key={idx} uri={img} style={styles.reviewImage} /> : null
                     ))}
                 </ScrollView>
             )}

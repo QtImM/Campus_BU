@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { User } from '../types';
 import { compressImageForUpload } from '../utils/image';
+import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { supabase } from './supabase';
 
 // Global flag to skip auth redirects during password reset flow
@@ -358,6 +359,7 @@ export const uploadUserAvatar = async (userId: string, imageUri: string): Promis
             .from(USER_AVATARS_BUCKET)
             .upload(fileName, arrayBuffer, {
                 contentType: 'image/jpeg',
+                cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
                 upsert: true,
             });
 

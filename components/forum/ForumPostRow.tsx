@@ -3,12 +3,14 @@ import * as Haptics from 'expo-haptics';
 import { MessageCircle, ThumbsUp } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { AdminBadge } from '../common/AdminBadge';
 import { EduBadge } from '../common/EduBadge';
 import { ForumPost } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isHKBUEmail, isAdminSync } from '../../utils/userUtils';
+import { CachedRemoteImage } from '../common/CachedRemoteImage';
 
 interface ForumPostRowProps {
     post: ForumPost;
@@ -23,9 +25,6 @@ const categoryColor: Record<string, string> = {
     lost_found: '#EF4444',
 };
 
-const isValidUrl = (url?: string) =>
-    !!url && (url.startsWith('http://') || url.startsWith('https://'));
-
 /** Right-side thumbnail: fixed 80×80 square, preserves crop center */
 const THUMB = 80;
 
@@ -33,10 +32,9 @@ const THUMB = 80;
 const RightThumb: React.FC<{ uri: string }> = ({ uri }) => {
     const [ready, setReady] = useState(false);
     return (
-        <Image
-            source={{ uri }}
+        <CachedRemoteImage
+            uri={uri}
             style={[styles.thumb, !ready && styles.thumbLoading]}
-            resizeMode="cover"
             onLoad={() => setReady(true)}
         />
     );
@@ -64,7 +62,7 @@ export const ForumPostRow: React.FC<ForumPostRowProps> = React.memo(({ post, onP
         { addSuffix: false }
     );
 
-    const thumbs = (post.images || []).filter(isValidUrl);
+    const thumbs = (post.images || []).filter(isRemoteImageUrl);
     const firstThumb = thumbs[0];          // show only first image on the right
     const hasImage = !!firstThumb;
 

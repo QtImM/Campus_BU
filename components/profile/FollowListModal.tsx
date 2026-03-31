@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     FlatList,
-    Image,
     Modal,
     Pressable,
     StyleSheet,
@@ -14,6 +13,8 @@ import {
     View,
 } from 'react-native';
 import { followUser, FollowUserInfo, getFollowersList, getFollowingList, unfollowUser } from '../../services/follows';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
+import { CachedRemoteImage } from '../common/CachedRemoteImage';
 
 type TabType = 'followers' | 'following';
 
@@ -270,8 +271,8 @@ export const FollowListModal: React.FC<FollowListModalProps> = ({
                     onPress={() => handleUserPress(item.uid)}
                     activeOpacity={0.7}
                 >
-                    {item.avatarUrl ? (
-                        <Image source={{ uri: item.avatarUrl }} style={styles.avatar} />
+                    {isRemoteImageUrl(item.avatarUrl) ? (
+                        <CachedRemoteImage uri={item.avatarUrl} style={styles.avatar} />
                     ) : (
                         <View style={[styles.avatar, styles.avatarPlaceholder]}>
                             <UserIcon size={20} color="#fff" />

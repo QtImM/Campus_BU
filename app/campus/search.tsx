@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     FlatList,
-    Image,
     Keyboard,
     ScrollView,
     StyleSheet,
@@ -17,11 +16,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MasonryGrid from '../../components/campus/MasonryGrid';
 import { MasonryPostCard } from '../../components/campus/MasonryPostCard';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { ForumPostRow } from '../../components/forum/ForumPostRow';
 import { getCurrentUser, searchUserProfiles, UserSearchResult } from '../../services/auth';
 import { searchPosts, togglePostLike } from '../../services/campus';
 import { searchForumPosts } from '../../services/forum';
 import { ForumPost, Post } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 type SearchTab = 'discover' | 'forum' | 'users';
 
@@ -260,16 +261,14 @@ export default function CampusSearchScreen() {
                         keyExtractor={(item) => item.uid}
                         renderItem={({ item }) => {
                             const initial = item.displayName?.charAt(0)?.toUpperCase() || '?';
-                            const isAvatarUrl = item.avatarUrl?.startsWith('http://') || item.avatarUrl?.startsWith('https://');
-
                             return (
                                 <TouchableOpacity
                                     style={styles.userRow}
                                     activeOpacity={0.85}
                                     onPress={() => router.push(`/profile/${item.uid}` as any)}
                                 >
-                                    {isAvatarUrl ? (
-                                        <Image source={{ uri: item.avatarUrl }} style={styles.userAvatar} />
+                                    {isRemoteImageUrl(item.avatarUrl) ? (
+                                        <CachedRemoteImage uri={item.avatarUrl} style={styles.userAvatar} />
                                     ) : (
                                         <View style={styles.userAvatarFallback}>
                                             <Text style={styles.userAvatarFallbackText}>{initial}</Text>

@@ -1,10 +1,12 @@
 import { Camera, Edit3, MessageCircle, User as UserIcon } from 'lucide-react-native';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { User } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isAdminSync, isHKBUEmail } from '../../utils/userUtils';
 import { AdminBadge } from '../common/AdminBadge';
+import { CachedRemoteImage } from '../common/CachedRemoteImage';
 import { EduBadge } from '../common/EduBadge';
 
 interface ProfileHeaderProps {
@@ -52,8 +54,8 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         <View style={styles.cardContainer}>
             <View style={styles.avatarSection}>
                 <View style={styles.avatarWrapper}>
-                    {user?.avatarUrl ? (
-                        <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+                    {isRemoteImageUrl(user?.avatarUrl) ? (
+                        <CachedRemoteImage uri={user.avatarUrl} style={styles.avatar} />
                     ) : (
                         <View style={[styles.avatar, styles.avatarPlaceholder]}>
                             <UserIcon size={32} color="#fff" />

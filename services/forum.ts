@@ -1,5 +1,6 @@
 import { ForumCategory, ForumComment, ForumPost, ForumSort } from '../types';
 import { compressImageForUpload } from '../utils/image';
+import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { getFollowingUserIds } from './follows';
 import { supabase } from './supabase';
 
@@ -326,7 +327,11 @@ export const uploadForumImage = async (uri: string): Promise<string> => {
 
     const { error } = await supabase.storage
         .from('campus')
-        .upload(filePath, arrayBuffer, { contentType: 'image/jpeg', upsert: true });
+        .upload(filePath, arrayBuffer, {
+            contentType: 'image/jpeg',
+            cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
+            upsert: true,
+        });
 
     if (error) throw error;
 

@@ -1,4 +1,5 @@
 import { Post, PostType } from '../types';
+import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { supabase } from './supabase';
 
 const POSTS_TABLE = 'posts';
@@ -108,6 +109,7 @@ export const uploadPostImage = async (uri: string, postId: string): Promise<stri
             .from('posts') // Assume 'posts' bucket exists, publicly readable
             .upload(fileName, blob, {
                 contentType: 'image/jpeg',
+                cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
             });
 
         if (error) throw error;

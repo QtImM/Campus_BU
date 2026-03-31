@@ -33,9 +33,11 @@ import { getCurrentUser } from '../../services/auth';
 import { deletePost, fetchPosts, subscribeToPosts, togglePostLike } from '../../services/campus';
 import { fetchForumPosts } from '../../services/forum';
 import { ForumCategory, ForumPost, ForumSort, Post, PostCategory } from '../../types';
+import { isRemoteImageUrl, normalizeRemoteImageUrl } from '../../utils/remoteImage';
 import { changeLanguage } from '../i18n/i18n';
 
 type MainTab = 'discover' | 'forum';
+const DISCOVER_PREFETCH_LIMIT = 12;
 
 export default function CampusScreen() {
   const { t, i18n } = useTranslation();
@@ -181,8 +183,7 @@ export default function CampusScreen() {
   );
 
   // ─── Data loading ─────────────────────────────────────────────────────────
-  const isValidCoverUrl = (url?: string) =>
-    !!url && (url.startsWith('http://') || url.startsWith('https://'));
+  const prefetchedCoverUrlsRef = useRef<Set<string>>(new Set());
 
   const loadPosts = useCallback(async (isSilent = false) => {
     try {
@@ -191,12 +192,33 @@ export default function CampusScreen() {
       setCurrentUser(user);
       const data = await fetchPosts('All', user?.uid);
       setPosts(data);
-      // Pre-warm expo-image's own disk+memory cache (must use expo-image's prefetch, not RN's)
-      data.forEach(post => {
+
+      if (__DEV__) {
+        return;
+      }
+
+      // Pre-warm only the first visible batch instead of the entire feed.
+      let prefetchedCount = 0;
+      for (const post of data) {
+        if (prefetchedCount >= DISCOVER_PREFETCH_LIMIT) {
+          break;
+        }
+
         const imgs = post.images?.length ? post.images : post.imageUrl ? [post.imageUrl] : [];
-        const cover = imgs.find(img => isValidCoverUrl(img));
-        if (cover) ExpoImageLib.prefetch(cover).catch(() => { });
-      });
+        const cover = imgs
+          .map(img => normalizeRemoteImageUrl(img))
+          .find((img): img is string => !!img);
+
+        if (!cover || prefetchedCoverUrlsRef.current.has(cover)) {
+          continue;
+        }
+
+        prefetchedCoverUrlsRef.current.add(cover);
+        prefetchedCount += 1;
+        ExpoImageLib.prefetch(cover).catch(() => {
+          prefetchedCoverUrlsRef.current.delete(cover);
+        });
+      }
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
@@ -241,7 +263,7 @@ export default function CampusScreen() {
       // Pass cover image URL so the detail page can render it immediately from cache
       const post = posts.find(p => p.id === postId);
       const imgs = post?.images?.length ? post.images : post?.imageUrl ? [post.imageUrl] : [];
-      const cover = imgs.find(img => isValidCoverUrl(img)) ?? '';
+      const cover = imgs.find(img => isRemoteImageUrl(img)) ?? '';
       const textOnly = !cover ? '1' : '0';
       router.push({
         pathname: '/campus/[id]' as any,

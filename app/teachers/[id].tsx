@@ -33,6 +33,8 @@ import {
     summarizeTeacherReviews
 } from '../../services/teachers';
 import { Teacher, TeacherReview } from '../../types';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isHKBUEmail } from '../../utils/userUtils';
 import { EduBadge } from '../../components/common/EduBadge';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
@@ -286,8 +288,8 @@ export default function TeacherDetailScreen() {
                                     <View style={styles.reviewHeader}>
                                         <View style={styles.reviewerInfo}>
                                             <View style={styles.reviewerAvatar}>
-                                                {review.authorAvatar && review.authorAvatar.length > 2 ? (
-                                                    <Image source={{ uri: review.authorAvatar }} style={styles.avatarImage} />
+                                                {isRemoteImageUrl(review.authorAvatar) ? (
+                                                    <CachedRemoteImage uri={review.authorAvatar} style={styles.avatarImage} />
                                                 ) : (
                                                     <Text style={styles.reviewerInitial}>
                                                         {review.authorName ? review.authorName.charAt(0).toUpperCase() : 'S'}

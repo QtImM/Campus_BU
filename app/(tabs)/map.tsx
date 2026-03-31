@@ -12,7 +12,6 @@ import {
     Dimensions,
     Easing,
     FlatList,
-    Image,
     InteractionManager,
     KeyboardAvoidingView,
     Modal,
@@ -26,6 +25,7 @@ import {
     View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { CAMPUS_BUILDINGS } from '../../data/buildings';
 import storage from '../../lib/storage';
 import { getCurrentUser } from '../../services/auth';
@@ -34,6 +34,7 @@ import { fetchPosts } from '../../services/campus';
 import { CAMPUS_LOCATIONS } from '../../services/locations';
 import { CampusLocation } from '../../types';
 import { compressImage } from '../../utils/image';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -1717,8 +1718,8 @@ export default function MapScreen() {
                                                     <Text style={styles.commentTime}>{comment?.time || t('map.markers.just_now')}</Text>
                                                 </View>
                                                 <Text style={styles.commentContent}>{comment?.content || ''}</Text>
-                                                {comment?.image && (
-                                                    <Image source={{ uri: comment.image || '' }} style={styles.commentImage} />
+                                                {isRemoteImageUrl(comment?.image) && (
+                                                    <CachedRemoteImage uri={comment.image} style={styles.commentImage} />
                                                 )}
                                             </View>
                                         ))}
@@ -1765,7 +1766,7 @@ export default function MapScreen() {
 
                                     {commentImage && (
                                         <View style={styles.commentImagePreviewContainer}>
-                                            <Image source={{ uri: commentImage || '' }} style={styles.commentImagePreview} />
+                                            <Animated.Image source={{ uri: commentImage || '' }} style={styles.commentImagePreview} />
                                             <TouchableOpacity
                                                 style={styles.removeCommentImageButton}
                                                 onPress={() => setCommentImage(null)}

@@ -1,5 +1,6 @@
 // services/food.ts
 import { supabase } from './supabase';
+import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 
 export interface FoodReview {
     id: string;
@@ -104,6 +105,7 @@ export const uploadFoodImage = async (uri: string): Promise<string> => {
             .from('campus') // Reusing the 'campus' bucket
             .upload(filePath, arrayBuffer, {
                 contentType: 'image/jpeg',
+                cacheControl: IMMUTABLE_STORAGE_CACHE_CONTROL,
                 upsert: true
             });
 

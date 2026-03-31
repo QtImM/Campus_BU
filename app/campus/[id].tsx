@@ -16,7 +16,6 @@ import {
     Animated,
     DeviceEventEmitter,
     Dimensions,
-    Image,
     Keyboard,
     KeyboardAvoidingView,
     Platform,
@@ -33,6 +32,7 @@ import { AdminDeletionModal, DeletionReason } from '../../components/campus/Admi
 import { BottomSheet } from '../../components/campus/BottomSheet';
 import { SharePostModal } from '../../components/campus/SharePostModal';
 import { Toast, ToastType } from '../../components/campus/Toast';
+import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { EduBadge } from '../../components/common/EduBadge';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { ZoomableImageCarousel } from '../../components/common/ZoomableImageCarousel';
@@ -49,6 +49,7 @@ import {
 } from '../../services/campus';
 import { sendDirectMessage } from '../../services/messages';
 import { Post, PostComment } from '../../types';
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isAdmin, isHKBUEmail } from '../../utils/userUtils';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -74,9 +75,6 @@ function getPalette(id: string) {
     }
     return TEXT_CARD_PALETTES[Math.abs(hash) % TEXT_CARD_PALETTES.length];
 }
-
-const isValidUrl = (url?: string) =>
-    !!url && (url.startsWith('http://') || url.startsWith('https://'));
 
 const categoryColors: Record<string, string> = {
     Events: '#FF6B6B',
@@ -117,20 +115,11 @@ export default function PostDetailScreen() {
     const [isOwnPost, setIsOwnPost] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
 
-    // Debug logging for settings sheet
-    React.useEffect(() => {
-        console.log('[PostDetail] settingsSheetVisible changed:', settingsSheetVisible);
-        console.log('[PostDetail] currentUser:', currentUser ? 'exists' : 'null', 'uid:', currentUser?.uid);
-        console.log('[PostDetail] isAdminUser:', isAdminUser, 'isOwnPost:', isOwnPost);
-    }, [settingsSheetVisible, currentUser, isAdminUser, isOwnPost]);
-
     // Check if current user is admin
     React.useEffect(() => {
         const checkAdminStatus = async () => {
             if (currentUser?.uid) {
-                console.log('[PostDetail] Checking admin status for user:', currentUser.uid);
                 const admin = await isAdmin(currentUser.uid);
-                console.log('[PostDetail] User is admin:', admin);
                 setIsAdminUser(admin);
             } else {
                 setIsAdminUser(false);
@@ -142,13 +131,7 @@ export default function PostDetailScreen() {
     // Check if current user owns the post
     React.useEffect(() => {
         if (post && currentUser?.uid) {
-            const ownsPost = post.authorId === currentUser.uid;
-            console.log('[PostDetail] Post ownership check:', {
-                postAuthorId: post.authorId,
-                currentUserId: currentUser.uid,
-                isOwnPost: ownsPost
-            });
-            setIsOwnPost(ownsPost);
+            setIsOwnPost(post.authorId === currentUser.uid);
         } else {
             setIsOwnPost(false);
         }
@@ -378,7 +361,6 @@ export default function PostDetailScreen() {
 
     // Admin deletion handlers
     const handleAdminDeletePress = () => {
-        console.log('[PostDetail] Admin delete pressed in settings sheet');
         setSettingsSheetVisible(false);
         setTimeout(() => {
             setAdminDeletionModalVisible(true);
@@ -386,8 +368,6 @@ export default function PostDetailScreen() {
     };
 
     const handleAdminDeleteConfirm = async (reason: DeletionReason, customReason?: string) => {
-        console.log('[PostDetail] Admin delete confirmed with reason:', reason, customReason);
-
         if (!post) {
             console.error('[PostDetail] No post to delete');
             return;
@@ -399,8 +379,6 @@ export default function PostDetailScreen() {
 
             // Call the delete function
             await deletePost(post.id);
-
-            console.log('[PostDetail] Post deleted successfully');
 
             // Show success toast
             const reasonText = reason === 'other' && customReason
@@ -442,13 +420,11 @@ export default function PostDetailScreen() {
     };
 
     const handleAdminDeleteCancel = () => {
-        console.log('[PostDetail] Admin delete cancelled');
         setAdminDeletionModalVisible(false);
     };
 
     // User deletion handlers (for own posts)
     const handleUserDeletePress = () => {
-        console.log('[PostDetail] User delete pressed for own post');
         setSettingsSheetVisible(false);
         setTimeout(() => {
             setUserDeletionConfirmVisible(true);
@@ -456,8 +432,6 @@ export default function PostDetailScreen() {
     };
 
     const handleUserDeleteConfirm = async () => {
-        console.log('[PostDetail] User delete confirmed for own post');
-
         if (!post) {
             console.error('[PostDetail] No post to delete');
             return;
@@ -469,8 +443,6 @@ export default function PostDetailScreen() {
 
             // Call the delete function
             await deletePost(post.id);
-
-            console.log('[PostDetail] Post deleted successfully (user deletion)');
 
             // Show success toast
             setToast({
@@ -506,7 +478,6 @@ export default function PostDetailScreen() {
     };
 
     const handleUserDeleteCancel = () => {
-        console.log('[PostDetail] User delete cancelled');
         setUserDeletionConfirmVisible(false);
     };
 
@@ -543,9 +514,9 @@ export default function PostDetailScreen() {
     // ── Prepare image list ────────────────────────────────────────────────────
     // While loading, use the param-passed cover for instant display
     const resolvedImages = post
-        ? (post.images?.length ? post.images : post.imageUrl ? [post.imageUrl] : []).filter(isValidUrl)
+        ? (post.images?.length ? post.images : post.imageUrl ? [post.imageUrl] : []).filter(isRemoteImageUrl)
         : [];
-    const coverFromParam = coverImageParam && isValidUrl(coverImageParam) ? coverImageParam : null;
+    const coverFromParam = isRemoteImageUrl(coverImageParam) ? coverImageParam : null;
     const images = resolvedImages.length > 0 ? resolvedImages : coverFromParam ? [coverFromParam] : [];
     const paramIsTextOnly = isTextOnlyParam === '1';
     const isTextOnly = post ? images.length === 0 : paramIsTextOnly;
@@ -568,12 +539,10 @@ export default function PostDetailScreen() {
                 {/* ── Top header bar ── */}
                 <View style={styles.topBar}>
                     <TouchableOpacity style={styles.backBtn} onPress={() => {
-                        console.log('[PostDetail] Back button pressed');
                         // Check if we can go back, otherwise navigate to campus feed
                         if (router.canGoBack()) {
                             router.back();
                         } else {
-                            console.log('[PostDetail] No history, navigating to campus feed');
                             router.replace('/(tabs)/campus' as any);
                         }
                     }}>
@@ -581,9 +550,6 @@ export default function PostDetailScreen() {
                     </TouchableOpacity>
                     <Text style={styles.topBarTitle}>HKCampus</Text>
                     <TouchableOpacity style={styles.settingsBtn} onPress={() => {
-                        console.log('[PostDetail] Settings button pressed!');
-                        console.log('[PostDetail] Current settingsSheetVisible:', settingsSheetVisible);
-                        console.log('[PostDetail] Setting settingsSheetVisible to true');
                         setSettingsSheetVisible(true);
                     }}>
                         <MoreHorizontal size={22} color="#1E3A8A" />
@@ -646,8 +612,8 @@ export default function PostDetailScreen() {
                         activeOpacity={post?.isAnonymous ? 1 : 0.7}
                     >
                         <View style={styles.authorAvatar}>
-                            {post && !post.isAnonymous && isValidUrl(post.authorAvatar) ? (
-                                <Image source={{ uri: post.authorAvatar }} style={styles.avatarImg} />
+                            {post && !post.isAnonymous && isRemoteImageUrl(post.authorAvatar) ? (
+                                <CachedRemoteImage uri={post.authorAvatar} style={styles.avatarImg} />
                             ) : loading ? null : (
                                 <Text style={styles.avatarLetter}>
                                     {post?.isAnonymous ? '?' : post?.authorName.charAt(0).toUpperCase()}
@@ -736,8 +702,8 @@ export default function PostDetailScreen() {
                                         disabled={comment.isAnonymous}
                                         activeOpacity={comment.isAnonymous ? 1 : 0.7}
                                     >
-                                        {comment.authorAvatar && isValidUrl(comment.authorAvatar) ? (
-                                            <Image source={{ uri: comment.authorAvatar }} style={styles.avatarImg} />
+                                        {isRemoteImageUrl(comment.authorAvatar) ? (
+                                            <CachedRemoteImage uri={comment.authorAvatar} style={styles.avatarImg} />
                                         ) : (
                                             <Text style={styles.avatarLetter}>
                                                 {comment.authorName?.charAt(0).toUpperCase() ?? '?'}
@@ -810,8 +776,8 @@ export default function PostDetailScreen() {
                                                     disabled={reply.isAnonymous}
                                                     activeOpacity={reply.isAnonymous ? 1 : 0.7}
                                                 >
-                                                    {reply.authorAvatar && isValidUrl(reply.authorAvatar) ? (
-                                                        <Image source={{ uri: reply.authorAvatar }} style={styles.avatarImg} />
+                                                    {isRemoteImageUrl(reply.authorAvatar) ? (
+                                                        <CachedRemoteImage uri={reply.authorAvatar} style={styles.avatarImg} />
                                                     ) : (
                                                         <Text style={styles.avatarLetterSmall}>
                                                             {reply.authorName?.charAt(0).toUpperCase() ?? '?'}
@@ -945,8 +911,6 @@ export default function PostDetailScreen() {
                         <TouchableOpacity
                             style={styles.shareOption}
                             onPress={() => {
-                                console.log('[PostDetail] Share button clicked, currentUser.uid:', currentUser?.uid);
-                                console.log('[PostDetail] Post data:', { id, content: post?.content?.substring(0, 50) });
                                 setSettingsSheetVisible(false);
                                 setShowShareModal(true);
                             }}
@@ -1035,11 +999,9 @@ export default function PostDetailScreen() {
                 <SharePostModal
                     visible={showShareModal}
                     onClose={() => {
-                        console.log('[PostDetail] Share modal closed');
                         setShowShareModal(false);
                     }}
                     onBack={() => {
-                        console.log('[PostDetail] Share modal back pressed, reopening settings sheet');
                         setShowShareModal(false);
                         setSettingsSheetVisible(true);
                     }}
@@ -1047,11 +1009,8 @@ export default function PostDetailScreen() {
                     postId={id}
                     postContent={post?.content || ''}
                     onShare={async (receiverId: string, message: string) => {
-                        console.log('[PostDetail] onShare called with receiverId:', receiverId);
-                        console.log('[PostDetail] Message length:', message.length);
                         try {
                             await sendDirectMessage(currentUser?.uid || '', receiverId, message);
-                            console.log('[PostDetail] sendDirectMessage succeeded');
                             setToast({ visible: true, message: t('share.success', '帖子已分享'), type: 'success' });
                         } catch (error) {
                             console.error('[PostDetail] Failed to send message:', error);

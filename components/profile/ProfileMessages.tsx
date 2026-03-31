@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Search } from 'lucide-react-native';
+import { CachedRemoteImage } from '../common/CachedRemoteImage';
 import { DirectConversationSummary } from '../../types';
 import { getCurrentUser } from '../../services/auth';
 import { fetchDirectConversations, subscribeToDirectConversationList } from '../../services/messages';
-
-const isValidUrl = (value?: string) => !!value && (value.startsWith('http://') || value.startsWith('https://'));
+import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 const formatConversationTimestamp = (date: Date, t: (key: string, options?: any) => string) => {
     const now = Date.now();
@@ -147,8 +147,8 @@ export const ProfileMessages: React.FC = () => {
             activeOpacity={0.7}
         >
             <View style={styles.avatarContainer}>
-                {isValidUrl(item.user.avatar) ? (
-                    <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+                {isRemoteImageUrl(item.user.avatar) ? (
+                    <CachedRemoteImage uri={item.user.avatar} style={styles.avatar} />
                 ) : (
                     <View style={[styles.avatar, styles.avatarFallback]}>
                         <Text style={styles.avatarFallbackText}>
