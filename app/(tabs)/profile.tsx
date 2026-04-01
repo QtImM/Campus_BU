@@ -13,6 +13,7 @@ import { ProfileTabs, ProfileTabType } from '../../components/profile/ProfileTab
 import { useNotifications } from '../../context/NotificationContext';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { deleteAccount, getCurrentUser, getUserProfile, signOut, uploadAndUpdateAvatar } from '../../services/auth';
+import { getDailyDigestEnabled, setDailyDigestEnabled as updateDailyDigestEnabled } from '../../services/agent/dailyDigest';
 import { fetchAnonymousPostsByAuthor, fetchLikedPosts, fetchPostsByAuthor, togglePostLike } from '../../services/campus';
 import { getFollowCounts } from '../../services/follows';
 import { fetchNotifications, markAllAsRead, markAsRead, Notification, subscribeToNotifications } from '../../services/notifications';
@@ -46,6 +47,8 @@ export default function ProfileScreen() {
     const [loadingProfile, setLoadingProfile] = useState(true);
     const [pushNotificationsEnabled, setPushNotificationsEnabledState] = useState(false);
     const [pushNotificationsLoading, setPushNotificationsLoading] = useState(false);
+    const [dailyDigestEnabled, setDailyDigestEnabledState] = useState(false);
+    const [dailyDigestLoading, setDailyDigestLoading] = useState(false);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState('');
@@ -63,8 +66,12 @@ export default function ProfileScreen() {
             if (user) {
                 setUserId(user.uid);
                 setUserEmail(user.email || '');
-                const enabled = await getPushNotificationsEnabled(user.uid);
+                const [enabled, digestEnabled] = await Promise.all([
+                    getPushNotificationsEnabled(user.uid),
+                    getDailyDigestEnabled(user.uid),
+                ]);
                 setPushNotificationsEnabledState(enabled);
+                setDailyDigestEnabledState(digestEnabled);
 
                 // Check admin status
                 const adminStatus = await isAdmin(user.uid);
@@ -93,6 +100,7 @@ export default function ProfileScreen() {
                 }
             } else {
                 setPushNotificationsEnabledState(false);
+                setDailyDigestEnabledState(false);
             }
         } catch (error) {
             console.error('[Profile] Error loading data:', error);
@@ -216,6 +224,29 @@ export default function ProfileScreen() {
             setPushNotificationsEnabledState(nextEnabled);
         } finally {
             setPushNotificationsLoading(false);
+        }
+    };
+
+    const handleDailyDigestToggle = async (nextEnabled: boolean) => {
+        if (!userId) {
+            checkLogin(userId);
+            return;
+        }
+
+        setDailyDigestLoading(true);
+        try {
+            await updateDailyDigestEnabled(userId, nextEnabled);
+            setDailyDigestEnabledState(nextEnabled);
+        } catch (error) {
+            console.error('Error updating daily digest preference:', error);
+            Alert.alert(
+                t('common.tip'),
+                nextEnabled
+                    ? t('profile.daily_digest_enable_failed', 'Could not enable AI Daily Digest. Please try again.')
+                    : t('profile.daily_digest_disable_failed', 'Could not disable AI Daily Digest. Please try again.')
+            );
+        } finally {
+            setDailyDigestLoading(false);
         }
     };
 
@@ -688,6 +719,31 @@ export default function ProfileScreen() {
                                 {pushNotificationsEnabled
                                     ? t('profile.push_notifications_enabled_hint')
                                     : t('profile.push_notifications_disabled_hint')}
+                            </Text>
+                        </View>
+                    )}
+
+                    {userId && (
+                        <View style={styles.section}>
+                            <View style={styles.settingRow}>
+                                <View style={styles.settingLeft}>
+                                    <Sparkles size={20} color="#1E3A8A" />
+                                    <Text style={styles.settingLabel}>{t('profile.daily_digest')}</Text>
+                                </View>
+                                <Switch
+                                    value={dailyDigestEnabled}
+                                    onValueChange={handleDailyDigestToggle}
+                                    disabled={!pushNotificationsEnabled || dailyDigestLoading}
+                                    trackColor={{ false: '#D1D5DB', true: '#BFDBFE' }}
+                                    thumbColor={dailyDigestEnabled ? '#1E3A8A' : '#FFFFFF'}
+                                />
+                            </View>
+                            <Text style={styles.settingHint}>
+                                {!pushNotificationsEnabled
+                                    ? t('profile.daily_digest_requires_push')
+                                    : dailyDigestEnabled
+                                        ? t('profile.daily_digest_enabled_hint')
+                                        : t('profile.daily_digest_disabled_hint')}
                             </Text>
                         </View>
                     )}
