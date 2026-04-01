@@ -20,6 +20,7 @@ import { getPushNotificationsEnabled, setPushNotificationsEnabled as updatePushN
 import { supabase } from '../../services/supabase';
 import { Post, User as UserProfile } from '../../types';
 import { isAdmin } from '../../utils/userUtils';
+import { getDeleteAccountErrorAlertCopy, getDeleteAccountSuccessAlertCopy } from '../../utils/deleteAccountFeedback';
 import { changeLanguage } from '../i18n/i18n';
 
 // Helper to check if avatar URL is valid (not a local file path)
@@ -248,10 +249,17 @@ export default function ProfileScreen() {
                     onPress: async () => {
                         try {
                             await deleteAccount();
-                            router.replace('/(auth)/login');
+                            const successCopy = getDeleteAccountSuccessAlertCopy(t);
+                            Alert.alert(successCopy.title, successCopy.message, [
+                                {
+                                    text: t('common.ok'),
+                                    onPress: () => router.replace('/(auth)/login'),
+                                }
+                            ]);
                         } catch (e) {
                             console.error('Delete account failed:', e);
-                            Alert.alert(t('common.error'), t('profile.cannot_update', 'Operation failed'));
+                            const errorCopy = getDeleteAccountErrorAlertCopy(t);
+                            Alert.alert(errorCopy.title, errorCopy.message);
                         }
                     }
                 }

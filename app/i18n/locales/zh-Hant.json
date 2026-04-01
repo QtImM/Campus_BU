@@ -87,6 +87,8 @@
         "sign_out_confirm": "確定要登出嗎？",
         "delete_account": "註銷帳號",
         "delete_account_confirm": "確定要註銷您的帳號嗎？此操作不可逆，所有數據將被永久刪除。",
+        "delete_account_success": "帳號已註銷。",
+        "delete_account_failed_logged_in": "註銷失敗，目前帳號仍保持登入，請稍後再試。",
         "mark_all_read": "全部標記為已讀",
         "no_notifications_yet": "暫無通知",
         "guest_name": "訪客",

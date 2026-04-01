@@ -88,6 +88,8 @@
         "sign_out_confirm": "确定要退出登录吗？",
         "delete_account": "注销账号",
         "delete_account_confirm": "确定要注销您的账号吗？此操作不可逆，所有数据将被永久删除。",
+        "delete_account_success": "账号已注销。",
+        "delete_account_failed_logged_in": "注销失败，当前账号仍保持登录，请稍后重试。",
         "mark_all_read": "全部标记为已读",
         "no_notifications_yet": "暂无通知",
         "guest_name": "访客",
