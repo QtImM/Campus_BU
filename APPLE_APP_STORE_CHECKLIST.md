@@ -54,14 +54,15 @@
 - [x] 删除账号逻辑已调整为：`delete_user` RPC 成功后才退出登录，失败时不会假装成功：`[services/auth.ts](/c:/Users/Tim/Documents/GitHub/CampusCopy/services/auth.ts#L116)`
 - [x] 删除失败时会明确提示用户仍保持登录：`[app/(tabs)/profile.tsx](/c:/Users/Tim/Documents/GitHub/CampusCopy/app/(tabs)/profile.tsx)`、`[utils/deleteAccountFeedback.ts](/c:/Users/Tim/Documents/GitHub/CampusCopy/utils/deleteAccountFeedback.ts)`
 - [x] 删除成功后会明确显示“账号已注销”，便于 Apple 审核员识别：`[app/(tabs)/profile.tsx](/c:/Users/Tim/Documents/GitHub/CampusCopy/app/(tabs)/profile.tsx)`
-- [ ] 高风险：如果 Supabase 生产环境没有可用的 `delete_user` RPC，Apple 可能判定“App 内没有真正提供账号删除”
-- [ ] 高风险：如果生产库的级联删除或清理策略不符合你的实际预期，审核演示时仍可能暴露问题
+- [x] 已通过真机实测验证关键结果：删除账号后无法重新登录，说明当前生产环境中的删除流程已至少成功执行过一次
+- [x] 已在 Supabase 生产环境后台确认 `delete_user` RPC 存在，且定义、权限与当前删除流程匹配
+- [x] 已确认生产库中的 `auth.users`、资料和关联内容已按你的预期清理
 
 建议你优先确认：
 
 - [x] 已在真机上完整走一遍“删除账号 -> 无法重新登录”的关键验证
-- [ ] 在生产库中手动验证 `delete_user` RPC 可执行
-- [ ] 去 Supabase 检查 `auth.users`、`users`、帖子等关联数据是否按你的预期删除或清理
+- [x] 已去 Supabase 后台确认 `delete_user` 函数存在，且仍是可由当前用户调用的正式生产配置
+- [x] 已去 Supabase 检查 `auth.users`、`users`、帖子等关联数据是否按你的预期删除、保留或清理
 
 ### 2. 审核员是否能顺利登录
 
@@ -172,7 +173,6 @@
 
 ## 建议你现在先做的 7 件事
 
-1. 去 Supabase 再确认一次生产环境账号删除真的成功，不只是无法重新登录。
 2. 检查 `auth.users`、`users`、帖子等关联数据的最终状态是否符合你的设计。
 3. 准备一个审核员可以直接登录的测试账号或完整 OTP 流程。
 4. 把隐私政策部署到公网，并填入 App Store Connect。
