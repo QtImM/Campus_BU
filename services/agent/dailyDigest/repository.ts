@@ -3,6 +3,7 @@ import { DailyDigestPayload } from './types';
 
 const getDigestKey = (userId: string, date: string) => `agent_daily_digest:${userId}:${date}`;
 const getPushSentKey = (userId: string, date: string) => `agent_daily_digest_push_sent:${userId}:${date}`;
+const getDigestEnabledKey = (userId: string) => `agent_daily_digest_enabled:${userId}`;
 
 export const getCachedDailyDigest = async (userId: string, date: string): Promise<DailyDigestPayload | null> => {
     try {
@@ -28,4 +29,21 @@ export const isDailyDigestPushSent = async (userId: string, date: string): Promi
 
 export const markDailyDigestPushSent = async (userId: string, date: string): Promise<void> => {
     await storage.setItem(getPushSentKey(userId, date), '1');
+};
+
+export const getDailyDigestEnabled = async (userId: string): Promise<boolean> => {
+    if (!userId) {
+        return false;
+    }
+
+    const value = await storage.getItem(getDigestEnabledKey(userId));
+    return value === 'true';
+};
+
+export const setDailyDigestEnabled = async (userId: string, enabled: boolean): Promise<void> => {
+    if (!userId) {
+        return;
+    }
+
+    await storage.setItem(getDigestEnabledKey(userId), enabled ? 'true' : 'false');
 };

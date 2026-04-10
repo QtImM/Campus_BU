@@ -3,7 +3,7 @@ import { buildDailyDigestSourceUrl, getDailyDigestDate } from './config';
 import { fetchDailyDigestSourceHtml } from './fetchSource';
 import { parseDailyDigestItems, parseDailyDigestSummaryText } from './parseSource';
 import { sendDailyDigestPush } from './push';
-import { getCachedDailyDigest, saveCachedDailyDigest } from './repository';
+import { getCachedDailyDigest, getDailyDigestEnabled, saveCachedDailyDigest } from './repository';
 import { buildDailyDigestSummary } from './summarize';
 import { DailyDigestPayload, DigestJobResult } from './types';
 
@@ -60,6 +60,14 @@ export const runDailyDigestJobForUser = async (
         return {
             ok: false,
             reason: 'missing_user_id',
+        };
+    }
+
+    const digestEnabled = await getDailyDigestEnabled(userId);
+    if (!digestEnabled) {
+        return {
+            ok: false,
+            reason: 'disabled',
         };
     }
 

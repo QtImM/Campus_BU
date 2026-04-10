@@ -1,6 +1,6 @@
 # HKCampus App Store Privacy Disclosure Checklist
 
-Last reviewed: 2026-03-22
+Last reviewed: 2026-04-01
 
 Use this as the working draft for App Store Connect "App Privacy".
 
@@ -53,7 +53,7 @@ Use:
 
 ### Location
 
-- Precise location, only when user actively requests location-based features
+- Precise location, only when the user actively requests location-based features
 
 Use:
 
@@ -79,8 +79,13 @@ Use:
 - Push notification permission is user-initiated.
 - Review build should not expose "demo", "beta", "mock", "prototype", or similar wording in user-facing UI.
 
+## Public URLs
+
+- Privacy Policy: https://public-site-ten-pearl.vercel.app/privacy
+- Support: https://public-site-ten-pearl.vercel.app/support
+
 ## Before Submission
 
-- Publish [privacy-policy.md](/d:/CampusCopy/HKCampus/docs/privacy-policy.md) to a public HTTPS URL.
-- Use that public URL in App Store Connect.
+- Use the public privacy policy URL above in App Store Connect.
+- Use the public support URL above in App Store Connect.
 - Verify the final build still matches the declared data collection above.

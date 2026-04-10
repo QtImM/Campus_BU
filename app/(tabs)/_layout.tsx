@@ -7,6 +7,7 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import { AnimatedTabIcon } from '../../components/common/AnimatedTabIcon';
 import { useCourseActivity } from '../../context/CourseActivityContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { getTabLabel } from './tabLabels';
 
 const AgentTabIcon = ({ color, focused }: { color: string; focused: boolean }) => (
   <View style={styles.agentTabIcon}>
@@ -23,6 +24,13 @@ export default function TabLayout() {
   const { t } = useTranslation('translation', { keyPrefix: 'tabs' });
   const scrollX = useRef(new Animated.Value(0)).current;
   const [containerWidth, setContainerWidth] = useState(0);
+  const routeLabelKeyMap: Partial<Record<string, 'home' | 'map' | 'agent' | 'course' | 'me'>> = {
+    campus: 'home',
+    map: 'map',
+    agent: 'agent',
+    course: 'course',
+    profile: 'me',
+  };
 
   // Custom TabBar Component to handle the sliding indicator
   const CustomTabBar = ({ state, descriptors, navigation }: any) => {
@@ -75,7 +83,10 @@ export default function TabLayout() {
 
           {visibleRoutes.map((route: any, index: number) => {
             const { options } = descriptors[route.key];
-            const label = options.tabBarLabel;
+            const routeLabelKey = routeLabelKeyMap[route.name];
+            const label = routeLabelKey
+              ? getTabLabel(t, routeLabelKey)
+              : (typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name);
             const isFocused = activeIndex === index;
 
             const onPress = () => {
@@ -140,7 +151,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="campus"
         options={{
-          tabBarLabel: t('home'),
+          tabBarLabel: getTabLabel(t, 'home'),
           tabBarIcon: ({ color, focused }) => (
             <AnimatedTabIcon focused={focused} color={color} size={22} IconComponent={CalendarIcon} />
           ),
@@ -149,7 +160,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="map"
         options={{
-          tabBarLabel: t('map'),
+          tabBarLabel: getTabLabel(t, 'map'),
           tabBarIcon: ({ color, focused }) => (
             <AnimatedTabIcon focused={focused} color={color} size={22} IconComponent={MapIcon} />
           ),
@@ -164,7 +175,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="agent"
         options={{
-          tabBarLabel: t('agent'),
+          tabBarLabel: getTabLabel(t, 'agent'),
           tabBarIcon: ({ color, focused }) => (
             <AgentTabIcon color={color} focused={focused} />
           ),
@@ -173,7 +184,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="course"
         options={{
-          tabBarLabel: t('course'),
+          tabBarLabel: getTabLabel(t, 'course'),
           tabBarIcon: ({ color, focused }) => (
             <AnimatedTabIcon focused={focused} color={color} size={22} IconComponent={GraduationCap} />
           ),
@@ -188,7 +199,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          tabBarLabel: t('me'),
+          tabBarLabel: getTabLabel(t, 'me'),
           tabBarIcon: ({ color, focused }) => (
             <AnimatedTabIcon focused={focused} color={color} size={22} IconComponent={UserIcon} />
           ),
