@@ -29,7 +29,7 @@
 - 食堂模块：餐厅列表、详情、图片、点评与地图入口
 - 教师评价：教师检索、匿名评价、标签与 AI 总结
 - 社交能力：关注、粉丝、私信、消息会话、个人主页
-- AI 助手：基于 LangGraph 的校园问答与工具调用能力
+- AI 助手：基于自定义路由与工具编排的校园问答能力
 - OCR 课表导入：支持通过独立 Python 后端接入 OCR 识别流程
 - 多语言：简体中文、繁体中文、English
 
@@ -38,7 +38,7 @@
 - App: Expo 54, React Native 0.81, React 19, Expo Router
 - Language: TypeScript
 - Backend/Data: Supabase Auth, Postgres, Storage, Edge Functions
-- AI: LangGraph, LangChain, DeepSeek/OpenAI compatible APIs
+- AI: Custom agent routing, DeepSeek/OpenAI compatible APIs
 - Optional OCR backend: FastAPI + Python
 - Test: Jest + React Native Testing Library + Maestro E2E
 
