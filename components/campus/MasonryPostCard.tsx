@@ -1,5 +1,4 @@
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
 import { Heart, MessageCircle } from 'lucide-react-native';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +23,7 @@ interface MasonryPostCardProps {
     post: Post;
     onPress: () => void;
     onLike: () => void;
+    onLongPress?: () => void;
     currentUserId?: string;
     onAuthorPress?: (authorId: string) => void;
 }
@@ -66,7 +66,7 @@ function getPalette(id: string) {
 }
 
 export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
-    ({ post, onPress, onLike, currentUserId: _currentUserId, onAuthorPress }) => {
+    ({ post, onPress, onLike, onLongPress, currentUserId: _currentUserId, onAuthorPress }) => {
         const { t } = useTranslation();
         const pressed = useSharedValue(1);
 
@@ -100,6 +100,7 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                 <View style={styles.card}>
                     <TouchableOpacity
                         onPress={onPress}
+                        onLongPress={onLongPress}
                         onPressIn={onPressIn}
                         onPressOut={onPressOut}
                         activeOpacity={1}

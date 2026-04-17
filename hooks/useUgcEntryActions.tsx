@@ -293,9 +293,7 @@ export function useUgcEntryActions(options: UseUgcEntryActionsOptions) {
                             <View style={[styles.iconWrap, styles.hideIconWrap]}>
                                 <EyeOff size={18} color="#6D28D9" />
                             </View>
-                            <Text style={styles.actionText}>
-                                {t('moderation.ugc_action_hide_post', { defaultValue: 'Hide Post' })}
-                            </Text>
+                            <Text style={styles.actionText}>{t('moderation.ugc_action_hide_post')}</Text>
                         </TouchableOpacity>
                     )}
                     {canBlock && (

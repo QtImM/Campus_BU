@@ -1078,6 +1078,11 @@ export default function ProfileScreen() {
                         </View>
 
                         <Text style={styles.helpContent}>{t('profile.help_contact')}</Text>
+                        <View style={styles.helpModerationNoticeBox}>
+                            <Text style={styles.helpModerationNoticeText}>
+                                {t('profile.help_moderation_notice', '你可以在帖子或评论菜单中举报不当内容。我们会在 24 小时内处理举报，并移除违规内容、处置违规用户。')}
+                            </Text>
+                        </View>
 
                         <TouchableOpacity
                             style={styles.emailContainer}
@@ -1680,7 +1685,23 @@ const styles = StyleSheet.create({
         color: '#64748B',
         textAlign: 'center',
         lineHeight: 24,
-        marginBottom: 32,
+        marginBottom: 16,
+    },
+    helpModerationNoticeBox: {
+        width: '100%',
+        backgroundColor: '#EEF2FF',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#C7D2FE',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 20,
+    },
+    helpModerationNoticeText: {
+        fontSize: 14,
+        lineHeight: 20,
+        color: '#1E3A8A',
+        fontWeight: '600',
     },
     emailContainer: {
         flexDirection: 'row',

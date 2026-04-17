@@ -47,6 +47,7 @@ import {
     fetchPostComments,
     togglePostLike,
 } from '../../services/campus';
+import { addHiddenPostId } from '../../services/feedPreferences';
 import { sendDirectMessage } from '../../services/messages';
 import { Post, PostComment } from '../../types';
 import { isRemoteImageUrl } from '../../utils/remoteImage';
@@ -183,6 +184,13 @@ export default function PostDetailScreen() {
         onBlockedUser: (blockedUserId) => {
             setComments((prev) => prev.filter((comment) => comment.authorId !== blockedUserId));
             if (post?.authorId === blockedUserId) {
+                setPost(null);
+            }
+        },
+        onHideTarget: async (target) => {
+            if (target.targetType === 'post') {
+                await addHiddenPostId(target.targetId);
+                DeviceEventEmitter.emit('feed_post_hidden', { id: target.targetId, targetType: 'post' });
                 setPost(null);
             }
         },
@@ -952,7 +960,7 @@ export default function PostDetailScreen() {
                             <View style={styles.shareIconContainer}>
                                 <MoreHorizontal size={20} color="#1E3A8A" />
                             </View>
-                            <Text style={styles.shareText}>{t('moderation.ugc_actions_entry', '举报 / 屏蔽')}</Text>
+                            <Text style={styles.shareText}>{t('moderation.ugc_actions_entry')}</Text>
                         </TouchableOpacity>
                     )}
 

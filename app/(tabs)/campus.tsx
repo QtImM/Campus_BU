@@ -73,6 +73,7 @@ export default function CampusScreen() {
         setForumPosts(prev => prev.filter(p => p.id !== target.targetId));
       } else if (target.targetType === 'post') {
         await addHiddenPostId(target.targetId);
+        DeviceEventEmitter.emit('feed_post_hidden', { id: target.targetId, targetType: 'post' });
         setPosts(prev => prev.filter(p => p.id !== target.targetId));
       }
     },
@@ -159,10 +160,17 @@ export default function CampusScreen() {
         setForumPosts(prev => prev.filter(p => p.authorId !== data.userId));
       }
     });
+    const hiddenSub = DeviceEventEmitter.addListener('feed_post_hidden', (data) => {
+      if (data?.id) {
+        setPosts(prev => prev.filter(p => p.id !== data.id));
+        setForumPosts(prev => prev.filter(p => p.id !== data.id));
+      }
+    });
     return () => {
       campusSub.remove();
       forumSub.remove();
       blockSub.remove();
+      hiddenSub.remove();
     };
   }, []);
 
@@ -327,6 +335,18 @@ export default function CampusScreen() {
     setSelectedPostId(postId);
     setDeleteModalVisible(true);
   }, []);
+
+  const handleDiscoverCardLongPress = useCallback((post: Post) => {
+    ugcActions.openActions({
+      id: post.id,
+      targetId: post.id,
+      targetType: 'post',
+      content: post.content,
+      authorId: post.authorId,
+      authorName: post.authorName,
+      isAnonymous: post.isAnonymous,
+    });
+  }, [ugcActions]);
 
   const confirmDelete = async () => {
     if (!selectedPostId) return;
@@ -532,6 +552,7 @@ export default function CampusScreen() {
                         post={post}
                         onPress={() => handlePostPress(post.id)}
                         onLike={() => handleLike(post.id)}
+                        onLongPress={() => handleDiscoverCardLongPress(post)}
                         currentUserId={currentUser?.uid}
                         onAuthorPress={(authorId) => {
                           if (!post.isAnonymous) {
