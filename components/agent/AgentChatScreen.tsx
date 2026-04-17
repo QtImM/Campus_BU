@@ -371,7 +371,17 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
         try {
             if (shouldUseLatestDigest(userMsg)) {
+                const digestStreamId = `digest-loading-${Date.now()}`;
+                setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: '',
+                    id: digestStreamId
+                }]);
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+
                 await loadLatestDigestResponse();
+
+                setMessages(prev => prev.filter(m => m.id !== digestStreamId));
                 return;
             }
 
