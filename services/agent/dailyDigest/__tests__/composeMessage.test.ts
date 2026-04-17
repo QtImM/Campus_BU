@@ -9,7 +9,7 @@ describe('composeDailyDigestMessage', () => {
         ]);
 
         expect(message).toBe(
-            '· First summary line【1】(https://example.com/1)【2】(https://example.com/2)\n· Second summary line【3】(https://example.com/3)'
+            '· First summary line[【1】](https://example.com/1)[【2】](https://example.com/2)\n· Second summary line[【3】](https://example.com/3)'
         );
     });
 
@@ -21,7 +21,7 @@ describe('composeDailyDigestMessage', () => {
         ]);
 
         expect(message).toBe(
-            '· OpenAI【1】(https://example.com/1), Anthropic【2】(https://example.com/2), Google, xAI latest updates'
+            '· OpenAI[【1】](https://example.com/1), Anthropic[【2】](https://example.com/2), Google, xAI latest updates'
         );
     });
 
@@ -48,7 +48,7 @@ describe('composeDailyDigestMessage', () => {
         ]);
 
         expect(message).toBe(
-            '· OpenAI, Anthropic【2】(https://example.com/anthropic), Google latest updates【1】(https://example.com/google)'
+            '· OpenAI, Anthropic[【2】](https://example.com/anthropic), Google latest updates[【1】](https://example.com/google)'
         );
     });
 
@@ -60,7 +60,7 @@ describe('composeDailyDigestMessage', () => {
         ]);
 
         expect(message).toBe(
-            '· OpenAI【1】(https://example.com/1), Anthropic【2】(https://example.com/2), Google, xAI latest updates'
+            '· OpenAI[【1】](https://example.com/1), Anthropic[【2】](https://example.com/2), Google, xAI latest updates'
         );
     });
 });

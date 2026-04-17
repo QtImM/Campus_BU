@@ -99,7 +99,7 @@ export const composeDailyDigestMessage = (summary: string, items: DigestItem[]):
             .filter((item) => item.lineIndex === index || (item.lineIndex === undefined && items.indexOf(item) === index))
             .slice(0, DAILY_DIGEST_CONFIG.maxRefsPerLine)
             .map((item) => ({
-                label: `【${refIndex++}】(${item.url})`,
+                label: `[【${refIndex++}】](${item.url})`,
                 matchText: item.contextSnippet || item.title,
             }))
         ;
