@@ -5,17 +5,18 @@ import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { AdminBadge } from '../common/AdminBadge';
-import { EduBadge } from '../common/EduBadge';
 import { ForumPost } from '../../types';
 import { isRemoteImageUrl } from '../../utils/remoteImage';
-import { isHKBUEmail, isAdminSync } from '../../utils/userUtils';
+import { isAdminSync, isHKBUEmail } from '../../utils/userUtils';
+import { AdminBadge } from '../common/AdminBadge';
 import { CachedRemoteImage } from '../common/CachedRemoteImage';
+import { EduBadge } from '../common/EduBadge';
 
 interface ForumPostRowProps {
     post: ForumPost;
     onPress: () => void;
     onAuthorPress?: (authorId: string) => void;
+    onLongPress?: () => void;
 }
 
 const categoryColor: Record<string, string> = {
@@ -40,7 +41,7 @@ const RightThumb: React.FC<{ uri: string }> = ({ uri }) => {
     );
 };
 
-export const ForumPostRow: React.FC<ForumPostRowProps> = React.memo(({ post, onPress, onAuthorPress }) => {
+export const ForumPostRow: React.FC<ForumPostRowProps> = React.memo(({ post, onPress, onAuthorPress, onLongPress }) => {
     const { t } = useTranslation();
     const pressed = useSharedValue(1);
 
@@ -71,6 +72,7 @@ export const ForumPostRow: React.FC<ForumPostRowProps> = React.memo(({ post, onP
             <TouchableOpacity
                 style={styles.row}
                 onPress={onPress}
+                onLongPress={onLongPress}
                 onPressIn={onPressIn}
                 onPressOut={onPressOut}
                 activeOpacity={1}

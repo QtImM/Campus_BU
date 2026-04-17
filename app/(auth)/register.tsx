@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { sendOTP, updatePassword, verifyOTP } from '../../services/auth';
-import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../authOptions';
+import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../constants/authOptions';
 import { changeLanguage } from '../i18n/i18n';
 
 export default function RegisterScreen() {

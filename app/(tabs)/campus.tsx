@@ -5,20 +5,20 @@ import { Check, X as CloseIcon, Globe, Plus, Search } from 'lucide-react-native'
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Animated,
-  DeviceEventEmitter,
-  Dimensions,
-  FlatList,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    DeviceEventEmitter,
+    Dimensions,
+    FlatList,
+    Modal,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { ActionModal } from '../../components/campus/ActionModal';
 import MasonryGrid from '../../components/campus/MasonryGrid';
@@ -27,8 +27,10 @@ import { Toast, ToastType } from '../../components/campus/Toast';
 import { Skeleton } from '../../components/common/Skeleton';
 import { ForumPostRow } from '../../components/forum/ForumPostRow';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import { getCurrentUser } from '../../services/auth';
 import { deletePost, fetchPosts, subscribeToPosts, togglePostLike } from '../../services/campus';
+import { addHiddenPostId, filterHiddenPosts, getHiddenPostIds } from '../../services/feedPreferences';
 import { fetchForumPosts } from '../../services/forum';
 import { ForumCategory, ForumPost, ForumSort, Post, PostCategory } from '../../types';
 import { isRemoteImageUrl, normalizeRemoteImageUrl } from '../../utils/remoteImage';
@@ -57,6 +59,24 @@ export default function CampusScreen() {
   ];
 
   const [mainTab, setMainTab] = useState<MainTab>('discover');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const ugcActions = useUgcEntryActions({
+    currentUserId: currentUser?.uid,
+    ensureLoggedIn: () => !!checkLogin(currentUser),
+    onBlockedUser: (blockedUserId) => {
+      setPosts(prev => prev.filter(p => p.authorId !== blockedUserId));
+      setForumPosts(prev => prev.filter(p => p.authorId !== blockedUserId));
+    },
+    onHideTarget: async (target) => {
+      if (target.targetType === 'forum_post') {
+        await addHiddenPostId(target.targetId);
+        setForumPosts(prev => prev.filter(p => p.id !== target.targetId));
+      } else if (target.targetType === 'post') {
+        await addHiddenPostId(target.targetId);
+        setPosts(prev => prev.filter(p => p.id !== target.targetId));
+      }
+    },
+  });
   const pagerRef = useRef<ScrollView>(null);
   const SCREEN_W = Dimensions.get('window').width;
   // Tracks pager horizontal scroll position in real time (frame-by-frame)
@@ -78,7 +98,6 @@ export default function CampusScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: ToastType }>({
@@ -153,7 +172,9 @@ export default function CampusScreen() {
       if (!isRefresh && forumPosts.length === 0) setForumLoading(true);
       const user = await getCurrentUser();
       const data = await fetchForumPosts(forumCategory, forumSort, user?.uid);
-      setForumPosts(data);
+      const hiddenPostIds = await getHiddenPostIds();
+      const filteredData = filterHiddenPosts(data, hiddenPostIds);
+      setForumPosts(filteredData);
     } catch (e) {
       console.error('Forum load error:', e);
     } finally {
@@ -195,7 +216,9 @@ export default function CampusScreen() {
       const user = await getCurrentUser();
       setCurrentUser(user);
       const data = await fetchPosts('All', user?.uid);
-      setPosts(data);
+      const hiddenPostIds = await getHiddenPostIds();
+      const filteredData = filterHiddenPosts(data, hiddenPostIds);
+      setPosts(filteredData);
 
       if (__DEV__) {
         return;
@@ -597,6 +620,14 @@ export default function CampusScreen() {
                     if (authorId === currentUser?.uid) return;
                     router.push({ pathname: '/profile/[id]' as any, params: { id: authorId } });
                   }}
+                  onLongPress={() => ugcActions.openActions({
+                    id: item.id,
+                    targetId: item.id,
+                    targetType: 'forum_post',
+                    content: `${item.title}\n${item.content || ''}`.trim(),
+                    authorId: item.authorId,
+                    authorName: item.authorName,
+                  })}
                 />
               )}
               refreshControl={
@@ -696,6 +727,9 @@ export default function CampusScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* UGC Actions */}
+      {ugcActions.ActionSheet}
     </View>
   );
 }

@@ -3,7 +3,7 @@ import { ChevronLeft, ShieldCheck } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { LEGAL_CONTENT, LegalTab, normalizeLanguage, TAB_LABELS } from './legalContent';
+import { LEGAL_CONTENT, LegalTab, normalizeLanguage, TAB_LABELS } from '../constants/legalContent';
 
 export default function LegalScreen() {
     const router = useRouter();

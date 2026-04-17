@@ -12,7 +12,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { Ban, Copy, MessageCircleWarning, Send, ShieldAlert } from 'lucide-react-native';
+import { Ban, Copy, EyeOff, MessageCircleWarning, Send, ShieldAlert } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { blockUser, ModerationTargetType, reportContent, ReportReason } from '../services/moderation';
 
@@ -31,6 +31,7 @@ type UseUgcEntryActionsOptions = {
     ensureLoggedIn: () => boolean;
     onFlash?: (id: string) => void;
     onBlockedUser?: (blockedUserId: string) => void;
+    onHideTarget?: (target: UgcActionTarget) => void | Promise<void>;
 };
 
 const REPORT_REASONS: Array<{ key: string; value: ReportReason }> = [
@@ -45,7 +46,7 @@ const REPORT_REASONS: Array<{ key: string; value: ReportReason }> = [
 
 export function useUgcEntryActions(options: UseUgcEntryActionsOptions) {
     const { t } = useTranslation();
-    const { currentUserId, ensureLoggedIn, onFlash, onBlockedUser } = options;
+    const { currentUserId, ensureLoggedIn, onFlash, onBlockedUser, onHideTarget } = options;
     const router = useRouter();
     const flashAnim = useRef(new Animated.Value(0)).current;
     const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -102,6 +103,12 @@ export function useUgcEntryActions(options: UseUgcEntryActionsOptions) {
         && !target?.isAnonymous
         && target.authorId !== currentUserId
     ), [currentUserId, target]);
+
+    const canHide = useMemo(() => (
+        !!target
+        && ['post', 'forum_post'].includes(target.targetType)
+        && !!onHideTarget
+    ), [onHideTarget, target]);
 
     const handleReportReason = useCallback(async (reason: ReportReason) => {
         if (!currentUserId || !target) {
@@ -213,6 +220,31 @@ export function useUgcEntryActions(options: UseUgcEntryActionsOptions) {
         }
     }, [closeActions, target?.content, t]);
 
+    const handleHide = useCallback(async () => {
+        if (!target || !canHide || !onHideTarget) {
+            return;
+        }
+
+        try {
+            await onHideTarget(target);
+            closeActions();
+            Alert.alert(
+                t('moderation.ugc_hide_success_title', { defaultValue: 'Hidden' }),
+                t('moderation.ugc_hide_success_msg', {
+                    defaultValue: 'This post has been removed from your feed immediately.',
+                }),
+            );
+        } catch (error) {
+            console.error('Error hiding UGC item:', error);
+            Alert.alert(
+                t('common.error'),
+                t('moderation.ugc_hide_failed', {
+                    defaultValue: 'Could not hide this post right now. Please try again.',
+                }),
+            );
+        }
+    }, [canHide, closeActions, onHideTarget, t, target]);
+
     const getHighlightStyle = useCallback((id: string) => {
         if (highlightedId !== id || onFlash) {
             return null;
@@ -256,6 +288,16 @@ export function useUgcEntryActions(options: UseUgcEntryActionsOptions) {
                         </View>
                         <Text style={styles.actionText}>{t('moderation.ugc_action_report')}</Text>
                     </TouchableOpacity>
+                    {canHide && (
+                        <TouchableOpacity style={styles.actionButton} activeOpacity={0.85} onPress={handleHide}>
+                            <View style={[styles.iconWrap, styles.hideIconWrap]}>
+                                <EyeOff size={18} color="#6D28D9" />
+                            </View>
+                            <Text style={styles.actionText}>
+                                {t('moderation.ugc_action_hide_post', { defaultValue: 'Hide Post' })}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                     {canBlock && (
                         <TouchableOpacity style={styles.actionButton} activeOpacity={0.85} onPress={handleBlock}>
                             <View style={[styles.iconWrap, styles.blockIconWrap]}>
@@ -326,6 +368,9 @@ const styles = StyleSheet.create({
     },
     reportIconWrap: {
         backgroundColor: '#FEE2E2',
+    },
+    hideIconWrap: {
+        backgroundColor: '#F5F3FF',
     },
     blockIconWrap: {
         backgroundColor: '#FFEDD5',

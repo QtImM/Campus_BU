@@ -28,6 +28,7 @@ import { ZoomableImageCarousel } from '../../components/common/ZoomableImageCaro
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import { getCurrentUser } from '../../services/auth';
+import { addHiddenPostId } from '../../services/feedPreferences';
 import {
     addForumComment,
     deleteForumComment,
@@ -76,6 +77,11 @@ export default function ForumPostDetailScreen() {
             setComments((prev) => prev.filter((comment) => comment.authorId !== blockedUserId));
             if (post?.authorId === blockedUserId) {
                 setPost(null);
+            }
+        },
+        onHideTarget: async (target) => {
+            if (target.targetType === 'forum_post') {
+                await addHiddenPostId(target.targetId);
             }
         },
     });

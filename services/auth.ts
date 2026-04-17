@@ -217,6 +217,16 @@ const isTransientNetworkError = (error: unknown): boolean => {
     return /network request failed|failed to fetch|networkerror|load failed/i.test(message);
 };
 
+const isInvalidRefreshTokenError = (error: unknown): boolean => {
+    const message = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error && 'message' in error
+            ? String((error as any).message)
+            : String(error || '');
+
+    return /invalid refresh token|refresh token not found/i.test(message);
+};
+
 export type UserSearchResult = {
     uid: string;
     displayName: string;
@@ -262,7 +272,21 @@ export const onAuthChange = (callback: (user: any | null) => void) => {
 
 // Get current user from the active Supabase session
 export const getCurrentUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    let session = null;
+
+    try {
+        const result = await supabase.auth.getSession();
+        session = result.data.session;
+    } catch (error) {
+        if (isInvalidRefreshTokenError(error)) {
+            console.warn('[auth.ts] clearing invalid persisted session');
+            await supabase.auth.signOut({ scope: 'local' });
+            return null;
+        }
+
+        throw error;
+    }
+
     if (session?.user) {
         const user = session.user;
         let profile: User | null = null;
