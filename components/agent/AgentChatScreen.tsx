@@ -94,7 +94,7 @@ const shouldUseLatestDigest = (input: string): boolean => {
     const text = input.trim().toLowerCase();
     if (!text) return false;
 
-    return /最新资讯|最新資訊|新鲜资讯|新鮮資訊|最近有什么新鲜资讯|最近有什麼新鮮資訊|today news|latest news|news digest|资讯摘要|資訊摘要|新聞摘要/.test(text);
+    return /最新资讯|最新資訊|新鲜资讯|新鮮資訊|新资讯|新資訊|新消息|新闻|新聞|资讯摘要|資訊摘要|新聞摘要|最近.*资讯|最近.*資訊|最近.*新闻|最近.*新聞|最近.*消息|有(什么|什麼|啥).*(资讯|資訊|新闻|新聞|消息)|today.?news|latest.?news|news.?digest|recent.?news|what.?s.?new/i.test(text);
 };
 
 export default function AgentChatScreen({ showBackButton = false }: AgentChatScreenProps) {
