@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
-import { ArrowLeft, ChevronDown, Eye, EyeOff, Globe, Mail } from 'lucide-react-native';
+import { ArrowLeft, Check, ChevronDown, Eye, EyeOff, Globe, Mail } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { sendOTP, updatePassword, verifyOTP } from '../../services/auth';
 import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../constants/authOptions';
+import { getAgreementGuardResult } from '../../services/authLegalAgreement';
 import { changeLanguage } from '../i18n/i18n';
 
 export default function RegisterScreen() {
@@ -20,6 +21,7 @@ export default function RegisterScreen() {
     const [showPassword, setShowPassword] = useState(false);
     const [countdown, setCountdown] = useState(0);
     const [isOtpSent, setIsOtpSent] = useState(false);
+    const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
 
     React.useEffect(() => {
         let timer: any;
@@ -34,7 +36,23 @@ export default function RegisterScreen() {
         setShowLangPicker(false);
     };
 
+    const ensureAgreementAccepted = (action: 'login' | 'send_otp' | 'register') => {
+        const result = getAgreementGuardResult(hasAcceptedTerms, action);
+        if (!result.ok) {
+            Alert.alert(
+                t('common.tip', 'Tip'),
+                t(result.messageKey, 'Please agree to the terms, privacy policy, and community safety rules before continuing.'),
+            );
+            return false;
+        }
+        return true;
+    };
+
     const handleSendOTP = async () => {
+        if (!ensureAgreementAccepted('send_otp')) {
+            return;
+        }
+
         if (!emailPrefix) {
             const placeholder = emailSuffix === 'other' ? t('auth.email_label') : t('auth.email_placeholder');
             Alert.alert(t('common.tip', 'Tip'), placeholder);
@@ -67,6 +85,10 @@ export default function RegisterScreen() {
     };
 
     const handleRegister = async () => {
+        if (!ensureAgreementAccepted('register')) {
+            return;
+        }
+
         if (!isOtpSent) {
             Alert.alert(t('common.tip', 'Tip'), t('auth.send_otp_first', 'Please send verification code first'));
             return;
@@ -254,14 +276,30 @@ export default function RegisterScreen() {
                         )}
                     </TouchableOpacity>
 
-                    <View style={[styles.footer, { marginTop: 18, marginBottom: 4 }]}>
-                        <Text style={styles.footerText}>{t('auth.agreement_prefix', 'By logging in you agree to ')}</Text>
+                    <View style={styles.agreementCard}>
+                        <Text style={styles.agreementNotice}>{t('auth.age_gate_notice', 'This app is intended for users 18+.')}</Text>
                         <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
                             <Text style={styles.link}>{t('auth.user_agreement', 'Terms')}</Text>
                         </TouchableOpacity>
                         <Text style={styles.footerText}> {t('auth.and', ' and ')} </Text>
                         <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
                             <Text style={styles.link}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.footerText}> {t('auth.and', ' and ')} </Text>
+                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                            <Text style={styles.link}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.checkboxRow}
+                            activeOpacity={0.85}
+                            onPress={() => setHasAcceptedTerms((value) => !value)}
+                        >
+                            <View style={[styles.checkbox, hasAcceptedTerms && styles.checkboxChecked]}>
+                                {hasAcceptedTerms && <Check size={14} color="#FFFFFF" />}
+                            </View>
+                            <Text style={styles.checkboxText}>
+                                {t('auth.agreement_checkbox_prefix', 'I have read and agree to the terms, privacy policy, and community safety rules.')}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 
@@ -431,6 +469,20 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginTop: 24,
     },
+    agreementCard: {
+        marginTop: 18,
+        padding: 16,
+        borderRadius: 16,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    agreementNotice: {
+        marginBottom: 8,
+        color: '#475569',
+        fontSize: 12,
+        textAlign: 'center',
+    },
     footerText: {
         color: '#9CA3AF',
         fontSize: 14,
@@ -519,5 +571,32 @@ const styles = StyleSheet.create({
     },
     eyeIcon: {
         padding: 12,
+    },
+    checkboxRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+        marginTop: 14,
+    },
+    checkbox: {
+        width: 20,
+        height: 20,
+        borderRadius: 6,
+        borderWidth: 1.5,
+        borderColor: '#94A3B8',
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 1,
+    },
+    checkboxChecked: {
+        backgroundColor: '#1E3A8A',
+        borderColor: '#1E3A8A',
+    },
+    checkboxText: {
+        flex: 1,
+        color: '#334155',
+        fontSize: 13,
+        lineHeight: 19,
     },
 });

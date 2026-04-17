@@ -542,7 +542,13 @@
         "password_same_as_old": "New password cannot be the same as the old password. Please set a different password",
         "guest_login": "Just looking around",
         "guest_prompt_title": "Login Required",
-        "guest_prompt_msg": "Login to interact, comment and post. Would you like to login now?"
+        "guest_prompt_msg": "Login to interact, comment and post. Would you like to login now?",
+        "age_gate_notice": "This app is intended for users 18+.",
+        "community_rules": "Community Safety Rules",
+        "agreement_checkbox_prefix": "I have read and agree to the terms, privacy policy, and community safety rules.",
+        "must_accept_terms_before_login": "Please agree to the terms, privacy policy, and community safety rules before logging in or entering the app.",
+        "must_accept_terms_before_send_code": "Please agree to the terms, privacy policy, and community safety rules before requesting a verification code.",
+        "must_accept_terms_before_register": "Please agree to the terms, privacy policy, and community safety rules before creating an account."
     },
     "setup": {
         "title": "Who are you?",
@@ -618,7 +624,7 @@
         "ugc_reported_msg": "Thank you for helping keep the community safe. We will review this report within 24 hours.",
         "ugc_report_failed": "Report failed. Please try again later.",
         "ugc_block_title": "Block User",
-        "ugc_block_msg_named": "Block \u300c{{name}}\u300d? You will no longer see their content.",
+        "ugc_block_msg_named": "Block 「{{name}}」? You will no longer see their content.",
         "ugc_block_msg_default": "Block this user? You will no longer see their content.",
         "ugc_blocked_title": "Blocked",
         "ugc_blocked_msg": "This user's content will be hidden from your feed immediately.",
