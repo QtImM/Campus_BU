@@ -1,4 +1,4 @@
-import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../app/authOptions';
+import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../constants/authOptions';
 
 describe('auth option labels', () => {
     it('exposes readable language labels', () => {
