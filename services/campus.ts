@@ -703,8 +703,9 @@ export const deleteComment = async (commentId: string) => {
  * Subscribe to posts (All or by category)
  */
 export const subscribeToPosts = (callback: (payload: any) => void) => {
+    const channelName = `public:posts:${Date.now()}`;
     const channel = supabase
-        .channel('public:posts')
+        .channel(channelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: POSTS_TABLE }, callback)
         .subscribe();
 

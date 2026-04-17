@@ -89,7 +89,7 @@ export const createNotification = async (data: Omit<Notification, 'id' | 'create
  * Subscribe to real-time notification updates for a user
  */
 export const subscribeToNotifications = (userId: string, callback: (payload: any) => void) => {
-    const channel = supabase.channel(`notifications:user_id=eq.${userId}`);
+    const channel = supabase.channel(`notifications:${userId}:${Date.now()}`);
 
     channel.on(
         'postgres_changes',
@@ -113,5 +113,9 @@ export const subscribeToNotifications = (userId: string, callback: (payload: any
         callback
     );
 
-    return channel.subscribe();
+    channel.subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
 };

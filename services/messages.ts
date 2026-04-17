@@ -607,7 +607,7 @@ export const subscribeToDirectConversation = (
     onChange: () => void,
 ) => {
     const channel = supabase
-        .channel(`direct-conversation:${conversationId}`)
+        .channel(`direct-conversation:${conversationId}:${Date.now()}`)
         .on('postgres_changes', {
             event: 'INSERT',
             schema: 'public',
@@ -638,7 +638,7 @@ export const subscribeToDirectConversationList = (
     onChange: () => void,
 ) => {
     const channel = supabase
-        .channel(`direct-conversation-list:${currentUserId}`)
+        .channel(`direct-conversation-list:${currentUserId}:${Date.now()}`)
         .on('postgres_changes', {
             event: 'INSERT',
             schema: 'public',

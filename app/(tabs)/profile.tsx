@@ -233,11 +233,11 @@ export default function ProfileScreen() {
     ]);
 
     useEffect(() => {
-        let subscription: any;
+        let unsubscribe: (() => void) | undefined;
         const initSubscription = async () => {
             const user = await getCurrentUser();
             if (user) {
-                subscription = subscribeToNotifications(user.uid, (payload) => {
+                unsubscribe = subscribeToNotifications(user.uid, (payload) => {
                     if (payload.new) {
                         setNotifications(prev => [payload.new, ...prev]);
                     }
@@ -248,7 +248,7 @@ export default function ProfileScreen() {
         initSubscription();
 
         return () => {
-            if (subscription) subscription.unsubscribe();
+            unsubscribe?.();
         };
     }, []);
 

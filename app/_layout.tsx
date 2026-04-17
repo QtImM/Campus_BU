@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useNavigationContainerRef, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -26,6 +26,7 @@ void SplashScreen.preventAutoHideAsync().catch(() => {
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
+  const navigationRef = useNavigationContainerRef();
   const segmentsRef = useRef(segments);
   const [loading, setLoading] = useState(true);
   const [isAnimationFinished, setIsAnimationFinished] = useState(false);
@@ -72,6 +73,15 @@ export default function RootLayout() {
       // Ensure i18n is initialized
       await i18nPromise;
 
+      const waitForNavReady = () =>
+        new Promise<void>((resolve) => {
+          if (navigationRef.isReady()) { resolve(); return; }
+          const unsub = navigationRef.addListener('state', () => {
+            unsub();
+            resolve();
+          });
+        });
+
       // Normal auth check
       const unsubscribe = onAuthChange(async (user) => {
         try {
@@ -82,6 +92,8 @@ export default function RootLayout() {
             setLoading(false);
             return;
           }
+
+          await waitForNavReady();
 
           // Use ref to get latest segments value
           const currentSegments = segmentsRef.current;

@@ -49,7 +49,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }, []);
 
     useEffect(() => {
-        let notificationSubscription: any;
+        let notificationUnsubscribe: (() => void) | undefined;
         let messageUnsubscribe: (() => void) | undefined;
 
         const init = async () => {
@@ -59,7 +59,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 await refreshCount();
 
                 // Subscribe to real-time updates
-                notificationSubscription = subscribeToNotifications(user.uid, (payload) => {
+                notificationUnsubscribe = subscribeToNotifications(user.uid, (payload) => {
                     if (payload.eventType === 'INSERT' && payload.new && !payload.new.is_read) {
                         setHasUnread(true);
                         setUnreadCount(prev => prev + 1);
@@ -100,7 +100,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         init();
 
         return () => {
-            if (notificationSubscription) notificationSubscription.unsubscribe();
+            notificationUnsubscribe?.();
             messageUnsubscribe?.();
         };
     }, [refreshCount]);

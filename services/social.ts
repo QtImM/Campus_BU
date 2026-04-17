@@ -140,7 +140,7 @@ export const subscribeToMessages = (
 ) => {
     // Supabase Realtime subscription
     const channel = supabase
-        .channel(`room:${roomId}`)
+        .channel(`room:${roomId}:${Date.now()}`)
         .on(
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
