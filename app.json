@@ -63,7 +63,8 @@
           "locationWhenInUsePermission": "HKCampus accesses your location only when you choose location-based campus features such as centering the map or attaching a location to a post."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/withScheduleWidget.js"
     ],
     "owner": "timchindev",
     "experiments": {

@@ -26,6 +26,7 @@ import {
     saveImportItemToSchedule,
     updateUserScheduleEntry,
 } from '../../services/schedule';
+import { writeScheduleToWidget } from '../../services/widgetBridge';
 import { Course } from '../../types';
 
 const PLACEHOLDER_COLOR = '#9CA3AF';
@@ -170,6 +171,7 @@ export default function MyScheduleCard({ userId }: { userId: string | null }) {
         try {
             const data = await getUserScheduleEntries(userId);
             setEntries(data);
+            await writeScheduleToWidget(data);
         } catch (error) {
             console.error('Failed to load schedule entries:', error);
         } finally {
