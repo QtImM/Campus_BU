@@ -466,8 +466,8 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                         我可以帮你查关于HKBU的任何问题，尽管来问我吧！你可以试着问我：
                     </Text>
                     <View style={styles.suggestions}>
-                        <TouchableOpacity style={styles.suggestion} onPress={() => { void handleLatestDigestSuggestion(); }}>
-                            <Text style={styles.suggestionText}>“最近有什么新鲜资讯”</Text>
+                        <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('最近有什么新鲜资讯')}>
+                            <Text style={styles.suggestionText}>”最近有什么新鲜资讯”</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.suggestion} onPress={() => handleSend('我的课表里面有什么')}>
                             <Text style={styles.suggestionText}>“我的课表里面有什么”</Text>
