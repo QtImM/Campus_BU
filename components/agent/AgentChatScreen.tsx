@@ -267,6 +267,14 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
     const loadLatestDigestResponse = async () => {
         if (!currentUser?.uid) {
+            setMessages((prev) => [
+                ...prev,
+                {
+                    role: 'assistant',
+                    content: '请先登录后再查看资讯摘要。',
+                },
+            ]);
+            scrollViewRef.current?.scrollToEnd({ animated: true });
             return;
         }
 
