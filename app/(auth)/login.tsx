@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Check, ChevronDown, Eye, EyeOff, Globe } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { signIn } from '../../services/auth';
 import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../constants/authOptions';
 import { getAgreementGuardResult } from '../../services/authLegalAgreement';
@@ -11,6 +11,7 @@ import { changeLanguage } from '../i18n/i18n';
 export default function LoginScreen() {
     const router = useRouter();
     const { t, i18n } = useTranslation();
+    const isEnglish = i18n.language === 'en';
     const [emailPrefix, setEmailPrefix] = useState('');
     const [emailSuffix, setEmailSuffix] = useState('@life.hkbu.edu.hk');
     const [password, setPassword] = useState('');
@@ -127,16 +128,21 @@ export default function LoginScreen() {
                 </View>
             </View>
 
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
+            <TouchableWithoutFeedback
+                testID="auth-background-login"
+                onPress={Keyboard.dismiss}
+                accessible={false}
             >
-                <View style={styles.header}>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={styles.header}>
                     <Text style={styles.title}>HKCampus</Text>
                     <Text style={styles.subtitle}>{t('auth.subtitle', 'Connect with your campus vibe')}</Text>
-                </View>
+                    </View>
 
-                <View style={styles.form}>
+                    <View style={styles.form}>
                     <Text style={styles.label}>{t('auth.email_label')}</Text>
 
                     {emailSuffix === 'other' ? (
@@ -236,20 +242,24 @@ export default function LoginScreen() {
 
                     <View style={styles.agreementCard}>
                         <Text style={styles.agreementNotice}>{t('auth.age_gate_notice', 'This app is intended for users 18+.')}</Text>
-                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
-                            <Text style={styles.link}>{t('auth.user_agreement', 'Terms')}</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.footerText}> {t('auth.and', ' and ')} </Text>
-                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
-                            <Text style={styles.link}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.footerText}> {t('auth.and', ' and ')} </Text>
-                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
-                            <Text style={styles.link}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
-                        </TouchableOpacity>
+                        <View style={[styles.agreementLinksRow, isEnglish && styles.agreementLinksRowEnglish]}>
+                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                                <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.user_agreement', 'Terms')}</Text>
+                            </TouchableOpacity>
+                            <Text style={[styles.agreementSeparator, isEnglish && styles.agreementSeparatorEnglish]}>{t('auth.and', ' / ')}</Text>
+                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
+                                <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
+                            </TouchableOpacity>
+                            <Text style={[styles.agreementSeparator, isEnglish && styles.agreementSeparatorEnglish]}>{t('auth.and', ' / ')}</Text>
+                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                                <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
+                            </TouchableOpacity>
+                        </View>
                         <TouchableOpacity
+                            testID="auth-agreement-checkbox-login"
                             style={styles.checkboxRow}
                             activeOpacity={0.85}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             onPress={() => setHasAcceptedTerms((value) => !value)}
                         >
                             <View style={[styles.checkbox, hasAcceptedTerms && styles.checkboxChecked]}>
@@ -260,8 +270,9 @@ export default function LoginScreen() {
                             </Text>
                         </TouchableOpacity>
                     </View>
-                </View>
-            </ScrollView>
+                    </View>
+                </ScrollView>
+            </TouchableWithoutFeedback>
 
             <Modal
                 visible={showDomainPicker}
@@ -491,6 +502,33 @@ const styles = StyleSheet.create({
         color: '#475569',
         fontSize: 12,
         textAlign: 'center',
+    },
+    agreementLinksRow: {
+        marginTop: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+    },
+    agreementLinksRowEnglish: {
+        flexWrap: 'nowrap',
+    },
+    agreementSeparator: {
+        color: '#9CA3AF',
+        fontSize: 11,
+        marginHorizontal: 5,
+    },
+    agreementSeparatorEnglish: {
+        fontSize: 10,
+        marginHorizontal: 4,
+    },
+    agreementLink: {
+        color: '#3B82F6',
+        fontWeight: '600',
+        fontSize: 11,
+    },
+    agreementLinkEnglish: {
+        fontSize: 10,
     },
     footerText: {
         color: '#9CA3AF',

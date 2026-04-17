@@ -522,7 +522,7 @@
         "seconds_resend": "s to resend",
         "agreement_prefix": "By logging in you agree to ",
         "user_agreement": "Terms",
-        "and": " and ",
+        "and": " / ",
         "privacy_policy": "Privacy Policy",
         "go_to_login_prefix": "Already have an account?",
         "go_to_login_link": "Login",

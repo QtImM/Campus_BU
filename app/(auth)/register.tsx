@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Check, ChevronDown, Eye, EyeOff, Globe, Mail } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { sendOTP, updatePassword, verifyOTP } from '../../services/auth';
 import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../constants/authOptions';
 import { getAgreementGuardResult } from '../../services/authLegalAgreement';
@@ -169,16 +169,21 @@ export default function RegisterScreen() {
                 </View>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-                <View style={styles.header}>
+            <TouchableWithoutFeedback
+                testID="auth-background-register"
+                onPress={Keyboard.dismiss}
+                accessible={false}
+            >
+                <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+                    <View style={styles.header}>
                     <View style={styles.iconContainer}>
                         <Mail size={32} color="#1E3A8A" />
                     </View>
                     <Text style={styles.title}>{t('auth.register_title')}</Text>
                     <Text style={styles.subtitle}>{t('auth.register_subtitle', 'Use school email to register and start your campus journey')}</Text>
-                </View>
+                    </View>
 
-                <View style={styles.form}>
+                    <View style={styles.form}>
                     <Text style={styles.label}>{t('auth.email_label')}</Text>
 
                     {emailSuffix === 'other' ? (
@@ -278,20 +283,24 @@ export default function RegisterScreen() {
 
                     <View style={styles.agreementCard}>
                         <Text style={styles.agreementNotice}>{t('auth.age_gate_notice', 'This app is intended for users 18+.')}</Text>
-                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
-                            <Text style={styles.link}>{t('auth.user_agreement', 'Terms')}</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.footerText}> {t('auth.and', ' and ')} </Text>
-                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
-                            <Text style={styles.link}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.footerText}> {t('auth.and', ' and ')} </Text>
-                        <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
-                            <Text style={styles.link}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
-                        </TouchableOpacity>
+                        <View style={styles.agreementLinksRow}>
+                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                                <Text style={styles.link}>{t('auth.user_agreement', 'Terms')}</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.agreementSeparator}>{t('auth.and', ' / ')}</Text>
+                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
+                                <Text style={styles.link}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.agreementSeparator}>{t('auth.and', ' / ')}</Text>
+                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                                <Text style={styles.link}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
+                            </TouchableOpacity>
+                        </View>
                         <TouchableOpacity
+                            testID="auth-agreement-checkbox-register"
                             style={styles.checkboxRow}
                             activeOpacity={0.85}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             onPress={() => setHasAcceptedTerms((value) => !value)}
                         >
                             <View style={[styles.checkbox, hasAcceptedTerms && styles.checkboxChecked]}>
@@ -309,8 +318,9 @@ export default function RegisterScreen() {
                             <Text style={styles.link}>{t('auth.go_to_login_link', 'Login')}</Text>
                         </TouchableOpacity>
                     </View>
-                </View>
-            </ScrollView>
+                    </View>
+                </ScrollView>
+            </TouchableWithoutFeedback>
 
             <Modal visible={showDomainPicker} transparent animationType="fade">
                 <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowDomainPicker(false)}>
@@ -482,6 +492,18 @@ const styles = StyleSheet.create({
         color: '#475569',
         fontSize: 12,
         textAlign: 'center',
+    },
+    agreementLinksRow: {
+        marginTop: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+    },
+    agreementSeparator: {
+        color: '#9CA3AF',
+        fontSize: 12,
+        marginHorizontal: 8,
     },
     footerText: {
         color: '#9CA3AF',
