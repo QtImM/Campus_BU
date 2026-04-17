@@ -265,6 +265,50 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
         };
     }, []);
 
+    const getDigestContent = async (): Promise<string> => {
+        if (!currentUser?.uid) {
+            return '请先登录后再查看资讯摘要。';
+        }
+
+        try {
+            const { data } = await supabase
+                .from('notifications')
+                .select('title, content, created_at')
+                .eq('user_id', currentUser.uid)
+                .eq('type', 'system')
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            const digestNotification = (data || []).find((item) =>
+                /AI资讯摘要|AI資訊摘要|AI news digest/i.test(String(item.title || ''))
+            );
+
+            const digestDate =
+                parseDigestDateFromText(digestNotification?.title)
+                || parseDigestDateFromText(digestNotification?.content)
+                || (digestNotification?.created_at ? new Date(digestNotification.created_at) : new Date());
+
+            const digestResult = await runDailyDigestJobForUser(currentUser.uid, digestDate, {
+                ignoreEnabledCheck: true,
+            });
+
+            if (digestResult.ok && digestResult.payload) {
+                return digestResult.payload.message;
+            }
+
+            if (digestNotification) {
+                const matchedDate = digestNotification.title?.match(/(\d{4}-\d{2}-\d{2})/)?.[1];
+                const fallbackHeader = matchedDate ? `最新资讯摘要 ${matchedDate}` : '最新资讯摘要';
+                return `${fallbackHeader}\n${digestNotification.content || ''}`.trim();
+            }
+
+            return '暂时没有读取到数据库里的最新资讯，请稍后再试。';
+        } catch (error) {
+            console.warn('[AgentChat] Failed to load digest:', error);
+            return '读取最新资讯失败了，请稍后再试。';
+        }
+    };
+
     const loadLatestDigestResponse = async () => {
         if (!currentUser?.uid) {
             setMessages((prev) => [
@@ -371,7 +415,7 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
         try {
             if (shouldUseLatestDigest(userMsg)) {
-                const digestStreamId = `digest-loading-${Date.now()}`;
+                const digestStreamId = `digest-${Date.now()}`;
                 setMessages(prev => [...prev, {
                     role: 'assistant',
                     content: '',
@@ -379,9 +423,12 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                 }]);
                 scrollViewRef.current?.scrollToEnd({ animated: true });
 
-                await loadLatestDigestResponse();
+                const digestContent = await getDigestContent();
 
-                setMessages(prev => prev.filter(m => m.id !== digestStreamId));
+                setMessages(prev => prev.map(m =>
+                    m.id === digestStreamId ? { ...m, content: digestContent } : m
+                ));
+                scrollViewRef.current?.scrollToEnd({ animated: true });
                 return;
             }
 
