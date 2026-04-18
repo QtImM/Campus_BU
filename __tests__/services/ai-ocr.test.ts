@@ -97,6 +97,6 @@ describe('AI OCR Service', () => {
 
         await expect(scanScheduleFromImage('file://mock-image-path.jpg'))
             .rejects
-            .toThrow('OCR backend URL is not configured. Set EXPO_PUBLIC_OCR_API_URL in .env.');
+            .toThrow('OCR backend URL is not configured. Set EXPO_PUBLIC_OCR_API_URL for the build environment.');
     });
 });
