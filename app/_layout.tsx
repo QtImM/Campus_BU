@@ -181,6 +181,9 @@ export default function RootLayout() {
     const accepted = await acceptCommunityEula(currentUser?.uid || null);
     if (accepted) {
       setEulaVisible(false);
+      if (!currentUser) {
+        router.replace('/(auth)/login');
+      }
     }
   };
 
