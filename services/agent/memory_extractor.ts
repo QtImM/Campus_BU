@@ -1,7 +1,10 @@
+import { callDeepSeek, resolveModelName } from './llm';
 import type {
     AcceptedMemoryWrite,
+    AgentHistoryItem,
     DurableMemoryType,
     MemoryCandidate,
+    MemoryCandidateType,
 } from './types';
 
 const MEMORY_CONFIDENCE_THRESHOLD = 0.75;
@@ -29,6 +32,18 @@ const ALLOWED_TYPES = new Set<DurableMemoryType>([
 const SENSITIVE_VALUE_PATTERN =
     /\b\d{15,19}\b|\b(?:password|bank|passport|ssn|social security|credit card|card number)\b/i;
 
+type ExtractionInput = {
+    recentTurns: AgentHistoryItem[];
+};
+
+const ALLOWED_MEMORY_CANDIDATE_TYPES = new Set<MemoryCandidateType>([
+    'long_term_preference',
+    'background_fact',
+    'emotion',
+    'temporary_context',
+    'unknown',
+]);
+
 const normalizeKeyShape = (rawKey: string): string => {
     return rawKey
         .trim()
@@ -47,6 +62,152 @@ const isSensitiveValue = (value: string): boolean => {
 
 const isDurableMemoryType = (type: MemoryCandidate['memory_type']): type is DurableMemoryType => {
     return ALLOWED_TYPES.has(type as DurableMemoryType);
+};
+
+const extractFirstJsonObject = (raw: string): string | null => {
+    let depth = 0;
+    let startIndex = -1;
+    let inString = false;
+    let isEscaped = false;
+
+    for (let index = 0; index < raw.length; index += 1) {
+        const char = raw[index];
+
+        if (startIndex === -1) {
+            if (char === '{') {
+                startIndex = index;
+                depth = 1;
+                inString = false;
+                isEscaped = false;
+            }
+            continue;
+        }
+
+        if (inString) {
+            if (isEscaped) {
+                isEscaped = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                isEscaped = true;
+                continue;
+            }
+
+            if (char === '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (char === '"') {
+            inString = true;
+            continue;
+        }
+
+        if (char === '{') {
+            depth += 1;
+            continue;
+        }
+
+        if (char === '}') {
+            depth -= 1;
+
+            if (depth === 0) {
+                return raw.slice(startIndex, index + 1);
+            }
+        }
+    }
+
+    return null;
+};
+
+const parseJsonObject = (raw: string): unknown => {
+    const trimmed = raw.trim();
+    const withoutFence = trimmed.replace(/^```(?:json)?\s*|\s*```$/gi, '').trim();
+
+    try {
+        return JSON.parse(withoutFence);
+    } catch {
+        const extractedObject = extractFirstJsonObject(withoutFence);
+        if (!extractedObject) {
+            throw new Error('No JSON object found in LLM response');
+        }
+
+        return JSON.parse(extractedObject);
+    }
+};
+
+const isMemoryCandidate = (value: unknown): value is MemoryCandidate => {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const candidate = value as Partial<MemoryCandidate>;
+
+    return (
+        typeof candidate.should_store === 'boolean' &&
+        typeof candidate.key === 'string' &&
+        typeof candidate.value === 'string' &&
+        typeof candidate.memory_type === 'string' &&
+        ALLOWED_MEMORY_CANDIDATE_TYPES.has(candidate.memory_type as MemoryCandidateType) &&
+        typeof candidate.confidence === 'number' &&
+        Number.isFinite(candidate.confidence) &&
+        candidate.confidence >= 0 &&
+        candidate.confidence <= 1 &&
+        typeof candidate.reason === 'string'
+    );
+};
+
+const buildExtractionPrompt = (input: ExtractionInput): { role: string; content: string }[] => {
+    const transcript = input.recentTurns
+        .map((turn) => `${turn.role.toUpperCase()}: ${turn.content}`)
+        .join('\n');
+
+    return [
+        {
+            role: 'system',
+            content: [
+                'You extract durable user memory candidates from a conversation.',
+                'Return JSON only.',
+                'The JSON must contain a top-level "candidates" array.',
+                'Each candidate must include should_store, key, value, memory_type, confidence, and reason.',
+                'Use memory_type values from: long_term_preference, background_fact, emotion, temporary_context, unknown.',
+                'Prefer durable preferences and background facts.',
+                'Do not invent facts.',
+                'Mark temporary context, emotions, and sensitive details as should_store false when present.',
+            ].join(' '),
+        },
+        {
+            role: 'user',
+            content: `Recent conversation:\n${transcript}`,
+        },
+    ];
+};
+
+export const extractMemoryCandidatesFromConversation = async (
+    input: ExtractionInput
+): Promise<MemoryCandidate[]> => {
+    if (input.recentTurns.length === 0) {
+        return [];
+    }
+
+    const raw = await callDeepSeek(buildExtractionPrompt(input), {
+        model: resolveModelName('fast'),
+    });
+
+    let parsed: unknown;
+    try {
+        parsed = parseJsonObject(raw);
+    } catch {
+        return [];
+    }
+
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { candidates?: unknown }).candidates)) {
+        return [];
+    }
+
+    return (parsed as { candidates: unknown[] }).candidates.filter(isMemoryCandidate);
 };
 
 export const normalizeMemoryKey = (rawKey: string): string | null => {
@@ -69,6 +230,7 @@ export const filterMemoryCandidates = (
 ): AcceptedMemoryWrite[] => {
     const accepted: AcceptedMemoryWrite[] = [];
     const acceptedPairs = new Set<string>();
+    const acceptedKeys = new Set<string>();
 
     for (const candidate of candidates) {
         if (!candidate.should_store) {
@@ -102,12 +264,17 @@ export const filterMemoryCandidates = (
             continue;
         }
 
+        if (acceptedKeys.has(normalizedKey)) {
+            continue;
+        }
+
         const acceptedPairKey = `${normalizedKey}::${normalizedValue}`;
         if (acceptedPairs.has(acceptedPairKey)) {
             continue;
         }
 
         acceptedPairs.add(acceptedPairKey);
+        acceptedKeys.add(normalizedKey);
         accepted.push({
             key: normalizedKey,
             value: normalizedValue,

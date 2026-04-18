@@ -1,5 +1,12 @@
-import { filterMemoryCandidates, normalizeMemoryKey } from '../../../services/agent/memory_extractor';
+import * as llm from '../../../services/agent/llm';
+import {
+    extractMemoryCandidatesFromConversation,
+    filterMemoryCandidates,
+    normalizeMemoryKey,
+} from '../../../services/agent/memory_extractor';
 import type { MemoryCandidate } from '../../../services/agent/types';
+
+jest.mock('../../../services/agent/llm');
 
 describe('normalizeMemoryKey', () => {
     it('lowercases and normalizes spaces', () => {
@@ -165,6 +172,117 @@ describe('filterMemoryCandidates', () => {
                 memoryType: 'background_fact',
                 confidence: 0.97,
                 reason: 'major',
+            },
+        ]);
+    });
+
+    it('rejects conflicting writes for the same normalized key in one batch', () => {
+        const candidates: MemoryCandidate[] = [
+            {
+                should_store: true,
+                key: 'preferred_name',
+                value: 'Tim',
+                memory_type: 'long_term_preference',
+                confidence: 0.99,
+                reason: 'name preference',
+            },
+            {
+                should_store: true,
+                key: 'nickname',
+                value: 'Timothy',
+                memory_type: 'long_term_preference',
+                confidence: 0.98,
+                reason: 'conflicting name preference',
+            },
+            {
+                should_store: true,
+                key: 'favorite_food',
+                value: 'dumplings',
+                memory_type: 'long_term_preference',
+                confidence: 0.97,
+                reason: 'food',
+            },
+        ];
+
+        expect(filterMemoryCandidates(candidates, {})).toEqual([
+            {
+                key: 'nickname',
+                value: 'Tim',
+                memoryType: 'long_term_preference',
+                confidence: 0.99,
+                reason: 'name preference',
+            },
+            {
+                key: 'favorite_food',
+                value: 'dumplings',
+                memoryType: 'long_term_preference',
+                confidence: 0.97,
+                reason: 'food',
+            },
+        ]);
+    });
+});
+
+describe('extractMemoryCandidatesFromConversation', () => {
+    it('parses structured candidate memories from the LLM response', async () => {
+        (llm.callDeepSeek as jest.Mock).mockResolvedValue(
+            JSON.stringify({
+                candidates: [
+                    {
+                        should_store: true,
+                        key: 'preferred_name',
+                        value: 'Tim',
+                        memory_type: 'long_term_preference',
+                        confidence: 0.96,
+                        reason: 'user explicitly said to call them Tim',
+                    },
+                ],
+            })
+        );
+
+        const result = await extractMemoryCandidatesFromConversation({
+            recentTurns: [
+                { role: 'user', content: 'Please call me Tim from now on.' },
+                { role: 'assistant', content: 'Okay, I will remember that.' },
+            ],
+        });
+
+        expect(result).toEqual([
+            {
+                should_store: true,
+                key: 'preferred_name',
+                value: 'Tim',
+                memory_type: 'long_term_preference',
+                confidence: 0.96,
+                reason: 'user explicitly said to call them Tim',
+            },
+        ]);
+    });
+
+    it('extracts the first JSON object from noisy LLM output', async () => {
+        (llm.callDeepSeek as jest.Mock).mockResolvedValue(
+            [
+                'Here is the extracted memory JSON:',
+                '{"candidates":[{"should_store":true,"key":"favorite_food","value":"dumplings","memory_type":"long_term_preference","confidence":0.93,"reason":"user said it is their favorite food"}]}',
+                'Let me know if you want anything else.',
+            ].join('\n')
+        );
+
+        const result = await extractMemoryCandidatesFromConversation({
+            recentTurns: [
+                { role: 'user', content: 'My favorite food is dumplings.' },
+                { role: 'assistant', content: 'That sounds good.' },
+            ],
+        });
+
+        expect(result).toEqual([
+            {
+                should_store: true,
+                key: 'favorite_food',
+                value: 'dumplings',
+                memory_type: 'long_term_preference',
+                confidence: 0.93,
+                reason: 'user said it is their favorite food',
             },
         ]);
     });
