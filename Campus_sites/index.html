@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>HKCampus — All for Students</title>
+<meta name="description" content="HKCampus is the all-in-one campus companion for HKBU students. Campus feed, AI assistant, course reviews, timetable and more — beautifully designed for university life." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f5f7;
+    --ink: #0b1b3b;
+    --ink-2: #1d2a4a;
+    --muted: #6e7488;
+    --brand: #1e3a8a;
+    --brand-2: #2b4dd8;
+    --brand-3: #6c84ff;
+    --accent: #10b981;
+    --line: rgba(11,27,59,.08);
+    --radius: 22px;
+    --shadow-soft: 0 2px 6px rgba(11,27,59,.04), 0 20px 40px rgba(11,27,59,.08);
+    --shadow-hard: 0 40px 80px rgba(11,27,59,.25);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.5; }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- NAV (Apple-style) ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 54px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand-mark { width: 26px; height: 26px; border-radius: 8px; background:
+    radial-gradient(80% 80% at 30% 30%, #cfd8ff 0%, #6c84ff 55%, #1e3a8a 100%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.35), 0 4px 14px rgba(30,58,138,.25);
+    position: relative;
+  }
+  .brand-mark::after{
+    content:""; position:absolute; inset:6px; border-radius:6px; background: #fff; mix-blend-mode: screen; opacity:.18;
+  }
+  .brand-name { font-size: 15px; }
+  .nav-links { display: flex; gap: 28px; font-size: 13.5px; color: #1d1d1f; }
+  .nav-links a { opacity: .85; transition: opacity .2s; }
+  .nav-links a:hover { opacity: 1; }
+  .nav-cta { display: flex; gap: 10px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; font-weight: 500; font-size: 14px; transition: transform .2s, box-shadow .2s, background .2s; cursor: pointer; border: 0; }
+  .btn-primary { background: var(--ink); color: #fff; }
+  .btn-primary:hover { background: #000; transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--ink); }
+  .btn-ghost:hover { background: var(--surface); }
+  .btn-lg { padding: 14px 26px; font-size: 15px; }
+
+  @media (max-width: 820px) {
+    .nav-links { display: none; }
+  }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    position: relative;
+    padding: 110px 0 40px;
+    text-align: center;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(108,132,255,.18), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(16,185,129,.10), transparent 60%),
+      linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%);
+  }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-size: 13px; color: var(--brand); background: rgba(30,58,138,.06); border: 1px solid rgba(30,58,138,.12); font-weight: 500; letter-spacing: .02em; }
+  .hero h1 {
+    font-size: clamp(44px, 7.2vw, 96px);
+    line-height: 1.02; letter-spacing: -0.035em;
+    font-weight: 800;
+    margin: 22px auto 0;
+    max-width: 14ch;
+    color: var(--ink);
+  }
+  .hero h1 .grad {
+    background: linear-gradient(120deg, #1e3a8a 0%, #2b4dd8 40%, #6c84ff 70%, #10b981 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub {
+    font-size: clamp(17px, 1.6vw, 22px);
+    color: var(--ink-2); opacity: .75; max-width: 60ch; margin: 22px auto 0;
+  }
+  .hero-cta { display: flex; gap: 14px; justify-content: center; margin-top: 34px; flex-wrap: wrap; }
+  .btn-brand { background: var(--brand); color: #fff; }
+  .btn-brand:hover { background: #15296b; transform: translateY(-1px); box-shadow: 0 10px 30px rgba(30,58,138,.25); }
+  .btn-outline { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  .btn-outline:hover { border-color: #c9cedb; }
+
+  .hero-stage { position: relative; margin-top: 70px; display: flex; justify-content: center; align-items: flex-end; min-height: 620px; }
+  .hero-stage::before, .hero-stage::after {
+    content: ""; position: absolute; border-radius: 50%; filter: blur(60px); opacity: .55; pointer-events: none;
+  }
+  .hero-stage::before { width: 520px; height: 520px; left: 10%; bottom: -120px; background: radial-gradient(circle, #6c84ff, transparent 70%); }
+  .hero-stage::after { width: 460px; height: 460px; right: 8%; bottom: -120px; background: radial-gradient(circle, #10b981, transparent 70%); }
+
+  /* Phone frame */
+  .phone {
+    position: relative;
+    width: 300px;
+    aspect-ratio: 9 / 19.5;
+    border-radius: 46px;
+    background: linear-gradient(180deg, #1a1a1c, #0a0a0c);
+    padding: 10px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.1) inset,
+      0 0 0 2px #0f0f11,
+      0 40px 80px rgba(11,27,59,.32),
+      0 10px 30px rgba(11,27,59,.18);
+    transition: transform .6s cubic-bezier(.2,.7,.2,1);
+  }
+  .phone::before {
+    content: ""; position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    width: 92px; height: 26px; border-radius: 999px; background: #0a0a0c; z-index: 3;
+  }
+  .phone .screen {
+    position: relative; width: 100%; height: 100%;
+    border-radius: 36px; overflow: hidden; background: #fff;
+  }
+  .phone .screen img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+
+  .hero-phones { display: flex; gap: 28px; align-items: flex-end; position: relative; }
+  .hero-phones .phone:nth-child(1) { transform: translateY(20px) rotate(-4deg) scale(.92); opacity: .9; }
+  .hero-phones .phone:nth-child(2) { transform: translateY(-10px) scale(1.02); z-index: 2; }
+  .hero-phones .phone:nth-child(3) { transform: translateY(20px) rotate(4deg) scale(.92); opacity: .9; }
+  @media (max-width: 820px) {
+    .hero { padding-top: 80px; }
+    .hero-phones { gap: 0; }
+    .hero-phones .phone:nth-child(1), .hero-phones .phone:nth-child(3) { display: none; }
+    .hero-phones .phone:nth-child(2) { transform: none; }
+    .phone { width: 250px; }
+    .hero-stage { min-height: 540px; }
+  }
+
+  /* ---------- MARQUEE of universities ---------- */
+  .trust { padding: 54px 0 0; text-align: center; }
+  .trust .label { font-size: 13px; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+  .trust-row { margin-top: 22px; display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; align-items: center; opacity: .8; }
+  .trust-row span { font-size: 15px; color: var(--ink-2); font-weight: 500; }
+
+  /* ---------- SECTION base ---------- */
+  .section { padding: 120px 0; position: relative; }
+  .section-dark { background: var(--ink); color: #fff; }
+  .section-soft { background: var(--surface); }
+  .sec-head { max-width: 900px; margin: 0 auto 70px; text-align: center; }
+  .sec-eyebrow { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--brand-2); font-weight: 600; }
+  .section-dark .sec-eyebrow { color: #8aa1ff; }
+  .sec-title { font-size: clamp(34px, 4.6vw, 60px); letter-spacing: -0.028em; font-weight: 800; line-height: 1.05; margin: 14px 0 18px; }
+  .sec-sub { font-size: clamp(17px, 1.4vw, 20px); color: var(--muted); max-width: 62ch; margin: 0 auto; }
+  .section-dark .sec-sub { color: rgba(255,255,255,.65); }
+
+  /* ---------- FEATURE GRID (Apple-bento style) ---------- */
+  .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }
+  .card {
+    background: var(--surface); border-radius: 28px; padding: 40px; position: relative; overflow: hidden;
+    min-height: 420px; display: flex; flex-direction: column; justify-content: flex-end;
+    transition: transform .4s cubic-bezier(.2,.7,.2,1), box-shadow .4s;
+  }
+  .card:hover { transform: translateY(-4px); box-shadow: var(--shadow-soft); }
+  .card h3 { font-size: 28px; letter-spacing: -0.02em; font-weight: 700; margin: 0 0 10px; }
+  .card p { color: var(--muted); font-size: 16px; margin: 0; max-width: 36ch; }
+  .card .tag { position: absolute; top: 30px; left: 30px; font-size: 12px; color: var(--brand-2); background: rgba(43,77,216,.08); border-radius: 999px; padding: 6px 12px; font-weight: 600; letter-spacing: .04em; }
+  .card-lg { grid-column: span 4; }
+  .card-sm { grid-column: span 2; }
+  .card-md { grid-column: span 3; }
+  .card-full { grid-column: span 6; min-height: 520px; }
+
+  .card-dark { background: linear-gradient(140deg, #0b1b3b, #1e3a8a 70%, #2b4dd8); color: #fff; }
+  .card-dark p { color: rgba(255,255,255,.75); }
+  .card-dark .tag { background: rgba(255,255,255,.14); color: #fff; }
+
+  .card-art { position: absolute; inset: 0; pointer-events: none; }
+  .card-content { position: relative; z-index: 2; }
+
+  @media (max-width: 900px) {
+    .bento { grid-template-columns: 1fr; }
+    .card, .card-lg, .card-sm, .card-md, .card-full { grid-column: span 1; min-height: 360px; }
+  }
+
+  /* ---------- SPLIT feature (image + text) ---------- */
+  .split { display: grid; grid-template-columns: 1.1fr 1fr; gap: 80px; align-items: center; }
+  .split.reverse { grid-template-columns: 1fr 1.1fr; }
+  .split-text h2 { font-size: clamp(34px, 3.8vw, 52px); letter-spacing: -0.025em; font-weight: 800; line-height: 1.08; margin: 14px 0 20px; }
+  .split-text p { font-size: 18px; color: var(--muted); max-width: 52ch; margin: 0 0 24px; }
+  .split-text ul { padding: 0; margin: 22px 0 0; list-style: none; }
+  .split-text ul li { padding: 14px 0; border-top: 1px solid var(--line); color: var(--ink-2); display: flex; align-items: flex-start; gap: 12px; font-size: 15.5px; }
+  .split-text ul li:last-child { border-bottom: 1px solid var(--line); }
+  .split-text ul li .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-2); margin-top: 9px; flex: 0 0 auto; }
+
+  .split-visual { display: flex; justify-content: center; align-items: center; }
+  .split-visual .phone-stage {
+    position: relative;
+    padding: 60px;
+    border-radius: 40px;
+    background: linear-gradient(160deg, #eef2ff 0%, #f5f7ff 60%, #fff 100%);
+    box-shadow: inset 0 0 0 1px rgba(11,27,59,.04);
+  }
+  .split-visual.blue .phone-stage {
+    background: linear-gradient(160deg, #0b1b3b 0%, #1e3a8a 60%, #2b4dd8 100%);
+    color: #fff;
+  }
+  .split-visual.mint .phone-stage {
+    background: linear-gradient(160deg, #ecfdf5 0%, #d1fae5 50%, #a7f3d0 100%);
+  }
+  .split-visual.cream .phone-stage {
+    background: linear-gradient(160deg, #fff7ed 0%, #ffedd5 60%, #fed7aa 100%);
+  }
+  @media (max-width: 900px) {
+    .split, .split.reverse { grid-template-columns: 1fr; gap: 40px; }
+    .split-visual .phone-stage { padding: 30px; }
+  }
+
+  /* ---------- PILL CHIPS ---------- */
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+  .chip { padding: 8px 14px; border-radius: 999px; background: rgba(30,58,138,.08); color: var(--brand); font-size: 13px; font-weight: 500; }
+  .section-dark .chip { background: rgba(255,255,255,.1); color: #fff; }
+
+  /* ---------- BIG TYPOGRAPHY statement ---------- */
+  .statement { padding: 180px 0; text-align: center; background: #fff; }
+  .statement h2 {
+    font-size: clamp(42px, 6vw, 92px);
+    letter-spacing: -0.035em; line-height: 1.02; font-weight: 800; max-width: 18ch; margin: 0 auto;
+  }
+  .statement h2 .muted { color: #c2c8d6; }
+
+  /* ---------- METRICS ---------- */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px; margin-top: 60px; }
+  .metric { text-align: left; }
+  .metric .n { font-size: clamp(40px, 4.6vw, 64px); font-weight: 800; letter-spacing: -0.025em; line-height: 1; }
+  .metric .n .grad {
+    background: linear-gradient(90deg, #6c84ff 0%, #10b981 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .metric p { margin: 12px 0 0; color: var(--muted); font-size: 15px; max-width: 24ch; }
+  @media (max-width: 820px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+
+  /* ---------- DOWNLOAD ---------- */
+  .download {
+    padding: 120px 0; text-align: center;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% 0%, rgba(108,132,255,.18), transparent 60%),
+      linear-gradient(180deg, #f5f7ff 0%, #ffffff 100%);
+  }
+  .store-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+  .store-btn {
+    display: inline-flex; align-items: center; gap: 12px; padding: 14px 22px; border-radius: 14px;
+    background: var(--ink); color: #fff; min-width: 200px; text-align: left;
+    transition: transform .2s, background .2s;
+  }
+  .store-btn:hover { background: #000; transform: translateY(-2px); }
+  .store-btn .small { font-size: 11px; opacity: .75; letter-spacing: .06em; }
+  .store-btn .big { font-size: 17px; font-weight: 600; margin-top: 2px; }
+  .store-btn svg { flex: 0 0 auto; }
+
+  /* ---------- FOOTER ---------- */
+  footer { background: #fff; color: var(--ink-2); border-top: 1px solid var(--line); padding: 48px 0 32px; font-size: 13px; }
+  .foot-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; }
+  .foot-grid h5 { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  .foot-grid a { display: block; padding: 5px 0; color: var(--ink-2); opacity: .85; }
+  .foot-grid a:hover { opacity: 1; color: var(--ink); }
+  .foot-bottom { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; color: var(--muted); flex-wrap: wrap; gap: 14px; }
+  @media (max-width: 820px) { .foot-grid { grid-template-columns: 1fr 1fr; } }
+
+  /* ---------- Reveal on scroll ---------- */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ---------- Feed card art ---------- */
+  .art-blob { position: absolute; border-radius: 50%; filter: blur(40px); opacity: .6; pointer-events: none; }
+  .art-circle { position: absolute; border-radius: 50%; pointer-events: none; }
+
+  /* ---------- Icon ---------- */
+  .i-ico { width: 44px; height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: #fff; color: var(--brand); box-shadow: 0 6px 14px rgba(11,27,59,.08); }
+  .card-dark .i-ico { background: rgba(255,255,255,.14); color: #fff; }
+
+  /* ---------- Sticker ---------- */
+  .sticker { position: absolute; top: 24px; right: 24px; padding: 6px 10px; border-radius: 999px; background: #fff; font-size: 12px; font-weight: 600; color: var(--brand); box-shadow: 0 4px 10px rgba(11,27,59,.08); }
+
+  /* Feed post mock */
+  .post {
+    background: #fff; border-radius: 18px; padding: 18px; box-shadow: 0 10px 30px rgba(11,27,59,.08); width: 260px;
+    font-size: 13px; color: var(--ink-2);
+  }
+  .post .head { display: flex; align-items: center; gap: 10px; }
+  .post .avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg,#6c84ff,#10b981); }
+  .post .body { margin-top: 12px; font-weight: 600; }
+  .post .meta { margin-top: 10px; font-size: 12px; color: var(--muted); display: flex; gap: 14px; }
+
+  /* Chat bubble mock */
+  .chat { width: 300px; }
+  .bubble { background: #fff; border-radius: 16px; padding: 12px 14px; font-size: 13px; color: var(--ink-2); box-shadow: 0 6px 18px rgba(11,27,59,.06); margin-bottom: 8px; max-width: 85%; }
+  .bubble.me { background: var(--brand); color: #fff; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="#" class="brand" aria-label="HKCampus">
+      <span class="brand-mark"></span>
+      <span class="brand-name">HKCampus</span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">功能</a>
+      <a href="#agent">Campus Agent</a>
+      <a href="#courses">课程点评</a>
+      <a href="#community">校园圈</a>
+      <a href="#about">关于</a>
+    </nav>
+    <div class="nav-cta">
+      <a href="#download" class="btn btn-ghost">登录</a>
+      <a href="#download" class="btn btn-primary">下载 App</a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow reveal">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6L12 2z" fill="currentColor"/></svg>
+      Version 1.0.0 · Built for HKBU
+    </span>
+    <h1 class="reveal">
+      大学生活，<br />
+      <span class="grad">从此更简单。</span>
+    </h1>
+    <p class="sub reveal">
+      校园圈、Campus Agent、课程点评、课表、地图——<br/>
+      一个 App，覆盖每一天。ALL FOR STUDENTS.
+    </p>
+    <div class="hero-cta reveal">
+      <a href="#download" class="btn btn-brand btn-lg">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+        下载 iOS 版
+      </a>
+      <a href="#download" class="btn btn-outline btn-lg">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5V3.5c0-.47.27-.87.67-1.07l10.81 9.57L3.67 21.57c-.4-.2-.67-.6-.67-1.07zm13.83-7.32l2.93 1.69c.57.33.57 1.15 0 1.48l-2.86 1.65-3.36-2.97 3.29-1.85zm-2.28-.82L5.28 3.02l11.16 6.44-2.89 2.9zM5.28 20.98l9.27-9.33 2.89 2.9L5.28 20.98z"/></svg>
+        下载 Android 版
+      </a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="hero-stage">
+      <div class="hero-phones">
+        <div class="phone"><div class="screen"><img src="assets/screen-courses.jpg" alt="Courses screen" /></div></div>
+        <div class="phone"><div class="screen"><img src="assets/screen-feed.jpg" alt="Campus feed screen" /></div></div>
+        <div class="phone"><div class="screen"><img src="assets/screen-agent.jpg" alt="Campus agent screen" /></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST -->
+<section class="trust">
+  <div class="wrap">
+    <div class="label">为香港浸会大学同学打造 · Trusted by students at</div>
+    <div class="trust-row">
+      <span>HKBU · School of Business</span>
+      <span>Arts &amp; Social Sciences</span>
+      <span>Communication</span>
+      <span>Science</span>
+      <span>Chinese Medicine</span>
+    </div>
+  </div>
+</section>
+
+<!-- BIG STATEMENT -->
+<section class="statement">
+  <div class="wrap">
+    <h2 class="reveal">
+      一个 App，<br />
+      <span class="muted">让校园里的</span><br />
+      每一件事<span class="muted">，都刚刚好。</span>
+    </h2>
+  </div>
+</section>
+
+<!-- BENTO FEATURES -->
+<section id="features" class="section section-soft">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-eyebrow">FEATURES</div>
+      <h2 class="sec-title">你的校园，尽在指尖。</h2>
+      <p class="sec-sub">从每日课表到即时资讯、从 AI 助手到课程点评——精心设计的每一个细节，都是为了让你的大学四年更从容。</p>
+    </div>
+
+    <div class="bento">
+      <!-- Campus Circle -->
+      <div class="card card-lg reveal" style="background: linear-gradient(145deg, #eef2ff 0%, #ffffff 60%);">
+        <div class="card-art">
+          <div class="art-blob" style="width:240px;height:240px;top:-40px;right:-40px;background: radial-gradient(circle, #6c84ff, transparent 70%);"></div>
+          <div class="art-circle" style="width:140px;height:140px;right:40px;top:80px;background: linear-gradient(135deg,#1e3a8a,#2b4dd8); opacity:.08;"></div>
+        </div>
+        <span class="tag">CAMPUS CIRCLE</span>
+        <div class="card-content">
+          <h3>校园圈 · 发现真实的校园生活</h3>
+          <p>看最新的活动与攻略、读最真诚的评价、一起做失物招领。你关心的，这里都有人在谈。</p>
+          <div class="chips">
+            <span class="chip">活动</span>
+            <span class="chip">评价</span>
+            <span class="chip">攻略</span>
+            <span class="chip">失物招领</span>
+            <span class="chip">论坛</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Campus Agent -->
+      <div class="card card-sm card-dark reveal">
+        <div class="card-art">
+          <div class="art-blob" style="width:200px;height:200px;left:-60px;bottom:-60px;background: radial-gradient(circle, #6c84ff, transparent 70%); opacity:.5;"></div>
+        </div>
+        <span class="tag">AI · CAMPUS AGENT</span>
+        <div class="card-content">
+          <h3>问一下，<br/>就知道。</h3>
+          <p>HKBU 的课表、资讯、校园生活问题，Campus Agent 都能答。</p>
+        </div>
+      </div>
+
+      <!-- Courses -->
+      <div class="card card-md reveal" style="background: linear-gradient(145deg, #fff7ed 0%, #ffedd5 100%);">
+        <div class="card-art">
+          <div class="art-circle" style="width:160px;height:160px;right:-40px;top:-40px;background: linear-gradient(135deg,#f59e0b,#f97316); opacity:.18;"></div>
+        </div>
+        <span class="tag">COURSE REVIEWS</span>
+        <div class="card-content">
+          <h3>5.0 的课，<br/>值得一选。</h3>
+          <p>选课不再靠猜。数千条真实点评，让学长学姐帮你省时间。</p>
+        </div>
+      </div>
+
+      <!-- Timetable -->
+      <div class="card card-md reveal" style="background: linear-gradient(145deg, #ecfdf5 0%, #d1fae5 100%);">
+        <div class="card-art">
+          <div class="art-circle" style="width:180px;height:180px;left:-40px;bottom:-40px;background: linear-gradient(135deg,#10b981,#34d399); opacity:.18;"></div>
+        </div>
+        <span class="tag">SMART TIMETABLE</span>
+        <div class="card-content">
+          <h3>一张截图，<br/>补齐整个课表。</h3>
+          <p>支持截图导入、OCR 识别与手动搜课补录，让课表从此轻松。</p>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div class="card card-sm reveal" style="background: linear-gradient(145deg, #fdf4ff 0%, #fae8ff 100%);">
+        <div class="card-art">
+          <div class="art-circle" style="width:140px;height:140px;right:-20px;bottom:-20px;background: linear-gradient(135deg,#a855f7,#c084fc); opacity:.22;"></div>
+        </div>
+        <span class="tag">CAMPUS MAP</span>
+        <div class="card-content">
+          <h3>地图 · 到得了每一栋楼。</h3>
+          <p>教学楼、食堂、图书馆，一张图走遍整个校园。</p>
+        </div>
+      </div>
+
+      <!-- Profile -->
+      <div class="card card-lg reveal" style="background: linear-gradient(160deg, #0b1b3b 0%, #1e3a8a 100%); color: #fff;">
+        <div class="card-art">
+          <div class="art-blob" style="width:260px;height:260px;right:-60px;top:-60px;background: radial-gradient(circle, #6c84ff, transparent 70%); opacity:.55;"></div>
+          <div class="art-circle" style="width:100px;height:100px;left:60px;top:60px;background: linear-gradient(135deg,#10b981,#34d399); opacity:.4;"></div>
+        </div>
+        <span class="tag" style="background:rgba(255,255,255,.14); color:#fff;">PROFILE</span>
+        <div class="card-content">
+          <h3>你的校园主页。</h3>
+          <p style="color: rgba(255,255,255,.75);">课表、通知、消息、作品——个人中心聚合你在校园里的一切。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SPLIT 1: Campus Agent -->
+<section id="agent" class="section">
+  <div class="wrap">
+    <div class="split reveal">
+      <div class="split-text">
+        <div class="sec-eyebrow">CAMPUS AGENT</div>
+        <h2>你好，<br/>我是你的校园 AI。</h2>
+        <p>“最近有什么新鲜资讯？”“我的课表里面有什么？”——用自然语言，获取关于 HKBU 的一切。由创新实验室打造，越用越懂你。</p>
+        <ul>
+          <li><span class="dot"></span>即时资讯 · 校园动态随问随答</li>
+          <li><span class="dot"></span>课表贴心助手 · 你的每一天有什么</li>
+          <li><span class="dot"></span>学生专属 · 理解校园语言与情境</li>
+        </ul>
+        <div class="hero-cta" style="margin-top: 32px;">
+          <a href="#download" class="btn btn-brand">立即体验 Campus Agent</a>
+        </div>
+      </div>
+      <div class="split-visual blue">
+        <div class="phone-stage">
+          <div class="phone"><div class="screen"><img src="assets/screen-agent.jpg" alt="Campus Agent screen" /></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BIG STATEMENT -->
+<section class="statement" style="padding: 140px 0;">
+  <div class="wrap">
+    <div class="sec-eyebrow reveal">DESIGNED FOR STUDENTS</div>
+    <h2 class="reveal" style="margin-top: 16px;">
+      每一个像素，<br/>
+      <span class="muted">都为</span>校园生活<span class="muted">而打磨。</span>
+    </h2>
+  </div>
+</section>
+
+<!-- SPLIT 2: Courses (reverse) -->
+<section id="courses" class="section section-soft">
+  <div class="wrap">
+    <div class="split reverse reveal">
+      <div class="split-visual cream">
+        <div class="phone-stage">
+          <div class="phone"><div class="screen"><img src="assets/screen-courses.jpg" alt="Courses screen" /></div></div>
+        </div>
+      </div>
+      <div class="split-text">
+        <div class="sec-eyebrow">COURSE REVIEWS</div>
+        <h2>选对课，<br/>比努力更重要。</h2>
+        <p>ACCT、COMP、BUS、CHI……每一门课都有真实的师生口碑。搜索课程代码，看评分、看真实评价，把选课焦虑变成确定。</p>
+        <ul>
+          <li><span class="dot"></span>按学院、按学期快速筛选</li>
+          <li><span class="dot"></span>5 星制评价 + 详细文字点评</li>
+          <li><span class="dot"></span>遇到满意的课，「换课」一键搞定</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SPLIT 3: Community -->
+<section id="community" class="section">
+  <div class="wrap">
+    <div class="split reveal">
+      <div class="split-text">
+        <div class="sec-eyebrow">CAMPUS CIRCLE</div>
+        <h2>一个真正懂你们的<br/>校园社区。</h2>
+        <p>不是陌生人的热搜，而是同学、同届、同系在谈的真实话题。活动招募、学长学姐攻略、饭堂评价、失物招领——你想看到什么，这里就发生什么。</p>
+        <ul>
+          <li><span class="dot"></span>发现 / 论坛双视图</li>
+          <li><span class="dot"></span>五大内容分类 + 最新 / 最多点赞排序</li>
+          <li><span class="dot"></span>实名 BU_Edu 认证，安心交流</li>
+        </ul>
+      </div>
+      <div class="split-visual mint">
+        <div class="phone-stage">
+          <div class="phone"><div class="screen"><img src="assets/screen-feed.jpg" alt="Campus community feed" /></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- METRICS / Dark -->
+<section class="section section-dark">
+  <div class="wrap">
+    <div class="sec-head reveal" style="margin-bottom: 30px;">
+      <div class="sec-eyebrow">THE NUMBERS</div>
+      <h2 class="sec-title">因为我们相信，<br/>好 App 来自每一次真实的使用。</h2>
+    </div>
+    <div class="metrics">
+      <div class="metric reveal">
+        <div class="n"><span class="grad">10<small style="font-size:.5em;opacity:.6;">k+</small></span></div>
+        <p>来自 HKBU 同学的日常使用与反馈</p>
+      </div>
+      <div class="metric reveal">
+        <div class="n"><span class="grad">500<small style="font-size:.5em;opacity:.6;">+</small></span></div>
+        <p>课程点评记录，并持续增长</p>
+      </div>
+      <div class="metric reveal">
+        <div class="n"><span class="grad">5</span><span style="opacity:.5;">.</span><span class="grad">0</span></div>
+        <p>App Store 上的学生用户评分</p>
+      </div>
+      <div class="metric reveal">
+        <div class="n"><span class="grad">6</span></div>
+        <p>核心模块，一次下载通通拥有</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROFILE section -->
+<section class="section section-soft">
+  <div class="wrap">
+    <div class="split reverse reveal">
+      <div class="split-visual">
+        <div class="phone-stage">
+          <div class="phone"><div class="screen"><img src="assets/screen-profile.jpg" alt="Profile screen" /></div></div>
+        </div>
+      </div>
+      <div class="split-text">
+        <div class="sec-eyebrow">YOUR HKCAMPUS</div>
+        <h2>课表、通知、作品——<br/>一处全搞定。</h2>
+        <p>个人中心把你每天最需要的事情放在一起：今天上什么课、谁找你说话、你发过的东西。支持截图导入课表、OCR 识别和手动补录。</p>
+        <ul>
+          <li><span class="dot"></span>按周一到周日查看课表</li>
+          <li><span class="dot"></span>集中查看获赞、评论、回复</li>
+          <li><span class="dot"></span>你的作品与发帖历史，都在这里</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section id="download" class="download">
+  <div class="wrap reveal">
+    <div class="sec-eyebrow">GET STARTED</div>
+    <h2 class="sec-title" style="margin-top: 14px;">今天就加入 HKCampus。</h2>
+    <p class="sec-sub" style="margin-top: 12px;">免费下载。使用 BU_Edu 邮箱一键认证，开启你的大学新方式。</p>
+    <div class="store-row">
+      <a href="#" class="store-btn" aria-label="Download on App Store">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.08zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+        <div>
+          <div class="small">Download on the</div>
+          <div class="big">App Store</div>
+        </div>
+      </a>
+      <a href="#" class="store-btn" aria-label="Get it on Google Play">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5V3.5c0-.47.27-.87.67-1.07l10.81 9.57L3.67 21.57c-.4-.2-.67-.6-.67-1.07zm13.83-7.32l2.93 1.69c.57.33.57 1.15 0 1.48l-2.86 1.65-3.36-2.97 3.29-1.85zm-2.28-.82L5.28 3.02l11.16 6.44-2.89 2.9zM5.28 20.98l9.27-9.33 2.89 2.9L5.28 20.98z"/></svg>
+        <div>
+          <div class="small">GET IT ON</div>
+          <div class="big">Google Play</div>
+        </div>
+      </a>
+    </div>
+    <p style="margin-top: 22px; color: var(--muted); font-size: 13px;">Version 1.0.0 · iOS 15+ / Android 10+</p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer id="about">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <div class="brand" style="margin-bottom: 14px;">
+          <span class="brand-mark"></span>
+          <span class="brand-name">HKCampus</span>
+        </div>
+        <p style="color: var(--muted); max-width: 38ch; margin: 0 0 14px;">
+          All for Students. 由 HKBU 创新实验室出品，为同学打造的校园生活 App。
+        </p>
+      </div>
+      <div>
+        <h5>产品</h5>
+        <a href="#features">功能一览</a>
+        <a href="#agent">Campus Agent</a>
+        <a href="#courses">课程点评</a>
+        <a href="#community">校园圈</a>
+      </div>
+      <div>
+        <h5>资源</h5>
+        <a href="#">帮助中心</a>
+        <a href="#">学生反馈</a>
+        <a href="#">更新日志</a>
+        <a href="#">API &amp; Dev</a>
+      </div>
+      <div>
+        <h5>关于</h5>
+        <a href="#">创新实验室</a>
+        <a href="#">隐私政策</a>
+        <a href="#">服务条款</a>
+        <a href="#">联系我们</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <div>© 2026 HKCampus. Made with care in Hong Kong.</div>
+      <div>ALL FOR STUDENTS.</div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // Parallax nudge on hero phones
+  const phones = document.querySelectorAll('.hero-phones .phone');
+  window.addEventListener('mousemove', (e) => {
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const dx = (e.clientX - cx) / cx;
+    const dy = (e.clientY - cy) / cy;
+    phones.forEach((p, i) => {
+      const depth = (i === 1) ? 8 : 14;
+      const baseRotate = (i === 0) ? -4 : (i === 2) ? 4 : 0;
+      const baseY = (i === 1) ? -10 : 20;
+      p.style.transform = `translate(${dx*depth}px, ${baseY + dy*depth}px) rotate(${baseRotate + dx*0.6}deg) scale(${i===1?1.02:0.92})`;
+    });
+  });
+</script>
+
+</body>
+</html>
