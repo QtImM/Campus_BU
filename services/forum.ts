@@ -50,11 +50,15 @@ const markFollowingAuthors = async (posts: ForumPost[], currentUserId?: string) 
     });
 };
 
+export const FORUM_PAGE_SIZE = 20;
+
 // ── Fetch list ────────────────────────────────────────────────────────────────
 export const fetchForumPosts = async (
     category: ForumCategory | 'all' = 'all',
     sort: ForumSort = 'latest_reply',
     currentUserId?: string,
+    page?: number,
+    pageSize: number = FORUM_PAGE_SIZE,
 ): Promise<ForumPost[]> => {
     let query = supabase.from(FORUM_POSTS).select('*');
 
@@ -64,6 +68,12 @@ export const fetchForumPosts = async (
 
     const orderCol = sort === 'latest_reply' ? 'last_reply_at' : 'created_at';
     query = query.order(orderCol, { ascending: false });
+
+    if (page !== undefined) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+        query = query.range(from, to);
+    }
 
     const { data, error } = await query;
     if (error) throw error;

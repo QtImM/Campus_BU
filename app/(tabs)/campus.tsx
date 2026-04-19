@@ -32,7 +32,7 @@ import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import { getCurrentUser } from '../../services/auth';
 import { deletePost, fetchPosts, POSTS_PAGE_SIZE, subscribeToPosts, togglePostLike } from '../../services/campus';
 import { addHiddenPostId, filterHiddenPosts, getHiddenPostIds } from '../../services/feedPreferences';
-import { fetchForumPosts } from '../../services/forum';
+import { fetchForumPosts, FORUM_PAGE_SIZE } from '../../services/forum';
 import { ForumCategory, ForumPost, ForumSort, Post, PostCategory } from '../../types';
 import { isRemoteImageUrl, normalizeRemoteImageUrl } from '../../utils/remoteImage';
 import { changeLanguage } from '../i18n/i18n';
@@ -141,6 +141,9 @@ export default function CampusScreen() {
   const [forumPosts, setForumPosts] = useState<ForumPost[]>([]);
   const [forumLoading, setForumLoading] = useState(false);
   const [forumRefreshing, setForumRefreshing] = useState(false);
+  const [forumPage, setForumPage] = useState(0);
+  const [hasMoreForum, setHasMoreForum] = useState(true);
+  const [loadingMoreForum, setLoadingMoreForum] = useState(false);
 
   // ── Sync status across views ──────────────────────────────────────
   useEffect(() => {
@@ -178,15 +181,25 @@ export default function CampusScreen() {
     };
   }, []);
 
-  const loadForumPosts = async (isRefresh = false) => {
+  const loadForumPosts = async (isRefresh = false, pageToLoad = 0) => {
     try {
-      // Show skeleton only on true first load (no existing data)
       if (!isRefresh && forumPosts.length === 0) setForumLoading(true);
       const user = await getCurrentUser();
-      const data = await fetchForumPosts(forumCategory, forumSort, user?.uid);
+      const data = await fetchForumPosts(forumCategory, forumSort, user?.uid, pageToLoad, FORUM_PAGE_SIZE);
       const hiddenPostIds = await getHiddenPostIds();
       const filteredData = filterHiddenPosts(data, hiddenPostIds);
-      setForumPosts(filteredData);
+
+      if (pageToLoad === 0) {
+        setForumPosts(filteredData);
+      } else {
+        setForumPosts(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newPosts = filteredData.filter(p => !existingIds.has(p.id));
+          return [...prev, ...newPosts];
+        });
+      }
+      setForumPage(pageToLoad);
+      setHasMoreForum(data.length >= FORUM_PAGE_SIZE);
     } catch (e) {
       console.error('Forum load error:', e);
     } finally {
@@ -195,10 +208,18 @@ export default function CampusScreen() {
     }
   };
 
+  const loadMoreForumPosts = useCallback(() => {
+    if (loadingMoreForum || !hasMoreForum) return;
+    setLoadingMoreForum(true);
+    loadForumPosts(true, forumPage + 1).finally(() => setLoadingMoreForum(false));
+  }, [forumPage, hasMoreForum, loadingMoreForum, forumCategory, forumSort]);
+
   // Load forum posts once on mount, and re-fetch when category/sort changes.
   // DO NOT include mainTab – swiping to the forum tab must NOT trigger a reload.
   useEffect(() => {
-    loadForumPosts();
+    setForumPage(0);
+    setHasMoreForum(true);
+    loadForumPosts(false, 0);
   }, [forumCategory, forumSort]);
 
   // ─── Skeletons ────────────────────────────────────────────────────────────
@@ -688,13 +709,25 @@ export default function CampusScreen() {
                   })}
                 />
               )}
+              onEndReached={loadMoreForumPosts}
+              onEndReachedThreshold={0.3}
               refreshControl={
                 <RefreshControl
                   refreshing={forumRefreshing}
-                  onRefresh={() => { setForumRefreshing(true); loadForumPosts(true); }}
+                  onRefresh={() => {
+                    setForumRefreshing(true);
+                    setForumPage(0);
+                    setHasMoreForum(true);
+                    loadForumPosts(true, 0);
+                  }}
                   tintColor="#1E3A8A"
                 />
               }
+              ListFooterComponent={loadingMoreForum ? (
+                <View style={styles.loadingMore}>
+                  <ActivityIndicator size="small" color="#1E3A8A" />
+                </View>
+              ) : null}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyText}>{t('forum.empty.title')}</Text>
