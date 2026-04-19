@@ -43,7 +43,10 @@ const initI18n = async () => {
         interpolation: {
             escapeValue: false
         },
-        compatibilityJSON: 'v3' as any // Required for Android, cast to silence TS error
+        compatibilityJSON: 'v3' as any, // Required for Android, cast to silence TS error
+        react: {
+            useSuspense: false, // Disable suspense to avoid issues with sync rendering
+        }
     });
 };
 
