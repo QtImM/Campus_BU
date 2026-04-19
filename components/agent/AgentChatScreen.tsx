@@ -1,4 +1,4 @@
-﻿import * as Location from 'expo-location';
+import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Bot, Send, Sparkles, User } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
@@ -618,11 +618,20 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                     />
                 </View>
                 <TouchableOpacity
-                    style={[styles.sendButton, (!input.trim() || !currentUser) && styles.sendButtonDisabled]}
+                    style={[
+                        styles.sendButton, 
+                        (!input.trim() || !currentUser) && styles.sendButtonDisabled,
+                        loading && styles.sendButtonLoading
+                    ]}
                     onPress={() => handleSend()}
                     disabled={!input.trim() || loading || !currentUser}
+                    activeOpacity={0.7}
                 >
-                    <Send size={20} color="#fff" />
+                    {loading ? (
+                        <View style={styles.loadingDot} />
+                    ) : (
+                        <Send size={22} color="#fff" strokeWidth={2.5} />
+                    )}
                 </TouchableOpacity>
             </View>
 
@@ -807,12 +816,12 @@ const styles = StyleSheet.create({
     },
     inputArea: {
         flexDirection: 'row',
-        padding: 16,
-        paddingBottom: 16,
+        padding: 14,
+        paddingBottom: 14,
         backgroundColor: '#fff',
         borderTopWidth: 1,
         borderTopColor: '#E5E7EB',
-        alignItems: 'flex-end',
+        alignItems: 'center',
     },
     inputShell: {
         flex: 1,
@@ -830,16 +839,33 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
     sendButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: '#1E3A8A',
         alignItems: 'center',
         justifyContent: 'center',
         marginLeft: 12,
+        shadowColor: '#1E3A8A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
     },
     sendButtonDisabled: {
         backgroundColor: '#9CA3AF',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    sendButtonLoading: {
+        backgroundColor: '#3B82F6',
+        shadowOpacity: 0.5,
+    },
+    loadingDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#fff',
     },
     headerActions: {
         flexDirection: 'row',
