@@ -36,11 +36,17 @@ export default function RootLayout() {
   const [isAnimationFinished, setIsAnimationFinished] = useState(false);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [eulaVisible, setEulaVisible] = useState(false);
+  const [i18nReady, setI18nReady] = useState(false);
 
   // Keep segmentsRef in sync with latest segments
   useEffect(() => {
     segmentsRef.current = segments;
   }, [segments]);
+
+  // Wait for i18n initialization before rendering
+  useEffect(() => {
+    i18nPromise.then(() => setI18nReady(true));
+  }, []);
 
   useEffect(() => {
     // SplashScreen.setOptions is not available in Expo Go
@@ -196,6 +202,11 @@ export default function RootLayout() {
       }
     }
   };
+
+  // Don't render anything until i18n is initialized to prevent useTranslation warnings
+  if (!i18nReady) {
+    return null;
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

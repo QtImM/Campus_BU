@@ -1,8 +1,8 @@
 import { AlertTriangle, Ban, ShieldAlert, UserCheck } from 'lucide-react-native';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import i18n from '../../app/i18n/i18n';
 import { normalizeLanguage } from '../../constants/legalContent';
 
 interface EULAModalProps {
@@ -11,6 +11,7 @@ interface EULAModalProps {
 }
 
 export const EULAModal: React.FC<EULAModalProps> = ({ visible, onAccept }) => {
+    const { i18n } = useTranslation();
     const language = normalizeLanguage(i18n.language);
 
     const copy = {
