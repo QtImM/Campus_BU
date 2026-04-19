@@ -8,7 +8,7 @@ import { AnimatedTabIcon } from '../../components/common/AnimatedTabIcon';
 import { useCourseActivity } from '../../context/CourseActivityContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { getCurrentUser } from '../../services/auth';
-import { getTabLabel } from './tabLabels';
+import { getTabLabel } from './_tabLabels';
 
 const AgentTabIcon = ({ color, focused }: { color: string; focused: boolean }) => (
   <View style={styles.agentTabIcon}>
