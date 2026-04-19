@@ -48,8 +48,19 @@ jest.mock('../../../services/faq', () => ({
     },
 }));
 
+const mockCreateManualScheduleEntry = jest.fn();
+
 jest.mock('../../../services/schedule', () => ({
     getUserScheduleEntries: jest.fn().mockResolvedValue([]),
+    createManualScheduleEntry: (...args: any[]) => mockCreateManualScheduleEntry(...args),
+}));
+
+const mockCreateUserCalendarEvent = jest.fn();
+const mockGetUpcomingUserCalendarEvents = jest.fn();
+
+jest.mock('../../../services/calendar', () => ({
+    createUserCalendarEvent: (...args: any[]) => mockCreateUserCalendarEvent(...args),
+    getUpcomingUserCalendarEvents: (...args: any[]) => mockGetUpcomingUserCalendarEvents(...args),
 }));
 
 jest.mock('../../../services/agent/campus_queries', () => ({
@@ -131,6 +142,35 @@ describe('AgentExecutor course publishing flow', () => {
         mockFetchTeamingRequests.mockResolvedValue([]);
         mockPostTeamingRequest.mockResolvedValue({ success: true, data: { id: 'team-1' } });
         mockInsert.mockResolvedValue({ error: null });
+        mockCreateManualScheduleEntry.mockResolvedValue({
+            id: 'schedule-1',
+            userId: 'user-1',
+            title: 'COMP3015',
+            courseCode: 'COMP3015',
+            room: 'WLB204',
+            dayOfWeek: 2,
+            startTime: '09:00',
+            endTime: '10:00',
+            source: 'manual_custom',
+            isActive: true,
+        });
+        mockCreateUserCalendarEvent.mockResolvedValue({
+            data: {
+                id: 'event-1',
+                userId: 'user-1',
+                title: 'COMP3015 Final Exam',
+                eventType: 'exam',
+                eventDate: '2026-05-15',
+                startTime: '14:00',
+                endTime: '16:00',
+                location: 'HSH201',
+                isActive: true,
+                createdAt: '2026-04-19T00:00:00.000Z',
+                updatedAt: '2026-04-19T00:00:00.000Z',
+            },
+            error: null,
+        });
+        mockGetUpcomingUserCalendarEvents.mockResolvedValue([]);
         (callDeepSeek as jest.Mock).mockReset();
         AGENT_CONFIG.DEEPSEEK_ENABLED = false;
     });
@@ -763,7 +803,7 @@ describe('AgentExecutor course publishing flow', () => {
 
     // ============== Schedule & Calendar Event Write Tests ==============
 
-    describe('Schedule Write Intent', () => {
+    describe.skip('Legacy Schedule Write Intent', () => {
         it('should detect schedule write intent and request confirmation', async () => {
             const executor = new AgentExecutor('user-1', {
                 history: [],
@@ -811,7 +851,7 @@ describe('AgentExecutor course publishing flow', () => {
         });
     });
 
-    describe('Calendar Event Write Intent', () => {
+    describe.skip('Legacy Calendar Event Write Intent', () => {
         it('should detect exam write intent and request confirmation', async () => {
             const executor = new AgentExecutor('user-1', {
                 history: [],
@@ -864,7 +904,7 @@ describe('AgentExecutor course publishing flow', () => {
         });
     });
 
-    describe('Write Confirmation Flow', () => {
+    describe.skip('Legacy Write Confirmation Flow', () => {
         it('should confirm before writing schedule entry', async () => {
             const executor = new AgentExecutor('user-1', {
                 history: [],
@@ -909,6 +949,148 @@ describe('AgentExecutor course publishing flow', () => {
                 response1.finalAnswer.includes('时间') ||
                 response1.finalAnswer.includes('课程')
             ).toBe(true);
+        });
+    });
+
+    describe('Structured schedule and calendar writes', () => {
+        it('collects schedule details, waits for confirmation, then writes the entry', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const draft = await executor.process('帮我把 COMP3015 周二 09:00-10:00 在 WLB204 记进课表');
+            expect(mockCreateManualScheduleEntry).not.toHaveBeenCalled();
+            expect(draft.finalAnswer).toContain('确认');
+
+            const confirmed = await executor.process('确认');
+            expect(mockCreateManualScheduleEntry).toHaveBeenCalledWith({
+                userId: 'user-1',
+                entry: expect.objectContaining({
+                    title: 'COMP3015',
+                    courseCode: 'COMP3015',
+                    room: 'WLB204',
+                    dayOfWeek: 2,
+                    startTime: '09:00',
+                    endTime: '10:00',
+                }),
+            });
+            expect(confirmed.finalAnswer).toBeTruthy();
+        });
+
+        it('supports follow-up completion before schedule confirmation', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const first = await executor.process('帮我把 COMP3026 记进课表');
+            expect(first.finalAnswer).toBeTruthy();
+            expect(mockCreateManualScheduleEntry).not.toHaveBeenCalled();
+
+            const second = await executor.process('周三 13:00-15:00 在 OEE603');
+            expect(second.finalAnswer).toContain('确认');
+            expect(mockCreateManualScheduleEntry).not.toHaveBeenCalled();
+
+            await executor.process('是');
+            expect(mockCreateManualScheduleEntry).toHaveBeenCalledWith({
+                userId: 'user-1',
+                entry: expect.objectContaining({
+                    title: 'COMP3026',
+                    courseCode: 'COMP3026',
+                    room: 'OEE603',
+                    dayOfWeek: 3,
+                    startTime: '13:00',
+                    endTime: '15:00',
+                }),
+            });
+        });
+
+        it('cancels schedule writes cleanly', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            await executor.process('帮我把 COMP3015 周二 09:00-10:00 在 WLB204 记进课表');
+            const cancelled = await executor.process('取消');
+
+            expect(cancelled.finalAnswer).toContain('取消');
+            expect(mockCreateManualScheduleEntry).not.toHaveBeenCalled();
+        });
+
+        it('does not write schedule entries before confirmation', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            await executor.process('帮我把数据库课 周二 14:00-16:00 在 WLB205 记进课表');
+            expect(mockCreateManualScheduleEntry).not.toHaveBeenCalled();
+
+            await executor.process('这门课什么时候考试');
+            expect(mockCreateManualScheduleEntry).not.toHaveBeenCalled();
+        });
+
+        it('collects exam details, waits for confirmation, then writes the event', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const draft = await executor.process('帮我记一下 COMP3015 final，2026-05-15 14:00-16:00 在 HSH201');
+            expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
+            expect(draft.finalAnswer).toContain('确认');
+
+            const confirmed = await executor.process('确认');
+            expect(mockCreateUserCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+                userId: 'user-1',
+                title: 'COMP3015 Final Exam',
+                eventType: 'exam',
+                eventDate: '2026-05-15',
+                startTime: '14:00',
+                endTime: '16:00',
+                location: 'HSH201',
+                courseCode: 'COMP3015',
+            }));
+            expect(confirmed.finalAnswer).toBeTruthy();
+        });
+
+        it('supports follow-up completion before calendar-event confirmation', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const first = await executor.process('帮我记个 COMP3026 quiz');
+            expect(first.finalAnswer).toBeTruthy();
+            expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
+
+            const second = await executor.process('2026-06-01 09:00-10:00 在 OEE803');
+            expect(second.finalAnswer).toContain('确认');
+
+            await executor.process('确认');
+            expect(mockCreateUserCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+                userId: 'user-1',
+                title: 'COMP3026 Quiz',
+                eventType: 'quiz',
+                eventDate: '2026-06-01',
+                startTime: '09:00',
+                endTime: '10:00',
+                location: 'OEE803',
+                courseCode: 'COMP3026',
+            }));
+        });
+
+        it('asks for missing fields before calendar-event confirmation', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const response = await executor.process('帮我记个考试');
+            expect(response.finalAnswer).toBeTruthy();
+            expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
         });
     });
 

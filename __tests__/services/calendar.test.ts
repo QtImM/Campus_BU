@@ -1,165 +1,226 @@
-/**
- * Calendar Service Tests
- * 
- * These tests verify the calendar service functions work correctly.
- * Note: Full integration tests require database setup.
- */
+const mockSelect = jest.fn();
+const mockInsert = jest.fn();
+const mockUpdate = jest.fn();
+const mockEq = jest.fn();
+const mockGte = jest.fn();
+const mockLte = jest.fn();
+const mockOrder = jest.fn();
+const mockLimit = jest.fn();
+const mockIn = jest.fn();
+const mockMaybeSingle = jest.fn();
+const mockSingle = jest.fn();
+
+const resetQueryChain = () => {
+    mockSelect.mockReset();
+    mockInsert.mockReset();
+    mockUpdate.mockReset();
+    mockEq.mockReset();
+    mockGte.mockReset();
+    mockLte.mockReset();
+    mockOrder.mockReset();
+    mockLimit.mockReset();
+    mockIn.mockReset();
+    mockMaybeSingle.mockReset();
+    mockSingle.mockReset();
+
+    const query: any = {
+        select: mockSelect,
+        insert: mockInsert,
+        update: mockUpdate,
+        eq: mockEq,
+        gte: mockGte,
+        lte: mockLte,
+        order: mockOrder,
+        limit: mockLimit,
+        in: mockIn,
+        maybeSingle: mockMaybeSingle,
+        single: mockSingle,
+    };
+
+    mockSelect.mockReturnValue(query);
+    mockInsert.mockReturnValue(query);
+    mockUpdate.mockReturnValue(query);
+    mockEq.mockReturnValue(query);
+    mockGte.mockReturnValue(query);
+    mockLte.mockReturnValue(query);
+    mockOrder.mockReturnValue(query);
+    mockLimit.mockReturnValue(query);
+    mockIn.mockReturnValue(query);
+
+    return query;
+};
+
+const mockFrom = jest.fn();
+
+jest.mock('../../services/supabase', () => ({
+    supabase: {
+        from: (...args: any[]) => mockFrom(...args),
+    },
+}));
 
 describe('Calendar Service', () => {
-    describe('Type Definitions', () => {
-        it('should export required types', () => {
-            // Verify types are exported
-            const calendarModule = require('../../services/calendar');
-            
-            expect(calendarModule.createUserCalendarEvent).toBeDefined();
-            expect(calendarModule.getUpcomingUserCalendarEvents).toBeDefined();
-            expect(calendarModule.updateUserCalendarEvent).toBeDefined();
-            expect(calendarModule.deleteUserCalendarEvent).toBeDefined();
-            expect(calendarModule.getUserCalendarEventById).toBeDefined();
-            expect(calendarModule.getUserCalendarEventsInRange).toBeDefined();
-        });
-
-        it('should export CalendarEventType', () => {
-            const { CalendarEventType } = require('../../services/calendar');
-            
-            // Type should be defined (as a type, it's removed at runtime, 
-            // but the values are used)
-            expect(CalendarEventType).toBeUndefined(); // Types don't exist at runtime
-        });
+    beforeEach(() => {
+        jest.resetModules();
+        const query = resetQueryChain();
+        mockFrom.mockReset();
+        mockFrom.mockReturnValue(query);
+        mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+        mockSingle.mockResolvedValue({ data: null, error: null });
+        mockLimit.mockResolvedValue({ data: [], error: null });
+        mockOrder.mockReturnValue(query);
     });
 
-    describe('Input Validation', () => {
-        it('should validate required fields in create input', () => {
-            const { createUserCalendarEvent } = require('../../services/calendar');
-            
-            // Test with missing title
-            const invalidInput1 = {
-                userId: 'user-1',
-                title: '',
-                eventType: 'exam',
-                eventDate: '2026-05-15',
-            };
-            
-            // The function should handle empty title
-            expect(async () => {
-                await createUserCalendarEvent(invalidInput1);
-            }).not.toThrow();
-        });
+    it('exports the expected public functions', () => {
+        const calendar = require('../../services/calendar');
 
-        it('should validate date format', () => {
-            const { createUserCalendarEvent } = require('../../services/calendar');
-            
-            const invalidDateInput = {
-                userId: 'user-1',
-                title: 'Test Event',
-                eventType: 'exam',
-                eventDate: '05-15-2026', // Wrong format
-            };
-            
-            // Should handle invalid date gracefully
-            expect(async () => {
-                await createUserCalendarEvent(invalidDateInput);
-            }).not.toThrow();
-        });
-
-        it('should validate time format', () => {
-            const { createUserCalendarEvent } = require('../../services/calendar');
-            
-            const invalidTimeInput = {
-                userId: 'user-1',
-                title: 'Test Event',
-                eventType: 'exam',
-                eventDate: '2026-05-15',
-                startTime: '9:00', // Should be 09:00
-            };
-            
-            // Should handle invalid time gracefully
-            expect(async () => {
-                await createUserCalendarEvent(invalidTimeInput);
-            }).not.toThrow();
-        });
+        expect(typeof calendar.createUserCalendarEvent).toBe('function');
+        expect(typeof calendar.getUpcomingUserCalendarEvents).toBe('function');
+        expect(typeof calendar.getUserCalendarEventsInRange).toBe('function');
+        expect(typeof calendar.updateUserCalendarEvent).toBe('function');
+        expect(typeof calendar.deleteUserCalendarEvent).toBe('function');
+        expect(typeof calendar.getUserCalendarEventById).toBe('function');
     });
 
-    describe('Function Exports', () => {
-        it('should export all required functions', () => {
-            const calendar = require('../../services/calendar');
-            
-            const expectedFunctions = [
-                'createUserCalendarEvent',
-                'getUpcomingUserCalendarEvents',
-                'getUserCalendarEventsInRange',
-                'updateUserCalendarEvent',
-                'deleteUserCalendarEvent',
-                'getUserCalendarEventById',
-            ];
-            
-            expectedFunctions.forEach(fn => {
-                expect(typeof calendar[fn]).toBe('function');
-            });
+    it('returns validation error when title is missing', async () => {
+        const { createUserCalendarEvent } = require('../../services/calendar');
+
+        const result = await createUserCalendarEvent({
+            userId: 'user-1',
+            title: '',
+            eventType: 'exam',
+            eventDate: '2026-05-15',
         });
 
-        it('should have correct function signatures', () => {
-            const {
-                createUserCalendarEvent,
-                getUpcomingUserCalendarEvents,
-                updateUserCalendarEvent,
-                deleteUserCalendarEvent,
-            } = require('../../services/calendar');
-            
-            // All should be async functions
-            expect(createUserCalendarEvent.constructor.name).toBe('Function');
-            expect(getUpcomingUserCalendarEvents.constructor.name).toBe('Function');
-            expect(updateUserCalendarEvent.constructor.name).toBe('Function');
-            expect(deleteUserCalendarEvent.constructor.name).toBe('Function');
-        });
+        expect(result).toEqual({ data: null, error: 'Title is required' });
+        expect(mockFrom).not.toHaveBeenCalled();
     });
 
-    describe('Service Integration', () => {
-        it('should handle database errors gracefully', async () => {
-            const { getUpcomingUserCalendarEvents } = require('../../services/calendar');
-            
-            // Should return empty array on error (not throw)
-            const result = await getUpcomingUserCalendarEvents('user-1');
-            expect(Array.isArray(result)).toBe(true);
+    it('returns validation error when date format is invalid', async () => {
+        const { createUserCalendarEvent } = require('../../services/calendar');
+
+        const result = await createUserCalendarEvent({
+            userId: 'user-1',
+            title: 'COMP3015 Final Exam',
+            eventType: 'exam',
+            eventDate: '05-15-2026',
         });
 
-        it('should return empty array when user has no events', async () => {
-            const { getUpcomingUserCalendarEvents } = require('../../services/calendar');
-            
-            const result = await getUpcomingUserCalendarEvents('user-no-events');
-            expect(Array.isArray(result)).toBe(true);
-            expect(result.length).toBe(0);
-        });
-
-        it('should handle date range queries', async () => {
-            const { getUserCalendarEventsInRange } = require('../../services/calendar');
-            
-            const result = await getUserCalendarEventsInRange(
-                'user-1',
-                '2026-05-01',
-                '2026-05-31'
-            );
-            expect(Array.isArray(result)).toBe(true);
-        });
+        expect(result).toEqual({ data: null, error: 'Event date must be in YYYY-MM-DD format' });
+        expect(mockFrom).not.toHaveBeenCalled();
     });
 
-    describe('Data Types', () => {
-        it('should have correct interface definitions', () => {
-            // This test verifies the TypeScript interfaces are correctly defined
-            // by checking the module exports
-            const calendar = require('../../services/calendar');
-            
-            // The interfaces should be usable (no runtime check needed for types)
-            expect(calendar).toBeDefined();
+    it('returns validation error when time format is invalid', async () => {
+        const { createUserCalendarEvent } = require('../../services/calendar');
+
+        const result = await createUserCalendarEvent({
+            userId: 'user-1',
+            title: 'COMP3015 Final Exam',
+            eventType: 'exam',
+            eventDate: '2026-05-15',
+            startTime: '9:00',
         });
 
-        it('should support all event types', () => {
-            const validEventTypes = ['exam', 'quiz', 'assignment', 'custom'];
-            
-            // All event types should be valid
-            validEventTypes.forEach(type => {
-                expect(['exam', 'quiz', 'assignment', 'custom']).toContain(type);
-            });
+        expect(result).toEqual({ data: null, error: 'Start time must be in HH:MM format' });
+        expect(mockFrom).not.toHaveBeenCalled();
+    });
+
+    it('creates a calendar event after duplicate check passes', async () => {
+        const { createUserCalendarEvent } = require('../../services/calendar');
+        mockSingle.mockResolvedValueOnce({
+            data: {
+                id: 'event-1',
+                user_id: 'user-1',
+                title: 'COMP3015 Final Exam',
+                event_type: 'exam',
+                course_code: 'COMP3015',
+                matched_course_id: null,
+                event_date: '2026-05-15',
+                start_time: '14:00',
+                end_time: '16:00',
+                location: 'HSH201',
+                note: null,
+                is_active: true,
+                created_at: '2026-04-19T00:00:00.000Z',
+                updated_at: '2026-04-19T00:00:00.000Z',
+            },
+            error: null,
         });
+
+        const result = await createUserCalendarEvent({
+            userId: 'user-1',
+            title: 'COMP3015 Final Exam',
+            eventType: 'exam',
+            courseCode: 'COMP3015',
+            eventDate: '2026-05-15',
+            startTime: '14:00',
+            endTime: '16:00',
+            location: 'HSH201',
+        });
+
+        expect(mockFrom).toHaveBeenCalledWith('user_calendar_events');
+        expect(result.error).toBeNull();
+        expect(result.data).toEqual(expect.objectContaining({
+            id: 'event-1',
+            title: 'COMP3015 Final Exam',
+            eventType: 'exam',
+            eventDate: '2026-05-15',
+            startTime: '14:00',
+            endTime: '16:00',
+            location: 'HSH201',
+        }));
+    });
+
+    it('returns empty array when upcoming-event query errors', async () => {
+        const { getUpcomingUserCalendarEvents } = require('../../services/calendar');
+        mockLimit.mockResolvedValueOnce({ data: null, error: { message: 'db down' } });
+
+        const result = await getUpcomingUserCalendarEvents('user-1');
+
+        expect(result).toEqual([]);
+    });
+
+    it('maps upcoming events correctly', async () => {
+        const { getUpcomingUserCalendarEvents } = require('../../services/calendar');
+        mockLimit.mockResolvedValueOnce({
+            data: [{
+                id: 'event-2',
+                user_id: 'user-1',
+                title: 'COMP3026 Quiz',
+                event_type: 'quiz',
+                course_code: 'COMP3026',
+                matched_course_id: null,
+                event_date: '2026-06-01',
+                start_time: '09:00',
+                end_time: '10:00',
+                location: 'OEE803',
+                note: 'bring calculator',
+                is_active: true,
+                created_at: '2026-04-19T00:00:00.000Z',
+                updated_at: '2026-04-19T00:00:00.000Z',
+            }],
+            error: null,
+        });
+
+        const result = await getUpcomingUserCalendarEvents('user-1', { days: 30, limit: 10 });
+
+        expect(result).toEqual([expect.objectContaining({
+            id: 'event-2',
+            title: 'COMP3026 Quiz',
+            eventType: 'quiz',
+            eventDate: '2026-06-01',
+            location: 'OEE803',
+            note: 'bring calculator',
+        })]);
+    });
+
+    it('returns empty array when range query errors', async () => {
+        const { getUserCalendarEventsInRange } = require('../../services/calendar');
+        mockOrder
+            .mockImplementationOnce(() => mockFrom.mock.results[0].value)
+            .mockResolvedValueOnce({ data: null, error: { message: 'db down' } });
+
+        const result = await getUserCalendarEventsInRange('user-1', '2026-05-01', '2026-05-31');
+
+        expect(result).toEqual([]);
     });
 });

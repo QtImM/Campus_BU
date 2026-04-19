@@ -176,6 +176,31 @@ type PendingCourseAction = {
     contacts?: ContactMethod[];
 };
 
+type ScheduleWriteDraft = {
+    title?: string;
+    courseCode?: string;
+    teacherName?: string;
+    room?: string;
+    dayOfWeek?: number;
+    startTime?: string;
+    endTime?: string;
+    startPeriod?: number;
+    endPeriod?: number;
+    weekText?: string;
+};
+
+type CalendarEventDraft = {
+    title?: string;
+    eventType?: CalendarEventType;
+    courseCode?: string;
+    matchedCourseId?: string;
+    eventDate?: string;
+    startTime?: string;
+    endTime?: string;
+    location?: string;
+    note?: string;
+};
+
 type PendingWriteAction =
     | {
         type: 'course';
@@ -188,11 +213,11 @@ type PendingWriteAction =
     }
     | {
         type: 'schedule';
-        entry: Omit<UserScheduleEntry, 'id' | 'userId' | 'source'>;
+        entry: ScheduleWriteDraft;
     }
     | {
         type: 'calendar_event';
-        event: Omit<CreateUserCalendarEventInput, 'userId'>;
+        event: CalendarEventDraft;
     };
 
 const extractCourseCode = (query: string): string | null => {
@@ -278,6 +303,297 @@ const isCancelActionQuery = (query: string): boolean =>
 
 const isConfirmActionQuery = (query: string): boolean =>
     /^(是|好的|好|确认|確認|可以|就这样|就這樣|没问题|沒問題|yes|ok|okay|confirm|send|发送|發送)$/i.test(query.trim());
+
+const CALENDAR_EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
+    exam: '考试',
+    quiz: '测验',
+    assignment: '作业',
+    custom: '事件',
+};
+
+const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+const normalizeHour = (hour: number, meridiem?: string): number => {
+    if (!meridiem) return hour;
+    if (/下午|晚上/i.test(meridiem) && hour < 12) return hour + 12;
+    if (/中午/i.test(meridiem) && hour < 11) return hour + 12;
+    if (/上午/i.test(meridiem) && hour === 12) return 0;
+    return hour;
+};
+
+const toTimeString = (hour: number, minute: number, meridiem?: string): string => {
+    const normalizedHour = normalizeHour(hour, meridiem);
+    return `${pad2(normalizedHour)}:${pad2(minute)}`;
+};
+
+const addOneHour = (time: string): string => {
+    const [hourText, minuteText] = time.split(':');
+    const date = new Date(2026, 0, 1, Number(hourText), Number(minuteText), 0, 0);
+    date.setHours(date.getHours() + 1);
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+};
+
+const extractDayOfWeek = (query: string): number | undefined => {
+    for (const item of weekdayPatterns) {
+        if (item.patterns.some(pattern => pattern.test(query))) {
+            return item.dayOfWeek;
+        }
+    }
+    return undefined;
+};
+
+const extractTimeRange = (query: string): {
+    startTime?: string;
+    endTime?: string;
+} => {
+    const compactRangeMatch = query.match(/\b(\d{1,2}:\d{2})\s*(?:-|到|至|~)\s*(\d{1,2}:\d{2})\b/);
+    if (compactRangeMatch) {
+        return {
+            startTime: compactRangeMatch[1],
+            endTime: compactRangeMatch[2],
+        };
+    }
+
+    const rangeMatch = query.match(
+        /(上午|中午|下午|晚上)?\s*(\d{1,2})(?::|点|點)?(\d{2})?\s*(?:-|到|至|~)\s*(上午|中午|下午|晚上)?\s*(\d{1,2})(?::|点|點)?(\d{2})?/i
+    );
+
+    if (rangeMatch) {
+        return {
+            startTime: toTimeString(Number(rangeMatch[2]), Number(rangeMatch[3] || '0'), rangeMatch[1]),
+            endTime: toTimeString(Number(rangeMatch[5]), Number(rangeMatch[6] || '0'), rangeMatch[4] || rangeMatch[1]),
+        };
+    }
+
+    const singleMatch = query.match(/(?:^|[^\d])(?:上午|中午|下午|晚上)?\s*(\d{1,2})(?::|点|點)(\d{2})?(?=$|[^\d])/i);
+    if (singleMatch) {
+        const startTime = toTimeString(Number(singleMatch[1]), Number(singleMatch[2] || '0'));
+        return {
+            startTime,
+            endTime: addOneHour(startTime),
+        };
+    }
+
+    return {};
+};
+
+const extractPeriods = (query: string): { startPeriod?: number; endPeriod?: number } => {
+    const match = query.match(/第?\s*(\d{1,2})\s*[-到至~]\s*(\d{1,2})\s*节/i);
+    if (!match) return {};
+    return {
+        startPeriod: Number(match[1]),
+        endPeriod: Number(match[2]),
+    };
+};
+
+const extractRoomLikeValue = (query: string): string | undefined => {
+    const patterns = [
+        /(?:在|@)\s*([A-Za-z]{2,}[ -]?\d{2,}[A-Za-z]?)/,
+        /(?:教室|地点|location|room)\s*[:：]?\s*([A-Za-z0-9_-]+)/i,
+    ];
+
+    for (const pattern of patterns) {
+        const match = query.match(pattern);
+        const value = match?.[1]?.trim();
+        if (value) {
+            return value.replace(/\s+/g, '');
+        }
+    }
+
+    return undefined;
+};
+
+const inferYearForMonthDay = (month: number, day: number): number => {
+    const now = getHongKongNow();
+    let year = now.getFullYear();
+    const inferred = new Date(year, month - 1, day);
+    if (inferred < new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)) {
+        year += 1;
+    }
+    return year;
+};
+
+const extractEventDate = (query: string): string | undefined => {
+    const isoMatch = query.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (isoMatch) return isoMatch[1];
+
+    const mdMatch = query.match(/(\d{1,2})月(\d{1,2})(?:日|号)/);
+    if (mdMatch) {
+        const month = Number(mdMatch[1]);
+        const day = Number(mdMatch[2]);
+        const year = inferYearForMonthDay(month, day);
+        return `${year}-${pad2(month)}-${pad2(day)}`;
+    }
+
+    if (/明天/i.test(query)) {
+        const date = getHongKongNow();
+        date.setDate(date.getDate() + 1);
+        return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+    }
+
+    if (/今天|今日|today/i.test(query)) {
+        const date = getHongKongNow();
+        return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+    }
+
+    return undefined;
+};
+
+const detectCalendarEventType = (query: string): CalendarEventType | undefined => {
+    if (/quiz|测验|小测/i.test(query)) return 'quiz';
+    if (/assignment|作业|deadline|due/i.test(query)) return 'assignment';
+    if (/exam|final|midterm|考试/i.test(query)) return 'exam';
+    if (/event|日程|提醒|presentation|展示/i.test(query)) return 'custom';
+    return undefined;
+};
+
+const deriveScheduleTitle = (query: string, courseCode?: string): string | undefined => {
+    if (courseCode) return courseCode;
+    const courseNameMatch = query.match(/([A-Za-z0-9\u4e00-\u9fa5]{2,30}?)(?:课程|这门课|这堂课|课)/);
+    if (courseNameMatch?.[1]) {
+        return courseNameMatch[1].trim();
+    }
+    return undefined;
+};
+
+const deriveCalendarEventTitle = (
+    query: string,
+    courseCode?: string,
+    eventType?: CalendarEventType
+): string | undefined => {
+    if (courseCode && eventType === 'exam') return `${courseCode} Final Exam`;
+    if (courseCode && eventType === 'quiz') return `${courseCode} Quiz`;
+    if (courseCode && eventType === 'assignment') return `${courseCode} Assignment`;
+    if (courseCode && eventType === 'custom') return `${courseCode} Event`;
+
+    const explicitMatch = query.match(/记(?:个|一下)?\s*([A-Za-z0-9\u4e00-\u9fa5 ]{2,40})/);
+    return explicitMatch?.[1]?.trim();
+};
+
+const mergeDefined = <T extends Record<string, any>>(base: T, patch: T): T => {
+    const next = { ...base };
+    for (const [key, value] of Object.entries(patch)) {
+        if (value !== undefined && value !== null && value !== '') {
+            (next as any)[key] = value;
+        }
+    }
+    return next;
+};
+
+const mergeScheduleDraft = (base: ScheduleWriteDraft, patch: ScheduleWriteDraft): ScheduleWriteDraft =>
+    mergeDefined(base, patch);
+
+const mergeCalendarEventDraft = (base: CalendarEventDraft, patch: CalendarEventDraft): CalendarEventDraft =>
+    mergeDefined(base, patch);
+
+const parseScheduleWriteDraft = (query: string): ScheduleWriteDraft => {
+    const courseCode = extractCourseCode(query) || undefined;
+    const { startTime, endTime } = extractTimeRange(query);
+    const { startPeriod, endPeriod } = extractPeriods(query);
+    return {
+        title: deriveScheduleTitle(query, courseCode),
+        courseCode,
+        room: extractRoomLikeValue(query),
+        dayOfWeek: extractDayOfWeek(query),
+        startTime,
+        endTime,
+        startPeriod,
+        endPeriod,
+    };
+};
+
+const parseCalendarEventDraft = (query: string): CalendarEventDraft => {
+    const courseCode = extractCourseCode(query) || undefined;
+    const eventType = detectCalendarEventType(query);
+    const { startTime, endTime } = extractTimeRange(query);
+    return {
+        title: deriveCalendarEventTitle(query, courseCode, eventType),
+        courseCode,
+        eventType,
+        eventDate: extractEventDate(query),
+        startTime,
+        endTime,
+        location: extractRoomLikeValue(query),
+    };
+};
+
+const getMissingScheduleFields = (draft: ScheduleWriteDraft): string[] => {
+    const missing: string[] = [];
+    if (!draft.title) missing.push('课程名称');
+    if (!draft.dayOfWeek) missing.push('星期几');
+    if (!draft.room) missing.push('教室');
+    const hasTime = Boolean(draft.startTime && draft.endTime);
+    const hasPeriod = Boolean(draft.startPeriod && draft.endPeriod);
+    if (!hasTime && !hasPeriod) missing.push('时间');
+    return missing;
+};
+
+const getMissingCalendarEventFields = (draft: CalendarEventDraft): string[] => {
+    const missing: string[] = [];
+    if (!draft.title) missing.push('事件名称');
+    if (!draft.eventType) missing.push('事件类型');
+    if (!draft.eventDate) missing.push('日期');
+    if (!draft.startTime) missing.push('时间');
+    if (!draft.location) missing.push('地点');
+    return missing;
+};
+
+const formatMissingFieldsPrompt = (fields: string[], kind: 'schedule' | 'calendar_event'): string => {
+    const fieldText = fields.join('、');
+    if (kind === 'schedule') {
+        return `要帮你写进课表，我还需要这些信息：${fieldText}。你直接补一句就行，比如“周二 09:00-10:00 在 WLB204”。`;
+    }
+    return `要帮你写进日历，我还需要这些信息：${fieldText}。你直接补一句就行，比如“2026-05-15 14:00-16:00 在 HSH201”。`;
+};
+
+const toScheduleEntry = (
+    draft: ScheduleWriteDraft
+): Omit<UserScheduleEntry, 'id' | 'userId' | 'source'> | null => {
+    const missing = getMissingScheduleFields(draft);
+    if (missing.length > 0 || !draft.title || !draft.dayOfWeek) return null;
+
+    return {
+        title: draft.title,
+        courseCode: draft.courseCode,
+        teacherName: draft.teacherName,
+        room: draft.room,
+        dayOfWeek: draft.dayOfWeek,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
+        startPeriod: draft.startPeriod,
+        endPeriod: draft.endPeriod,
+        weekText: draft.weekText?.trim() || '1-16',
+        matchedCourseId: undefined,
+    };
+};
+
+const toCalendarEventInput = (
+    draft: CalendarEventDraft
+): Omit<CreateUserCalendarEventInput, 'userId'> | null => {
+    const missing = getMissingCalendarEventFields(draft);
+    if (
+        missing.length > 0 ||
+        !draft.title ||
+        !draft.eventType ||
+        !draft.eventDate ||
+        !draft.startTime ||
+        !draft.location
+    ) {
+        return null;
+    }
+
+    return {
+        title: draft.title,
+        eventType: draft.eventType,
+        courseCode: draft.courseCode,
+        matchedCourseId: draft.matchedCourseId,
+        eventDate: draft.eventDate,
+        startTime: draft.startTime,
+        endTime: draft.endTime || addOneHour(draft.startTime),
+        location: draft.location,
+        note: draft.note,
+    };
+};
 
 const extractDelimitedContent = (query: string): string | undefined => {
     const match = query.match(/[：:]\s*(.+)$/);
@@ -739,7 +1055,7 @@ export class AgentExecutor {
             };
         }
 
-        if (isScheduleQuery(prompt)) {
+        if (!isScheduleWriteIntent(prompt) && isScheduleQuery(prompt)) {
             const observation = await this.executeTool('read_user_schedule', { query: prompt });
             return {
                 steps: [{
@@ -987,6 +1303,36 @@ export class AgentExecutor {
             return {
                 steps: [{
                     thought: '用户修改待确认内容',
+                    reply: response,
+                    path: 'pending',
+                }],
+                finalAnswer: response,
+            };
+        }
+
+        if (this.pendingWriteAction.type === 'schedule') {
+            const response = await this.prepareScheduleWrite({
+                ...this.pendingWriteAction.entry,
+                query: prompt,
+            });
+            return {
+                steps: [{
+                    thought: '继续补全待确认的课表写入',
+                    reply: response,
+                    path: 'pending',
+                }],
+                finalAnswer: response,
+            };
+        }
+
+        if (this.pendingWriteAction.type === 'calendar_event') {
+            const response = await this.prepareCalendarEventWrite({
+                ...this.pendingWriteAction.event,
+                query: prompt,
+            });
+            return {
+                steps: [{
+                    thought: '继续补全待确认的日历写入',
                     reply: response,
                     path: 'pending',
                 }],
@@ -1300,11 +1646,21 @@ export class AgentExecutor {
         }
 
         if (pending.type === 'schedule') {
-            return this.executeScheduleWrite(pending.entry);
+            const entry = toScheduleEntry(pending.entry);
+            if (!entry) {
+                this.pendingWriteAction = pending;
+                return formatMissingFieldsPrompt(getMissingScheduleFields(pending.entry), 'schedule');
+            }
+            return this.executeScheduleWrite(entry);
         }
 
         if (pending.type === 'calendar_event') {
-            return this.executeCalendarEventWrite(pending.event);
+            const event = toCalendarEventInput(pending.event);
+            if (!event) {
+                this.pendingWriteAction = pending;
+                return formatMissingFieldsPrompt(getMissingCalendarEventFields(pending.event), 'calendar_event');
+            }
+            return this.executeCalendarEventWrite(event);
         }
 
         const currentUser = await getCurrentUser();
@@ -1340,6 +1696,50 @@ export class AgentExecutor {
     // ============== Schedule & Calendar Event Write Methods ==============
 
     private async prepareScheduleWrite(input: any): Promise<string> {
+        if ((input?.query && typeof input.query === 'string') || this.pendingWriteAction?.type === 'schedule') {
+            const currentUser = await getCurrentUser();
+            if (!currentUser?.uid) {
+                return '要帮你写进课表的话需要先登录。你登录后再告诉我一次，我就继续帮你处理。';
+            }
+
+            const parsedFromQuery = typeof input?.query === 'string' ? parseScheduleWriteDraft(input.query) : {};
+            const draft = mergeScheduleDraft(
+                {
+                    title: input?.title?.trim() || undefined,
+                    courseCode: input?.courseCode?.trim() || undefined,
+                    teacherName: input?.teacherName?.trim() || undefined,
+                    room: input?.room?.trim() || undefined,
+                    dayOfWeek: input?.dayOfWeek,
+                    startTime: input?.startTime || undefined,
+                    endTime: input?.endTime || undefined,
+                    startPeriod: input?.startPeriod || undefined,
+                    endPeriod: input?.endPeriod || undefined,
+                    weekText: input?.weekText?.trim() || undefined,
+                },
+                parsedFromQuery,
+            );
+
+            const missing = getMissingScheduleFields(draft);
+            this.pendingWriteAction = { type: 'schedule', entry: draft };
+
+            if (missing.length > 0) {
+                return formatMissingFieldsPrompt(missing, 'schedule');
+            }
+
+            const entry = toScheduleEntry(draft);
+            if (!entry) {
+                return formatMissingFieldsPrompt(getMissingScheduleFields(draft), 'schedule');
+            }
+
+            const dayLabel = WEEKDAY_LABELS[entry.dayOfWeek];
+            const timeText = entry.startTime && entry.endTime
+                ? `${entry.startTime} - ${entry.endTime}`
+                : `第${entry.startPeriod}-${entry.endPeriod} 节`;
+            const courseCodeText = entry.courseCode ? ` (${entry.courseCode})` : '';
+
+            return `我准备把以下课程写入你的课表：\n\n${entry.title}${courseCodeText}\n${dayLabel} ${timeText}${entry.room ? ` @ ${entry.room}` : ''}\n\n如果确认无误，回复“确认”或“是”；如果要修改，直接把新信息发我。`;
+        }
+
         const currentUser = await getCurrentUser();
         if (!currentUser?.uid) {
             return '要帮你写入课表的话需要先登录。你登录后再告诉我一次，我可以继续帮你处理。';
@@ -1397,17 +1797,20 @@ export class AgentExecutor {
         }
 
         try {
-            await createManualScheduleEntry(currentUser.uid, {
-                title: entry.title,
-                courseCode: entry.courseCode,
-                teacherName: entry.teacherName,
-                room: entry.room,
-                dayOfWeek: entry.dayOfWeek,
-                startTime: entry.startTime,
-                endTime: entry.endTime,
-                startPeriod: entry.startPeriod,
-                endPeriod: entry.endPeriod,
-                weekText: entry.weekText,
+            await createManualScheduleEntry({
+                userId: currentUser.uid,
+                entry: {
+                    title: entry.title,
+                    courseCode: entry.courseCode,
+                    teacherName: entry.teacherName,
+                    room: entry.room,
+                    dayOfWeek: entry.dayOfWeek,
+                    startTime: entry.startTime,
+                    endTime: entry.endTime,
+                    startPeriod: entry.startPeriod,
+                    endPeriod: entry.endPeriod,
+                    weekText: entry.weekText,
+                },
             });
             
             return `已成功将 "${entry.title}" 添加到你的课表！`;
@@ -1418,6 +1821,49 @@ export class AgentExecutor {
     }
 
     private async prepareCalendarEventWrite(input: any): Promise<string> {
+        if ((input?.query && typeof input.query === 'string') || this.pendingWriteAction?.type === 'calendar_event') {
+            const currentUser = await getCurrentUser();
+            if (!currentUser?.uid) {
+                return '要帮你写进日历的话需要先登录。你登录后再告诉我一次，我就继续帮你处理。';
+            }
+
+            const parsedFromQuery = typeof input?.query === 'string' ? parseCalendarEventDraft(input.query) : {};
+            const draft = mergeCalendarEventDraft(
+                {
+                    title: input?.title?.trim() || undefined,
+                    eventType: input?.eventType,
+                    courseCode: input?.courseCode?.trim() || undefined,
+                    matchedCourseId: input?.matchedCourseId,
+                    eventDate: input?.eventDate,
+                    startTime: input?.startTime || undefined,
+                    endTime: input?.endTime || undefined,
+                    location: input?.location?.trim() || undefined,
+                    note: input?.note?.trim() || undefined,
+                },
+                parsedFromQuery,
+            );
+
+            const missing = getMissingCalendarEventFields(draft);
+            this.pendingWriteAction = { type: 'calendar_event', event: draft };
+
+            if (missing.length > 0) {
+                return formatMissingFieldsPrompt(missing, 'calendar_event');
+            }
+
+            const event = toCalendarEventInput(draft);
+            if (!event) {
+                return formatMissingFieldsPrompt(getMissingCalendarEventFields(draft), 'calendar_event');
+            }
+
+            const timeText = event.startTime
+                ? ` ${event.startTime}${event.endTime ? ` - ${event.endTime}` : ''}`
+                : '';
+            const locationText = event.location ? ` @ ${event.location}` : '';
+            const courseText = event.courseCode ? ` (${event.courseCode})` : '';
+
+            return `我准备在你的日历里写入这条${CALENDAR_EVENT_TYPE_LABELS[event.eventType]}：\n\n${event.title}${courseText}\n日期：${event.eventDate}${timeText}${locationText}${event.note ? `\n备注：${event.note}` : ''}\n\n如果确认无误，回复“确认”或“是”；如果要修改，直接把新信息发我。`;
+        }
+
         const currentUser = await getCurrentUser();
         if (!currentUser?.uid) {
             return '要帮你记录考试/事件的话需要先登录。你登录后再告诉我一次，我可以继续帮你处理。';
