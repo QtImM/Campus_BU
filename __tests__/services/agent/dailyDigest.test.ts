@@ -85,4 +85,50 @@ describe('agent daily digest opt-in', () => {
         expect(mockFetchHtml).toHaveBeenCalledTimes(1);
         expect(mockSendPush).toHaveBeenCalledTimes(1);
     });
+
+    it('does not log the full daily digest content', async () => {
+        const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+        mockStorageGetItem.mockImplementation(async (key: string) => {
+            if (key === 'agent_daily_digest_enabled:user-1') return 'true';
+            return null;
+        });
+        mockFetchHtml.mockResolvedValue('<html></html>');
+        mockParseItems.mockReturnValue([
+            { title: 'Story A', url: 'https://example.com/a', lineIndex: 0, contextSnippet: 'Very detailed snippet' },
+        ]);
+        mockParseSummary.mockReturnValue('Daily summary');
+        mockSendPush.mockResolvedValue(true);
+
+        await runDailyDigestJobForUser('user-1', new Date('2026-04-01T08:00:00Z'));
+
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+            '[DailyDigest] fetched',
+            expect.objectContaining({
+                userId: 'user-1',
+                date: '2026-04-01',
+                itemCount: 1,
+            })
+        );
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+            '[DailyDigest] fetched',
+            expect.not.objectContaining({
+                summary: expect.anything(),
+            })
+        );
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+            '[DailyDigest] fetched',
+            expect.not.objectContaining({
+                message: expect.anything(),
+            })
+        );
+        expect(consoleLogSpy).toHaveBeenCalledWith(
+            '[DailyDigest] fetched',
+            expect.not.objectContaining({
+                items: expect.anything(),
+            })
+        );
+
+        consoleLogSpy.mockRestore();
+    });
 });

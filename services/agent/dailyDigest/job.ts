@@ -29,8 +29,6 @@ const logDailyDigestDebug = (stage: string, payload: {
     sourceUrl?: string,
     fromCache?: boolean,
     extractedSummary?: string | null,
-    summary?: string,
-    message?: string,
     items?: DailyDigestPayload['items'],
 }) => {
     console.log(`[DailyDigest] ${stage}`, {
@@ -39,16 +37,7 @@ const logDailyDigestDebug = (stage: string, payload: {
         sourceUrl: payload.sourceUrl,
         fromCache: payload.fromCache,
         itemCount: payload.items?.length ?? 0,
-        summaryLines: payload.extractedSummary?.split('\n').filter(Boolean) ?? [],
-        items: payload.items?.map((item, index) => ({
-            index: index + 1,
-            lineIndex: item.lineIndex,
-            title: item.title,
-            contextSnippet: item.contextSnippet,
-            url: item.url,
-        })) ?? [],
-        summary: payload.summary,
-        message: payload.message,
+        summaryLineCount: payload.extractedSummary?.split('\n').filter(Boolean).length ?? 0,
     });
 };
 
@@ -81,8 +70,6 @@ export const runDailyDigestJobForUser = async (
             date: dateStr,
             sourceUrl: cached.sourceUrl,
             fromCache: true,
-            summary: cached.summary,
-            message: cached.message,
             items: cached.items,
         });
         await sendDailyDigestPush(userId, cached);
@@ -117,8 +104,6 @@ export const runDailyDigestJobForUser = async (
             sourceUrl,
             fromCache: false,
             extractedSummary,
-            summary,
-            message,
             items,
         });
 

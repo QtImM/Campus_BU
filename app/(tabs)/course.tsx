@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ArrowLeftRight, BookOpen, GraduationCap, Plus, Search, Star } from 'lucide-react-native';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
@@ -14,11 +14,13 @@ import {
     View
 } from 'react-native';
 import { Skeleton } from '../../components/common/Skeleton';
+import { FavoriteCourseSkeletonStrip } from '../../components/course/FavoriteCourseSkeletonStrip';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useCourseActivity } from '../../context/CourseActivityContext';
 import { getCurrentUser } from '../../services/auth';
 import { enrichCoursesWithReviewStats, getLocalCourses } from '../../services/courses';
 import {
+    loadFavoriteCoursesDetails,
     loadCourseFavorites,
     saveCourseFavoritesLocal,
     setCourseFavoriteRemote
@@ -48,6 +50,8 @@ export default function CoursesScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [courses, setCourses] = useState<Course[]>([]);
     const [favoriteCourseIds, setFavoriteCourseIds] = useState<string[]>([]);
+    const [favoriteCourses, setFavoriteCourses] = useState<Course[]>([]);
+    const [favoriteCoursesLoading, setFavoriteCoursesLoading] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -209,6 +213,42 @@ export default function CoursesScreen() {
         }
     };
 
+    useEffect(() => {
+        let cancelled = false;
+
+        const syncFavoriteCourses = async () => {
+            if (favoriteCourseIds.length === 0) {
+                if (!cancelled) {
+                    setFavoriteCourses([]);
+                    setFavoriteCoursesLoading(false);
+                }
+                return;
+            }
+
+            if (!cancelled) {
+                setFavoriteCoursesLoading(true);
+            }
+
+            const resolvedFavorites = await loadFavoriteCoursesDetails(favoriteCourseIds, courses);
+            if (!cancelled) {
+                setFavoriteCourses(resolvedFavorites);
+                setFavoriteCoursesLoading(false);
+            }
+        };
+
+        syncFavoriteCourses().catch((error) => {
+            console.error('Error loading favorite course details:', error);
+            if (!cancelled) {
+                setFavoriteCourses([]);
+                setFavoriteCoursesLoading(false);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [favoriteCourseIds, courses]);
+
     const toggleFavorite = async (courseId: string) => {
         if (!checkLogin(currentUserId)) return;
         const isFavorite = favoriteCourseIds.includes(courseId);
@@ -236,8 +276,6 @@ export default function CoursesScreen() {
             (course.instructor || '').toLowerCase().includes(query)
         );
     });
-    const favoriteCourses = courses.filter(course => favoriteCourseIds.includes(course.id));
-
     const handleCoursePress = (courseId: string) => {
         if (!checkLogin(currentUserId)) return;
         router.push(`/courses/${courseId}` as any);
@@ -322,25 +360,29 @@ export default function CoursesScreen() {
                 </View>
             </View>
 
-            {favoriteCourses.length > 0 && !searchQuery && (
+            {(favoriteCoursesLoading || favoriteCourses.length > 0) && !searchQuery && (
                 <View style={styles.favoritesSection}>
                     <Text style={styles.favoritesTitle}>⭐ {t('courses.favorites')}</Text>
-                    <FlatList
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        data={favoriteCourses}
-                        keyExtractor={(item) => `fav-${item.id}`}
-                        contentContainerStyle={styles.favoritesList}
-                        renderItem={({ item }) => (
-                            <TouchableOpacity
-                                style={styles.favoriteCard}
-                                onPress={() => handleCoursePress(item.id)}
-                            >
-                                {!!unreadByCourse[item.id]?.hasAnyUnread && <View style={styles.favoriteUnreadDot} />}
-                                <Text style={styles.favoriteCode}>{(item.code || '').toUpperCase()}</Text>
-                            </TouchableOpacity>
-                        )}
-                    />
+                    {favoriteCoursesLoading ? (
+                        <FavoriteCourseSkeletonStrip />
+                    ) : (
+                        <FlatList
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            data={favoriteCourses}
+                            keyExtractor={(item) => `fav-${item.id}`}
+                            contentContainerStyle={styles.favoritesList}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.favoriteCard}
+                                    onPress={() => handleCoursePress(item.id)}
+                                >
+                                    {!!unreadByCourse[item.id]?.hasAnyUnread && <View style={styles.favoriteUnreadDot} />}
+                                    <Text style={styles.favoriteCode}>{(item.code || '').toUpperCase()}</Text>
+                                </TouchableOpacity>
+                            )}
+                        />
+                    )}
                 </View>
             )}
 

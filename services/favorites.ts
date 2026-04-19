@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Course } from '../types';
-import { searchCourses } from './courses';
+import { getLocalCourses, searchCourses } from './courses';
 import { supabase } from './supabase';
 
 const COURSE_FAVORITES_KEY = 'hkcampus_favorite_courses';
@@ -73,6 +73,61 @@ export const setCourseFavoriteRemote = async (
         .eq('user_id', userId)
         .eq('course_id', courseId);
     if (error) throw error;
+};
+
+const mapCourseRowToCourse = (row: any): Course => ({
+    id: row.id,
+    code: row.code || '',
+    name: row.name || '',
+    instructor: row.instructor || '',
+    department: row.department || '',
+    credits: row.credits || 3,
+    rating: row.rating || 0,
+    reviewCount: row.review_count || 0,
+});
+
+export const loadFavoriteCoursesDetails = async (
+    favoriteCourseIds: string[],
+    loadedCourses: Course[] = []
+): Promise<Course[]> => {
+    if (!favoriteCourseIds.length) return [];
+
+    const courseMap = new Map<string, Course>();
+    loadedCourses.forEach((course) => {
+        courseMap.set(course.id, course);
+    });
+
+    const missingIds = favoriteCourseIds.filter((id) => !courseMap.has(id));
+
+    if (missingIds.length > 0) {
+        const localCourses = await getLocalCourses();
+        localCourses.forEach((course) => {
+            if (missingIds.includes(course.id) && !courseMap.has(course.id)) {
+                courseMap.set(course.id, course);
+            }
+        });
+    }
+
+    const remoteMissingIds = favoriteCourseIds.filter((id) => !courseMap.has(id));
+    if (remoteMissingIds.length > 0) {
+        const { data, error } = await supabase
+            .from('courses')
+            .select('*')
+            .in('id', remoteMissingIds);
+
+        if (!error && data) {
+            data.forEach((row: any) => {
+                const course = mapCourseRowToCourse(row);
+                if (!courseMap.has(course.id)) {
+                    courseMap.set(course.id, course);
+                }
+            });
+        }
+    }
+
+    return favoriteCourseIds
+        .map((id) => courseMap.get(id))
+        .filter((course): course is Course => Boolean(course));
 };
 
 const normalizeCourseCode = (value?: string): string =>
