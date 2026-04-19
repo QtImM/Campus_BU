@@ -466,8 +466,18 @@ const deriveCalendarEventTitle = (
     if (courseCode && eventType === 'assignment') return `${courseCode} Assignment`;
     if (courseCode && eventType === 'custom') return `${courseCode} Event`;
 
+    // 尝试提取显式标题（如"记一下XXX"）
     const explicitMatch = query.match(/记(?:个|一下)?\s*([A-Za-z0-9\u4e00-\u9fa5 ]{2,40})/);
-    return explicitMatch?.[1]?.trim();
+    if (explicitMatch?.[1]) {
+        return explicitMatch[1].trim();
+    }
+
+    // 如果没有课程代码和显式标题，根据事件类型返回默认标题
+    if (eventType === 'assignment') return '作业';
+    if (eventType === 'exam') return '考试';
+    if (eventType === 'quiz') return '测验';
+    
+    return undefined;
 };
 
 const mergeDefined = <T extends Record<string, any>>(base: T, patch: T): T => {
@@ -530,11 +540,10 @@ const getMissingScheduleFields = (draft: ScheduleWriteDraft): string[] => {
 
 const getMissingCalendarEventFields = (draft: CalendarEventDraft): string[] => {
     const missing: string[] = [];
-    if (!draft.title) missing.push('事件名称');
+    if (!draft.title) missing.push('课程名称');
     if (!draft.eventType) missing.push('事件类型');
     if (!draft.eventDate) missing.push('日期');
-    if (!draft.startTime) missing.push('时间');
-    if (!draft.location) missing.push('地点');
+    // 所有事件类型（考试、测验、作业、自定义）的时间和地点都是可选的
     return missing;
 };
 
@@ -575,22 +584,21 @@ const toCalendarEventInput = (
         missing.length > 0 ||
         !draft.title ||
         !draft.eventType ||
-        !draft.eventDate ||
-        !draft.startTime ||
-        !draft.location
+        !draft.eventDate
     ) {
         return null;
     }
 
+    // 所有事件类型（考试、测验、作业、自定义）的时间和地点都是可选的
     return {
         title: draft.title,
         eventType: draft.eventType,
         courseCode: draft.courseCode,
         matchedCourseId: draft.matchedCourseId,
         eventDate: draft.eventDate,
-        startTime: draft.startTime,
-        endTime: draft.endTime || addOneHour(draft.startTime),
-        location: draft.location,
+        startTime: draft.startTime || null,
+        endTime: draft.endTime || (draft.startTime ? addOneHour(draft.startTime) : null),
+        location: draft.location || null,
         note: draft.note,
     };
 };
@@ -1860,8 +1868,19 @@ export class AgentExecutor {
                 : '';
             const locationText = event.location ? ` @ ${event.location}` : '';
             const courseText = event.courseCode ? ` (${event.courseCode})` : '';
+            const eventTypeLabel = CALENDAR_EVENT_TYPE_LABELS[event.eventType];
 
-            return `我准备在你的日历里写入这条${CALENDAR_EVENT_TYPE_LABELS[event.eventType]}：\n\n${event.title}${courseText}\n日期：${event.eventDate}${timeText}${locationText}${event.note ? `\n备注：${event.note}` : ''}\n\n如果确认无误，回复“确认”或“是”；如果要修改，直接把新信息发我。`;
+            // 面向用户的确认信息，简洁明了
+            let confirmationText = `我准备在你的日历里记录这条${eventTypeLabel}：\n\n${event.title}${courseText}\n${event.eventDate}${timeText}${locationText}`;
+            
+            // 时间和地点是可选的，如果没有提供，提醒用户可以补充
+            if (!event.startTime || !event.location) {
+                confirmationText += `\n\n（如需补充具体时间或地点，直接告诉我；如确认无误，回复"确认"或"是"）`;
+            } else {
+                confirmationText += `\n\n如果确认无误，回复"确认"或"是"；如果要修改，直接把新信息发我。`;
+            }
+            
+            return confirmationText;
         }
 
         const currentUser = await getCurrentUser();
@@ -1918,7 +1937,17 @@ export class AgentExecutor {
         
         this.pendingWriteAction = { type: 'calendar_event', event };
         
-        return `我准备在你的日历中记录以下${typeLabels[eventType]}：\n\n${title}${courseText}\n日期：${eventDate}${timeText}${locationText}${event.note ? `\n备注：${event.note}` : ''}\n\n如果确认无误，回复"确认"或"是"；如果要修改，请告诉我新的信息。`;
+        // 面向用户的确认信息
+        let confirmationText = `我准备在你的日历中记录以下${typeLabels[eventType]}：\n\n${title}${courseText}\n${eventDate}${timeText}${locationText}`;
+        
+        // 时间和地点是可选的，如果没有提供，提醒可以补充
+        if (!event.startTime || !event.location) {
+            confirmationText += `\n\n（如需补充具体时间或地点，直接告诉我；如确认无误，回复"确认"或"是"）`;
+        } else {
+            confirmationText += `\n\n如果确认无误，回复"确认"或"是"；如果要修改，请告诉我新的信息。`;
+        }
+        
+        return confirmationText;
     }
 
     private async executeCalendarEventWrite(event: Omit<CreateUserCalendarEventInput, 'userId'>): Promise<string> {
