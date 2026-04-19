@@ -1,16 +1,14 @@
 import { getCurrentUser } from '../auth';
+import {
+    CalendarEventType,
+    createUserCalendarEvent,
+    CreateUserCalendarEventInput
+} from '../calendar';
 import { addReview, getCourseByCode, getReviews, searchCourses } from '../courses';
 import { FAQService } from '../faq';
-import { getUserScheduleEntries, UserScheduleEntry, createManualScheduleEntry } from '../schedule';
+import { createManualScheduleEntry, getUserScheduleEntries, UserScheduleEntry } from '../schedule';
 import { supabase } from '../supabase';
 import { fetchTeamingRequests, postTeamingRequest } from '../teaming';
-import {
-    createUserCalendarEvent,
-    CreateUserCalendarEventInput,
-    CalendarEventType,
-    UserCalendarEvent,
-    getUpcomingUserCalendarEvents,
-} from '../calendar';
 import {
     formatBuildingInfo,
     formatNearbyPlaceInfo,
@@ -299,10 +297,13 @@ const detectCoursePublishIntent = (query: string): CoursePublishIntent | null =>
 };
 
 const isCancelActionQuery = (query: string): boolean =>
-    /取消|算了|不用了|先不用|停止|cancel|never mind/i.test(query.trim());
+    /^(取消|算了|不用了|先不用|停止|cancel|never mind)(一下|吧|啦|了)?[！!。.]?$/i.test(query.trim());
 
 const isConfirmActionQuery = (query: string): boolean =>
-    /^(是|好的|好|确认|確認|可以|就这样|就這樣|没问题|沒問題|yes|ok|okay|confirm|send|发送|發送)$/i.test(query.trim());
+    /^(是|好的|好|确认|確認|可以|行|就这样|就這樣|没问题|沒問題|yes|ok|okay|confirm|send|发送|發送)(一下|下|吧|啦|了)?[！!。.]?$/i.test(query.trim());
+
+const hasConfirmKeyword = (query: string): boolean =>
+    /(?:确认|確認|confirm|yes|ok|okay|send|发送|發送|就这样|就這樣|没问题|沒問題)/i.test(query);
 
 const CALENDAR_EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
     exam: '考试',
@@ -390,6 +391,7 @@ const extractRoomLikeValue = (query: string): string | undefined => {
     const patterns = [
         /(?:在|@)\s*([A-Za-z]{2,}[ -]?\d{2,}[A-Za-z]?)/,
         /(?:教室|地点|location|room)\s*[:：]?\s*([A-Za-z0-9_-]+)/i,
+        /^\s*([A-Za-z]{2,3}[ -]?\d{2,3}[A-Za-z]?)\s*$/i,
     ];
 
     for (const pattern of patterns) {
@@ -525,6 +527,35 @@ const parseCalendarEventDraft = (query: string): CalendarEventDraft => {
         endTime,
         location: extractRoomLikeValue(query),
     };
+};
+
+const hasScheduleDraftUpdates = (draft: ScheduleWriteDraft): boolean => {
+    return Boolean(
+        draft.title ||
+        draft.courseCode ||
+        draft.teacherName ||
+        draft.room ||
+        draft.dayOfWeek ||
+        draft.startTime ||
+        draft.endTime ||
+        draft.startPeriod ||
+        draft.endPeriod ||
+        draft.weekText
+    );
+};
+
+const hasCalendarEventDraftUpdates = (draft: CalendarEventDraft): boolean => {
+    return Boolean(
+        draft.title ||
+        draft.eventType ||
+        draft.courseCode ||
+        draft.matchedCourseId ||
+        draft.eventDate ||
+        draft.startTime ||
+        draft.endTime ||
+        draft.location ||
+        draft.note
+    );
 };
 
 const getMissingScheduleFields = (draft: ScheduleWriteDraft): string[] => {
@@ -1273,8 +1304,14 @@ export class AgentExecutor {
         if (!this.pendingWriteAction) return null;
 
         const stableDecision = inferStableTask(prompt);
+        const isCancelIntent =
+            (stableDecision.type === 'write_confirmation' && stableDecision.intent === 'cancel')
+            || isCancelActionQuery(prompt);
+        const isConfirmIntent =
+            (stableDecision.type === 'write_confirmation' && stableDecision.intent === 'confirm')
+            || isConfirmActionQuery(prompt);
 
-        if (stableDecision.type === 'write_confirmation' && stableDecision.intent === 'cancel') {
+        if (isCancelIntent) {
             this.pendingWriteAction = null;
             this.pendingCourseAction = null;
             const reply = '已取消这次写入操作。你如果想改内容，直接重新告诉我，我会先给你确认稿。';
@@ -1289,7 +1326,89 @@ export class AgentExecutor {
             };
         }
 
-        if (stableDecision.type === 'write_confirmation' && stableDecision.intent === 'confirm') {
+        if (this.pendingWriteAction.type === 'schedule') {
+            const parsedUpdate = parseScheduleWriteDraft(prompt);
+            const hasStructuredUpdate = hasScheduleDraftUpdates(parsedUpdate);
+
+            if (isConfirmIntent || (hasConfirmKeyword(prompt) && hasStructuredUpdate)) {
+                const mergedDraft = hasStructuredUpdate
+                    ? mergeScheduleDraft(this.pendingWriteAction.entry, parsedUpdate)
+                    : this.pendingWriteAction.entry;
+                this.pendingWriteAction = { type: 'schedule', entry: mergedDraft };
+
+                const readyEntry = toScheduleEntry(mergedDraft);
+                if (!readyEntry) {
+                    return formatMissingFieldsPrompt(getMissingScheduleFields(mergedDraft), 'schedule');
+                }
+
+                const reply = await this.executePendingWriteAction();
+                return {
+                    steps: [{
+                        thought: hasStructuredUpdate ? '用户确认并补充课表信息后执行写入' : '用户确认执行写入',
+                        reply,
+                        routeReason: stableDecision.reason,
+                        path: 'pending',
+                    }],
+                    finalAnswer: reply,
+                };
+            }
+
+            const response = await this.prepareScheduleWrite({
+                ...this.pendingWriteAction.entry,
+                query: prompt,
+            });
+            return {
+                steps: [{
+                    thought: '继续补全待确认的课表写入',
+                    reply: response,
+                    path: 'pending',
+                }],
+                finalAnswer: response,
+            };
+        }
+
+        if (this.pendingWriteAction.type === 'calendar_event') {
+            const parsedUpdate = parseCalendarEventDraft(prompt);
+            const hasStructuredUpdate = hasCalendarEventDraftUpdates(parsedUpdate);
+
+            if (isConfirmIntent || (hasConfirmKeyword(prompt) && hasStructuredUpdate)) {
+                const mergedDraft = hasStructuredUpdate
+                    ? mergeCalendarEventDraft(this.pendingWriteAction.event, parsedUpdate)
+                    : this.pendingWriteAction.event;
+                this.pendingWriteAction = { type: 'calendar_event', event: mergedDraft };
+
+                const readyEvent = toCalendarEventInput(mergedDraft);
+                if (!readyEvent) {
+                    return formatMissingFieldsPrompt(getMissingCalendarEventFields(mergedDraft), 'calendar_event');
+                }
+
+                const reply = await this.executePendingWriteAction();
+                return {
+                    steps: [{
+                        thought: hasStructuredUpdate ? '用户确认并补充日历信息后执行写入' : '用户确认执行写入',
+                        reply,
+                        routeReason: stableDecision.reason,
+                        path: 'pending',
+                    }],
+                    finalAnswer: reply,
+                };
+            }
+
+            const response = await this.prepareCalendarEventWrite({
+                ...this.pendingWriteAction.event,
+                query: prompt,
+            });
+            return {
+                steps: [{
+                    thought: '继续补全待确认的日历写入',
+                    reply: response,
+                    path: 'pending',
+                }],
+                finalAnswer: response,
+            };
+        }
+
+        if (isConfirmIntent) {
             const reply = await this.executePendingWriteAction();
             return {
                 steps: [{
@@ -1311,36 +1430,6 @@ export class AgentExecutor {
             return {
                 steps: [{
                     thought: '用户修改待确认内容',
-                    reply: response,
-                    path: 'pending',
-                }],
-                finalAnswer: response,
-            };
-        }
-
-        if (this.pendingWriteAction.type === 'schedule') {
-            const response = await this.prepareScheduleWrite({
-                ...this.pendingWriteAction.entry,
-                query: prompt,
-            });
-            return {
-                steps: [{
-                    thought: '继续补全待确认的课表写入',
-                    reply: response,
-                    path: 'pending',
-                }],
-                finalAnswer: response,
-            };
-        }
-
-        if (this.pendingWriteAction.type === 'calendar_event') {
-            const response = await this.prepareCalendarEventWrite({
-                ...this.pendingWriteAction.event,
-                query: prompt,
-            });
-            return {
-                steps: [{
-                    thought: '继续补全待确认的日历写入',
                     reply: response,
                     path: 'pending',
                 }],

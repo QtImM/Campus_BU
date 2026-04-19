@@ -978,6 +978,50 @@ describe('AgentExecutor course publishing flow', () => {
             expect(confirmed.finalAnswer).toBeTruthy();
         });
 
+        it('accepts relaxed confirmation phrase like 确认一下 for schedule write', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const draft = await executor.process('帮我把 COMP3015 周二 09:00-10:00 在 WLB204 记进课表');
+            expect(draft.finalAnswer).toContain('确认');
+            expect(mockCreateManualScheduleEntry).not.toHaveBeenCalled();
+
+            await executor.process('确认一下');
+            expect(mockCreateManualScheduleEntry).toHaveBeenCalledWith({
+                userId: 'user-1',
+                entry: expect.objectContaining({
+                    title: 'COMP3015',
+                    room: 'WLB204',
+                }),
+            });
+        });
+
+        it('supports single-turn confirm with schedule detail update', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const draft = await executor.process('帮我把 COMP3015 周二 09:00-10:00 在 WLB204 记进课表');
+            expect(draft.finalAnswer).toContain('确认');
+            expect(mockCreateManualScheduleEntry).not.toHaveBeenCalled();
+
+            const committed = await executor.process('确认，周三 10:00-12:00 在 OEE803');
+            expect(mockCreateManualScheduleEntry).toHaveBeenCalledWith({
+                userId: 'user-1',
+                entry: expect.objectContaining({
+                    title: 'COMP3015',
+                    dayOfWeek: 3,
+                    startTime: '10:00',
+                    endTime: '12:00',
+                    room: 'OEE803',
+                }),
+            });
+            expect(committed.finalAnswer).toContain('成功');
+        });
+
         it('supports follow-up completion before schedule confirmation', async () => {
             const executor = new AgentExecutor('user-1', {
                 history: [],
@@ -1217,6 +1261,75 @@ describe('AgentExecutor course publishing flow', () => {
             }));
         });
 
+        it.each([
+            {
+                label: 'assignment',
+                firstPrompt: '帮我记个作业 COMP3015 assignment2 2025-05-01',
+                eventType: 'assignment',
+                courseCode: 'COMP3015',
+                eventDate: '2025-05-01',
+            },
+            {
+                label: 'quiz',
+                firstPrompt: '帮我记个 COMP3026 quiz，2026-06-01',
+                eventType: 'quiz',
+                courseCode: 'COMP3026',
+                eventDate: '2026-06-01',
+            },
+            {
+                label: 'exam',
+                firstPrompt: '帮我记一下COMP3015期末考试，2025-05-15',
+                eventType: 'exam',
+                courseCode: 'COMP3015',
+                eventDate: '2025-05-15',
+            },
+        ])('supports single-turn confirm with optional detail update for $label events', async ({
+            firstPrompt,
+            eventType,
+            courseCode,
+            eventDate,
+        }) => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const draft = await executor.process(firstPrompt);
+            expect(draft.finalAnswer).toContain('确认');
+            expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
+
+            const committed = await executor.process('确认，23:59 在 OEE803');
+            expect(mockCreateUserCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+                userId: 'user-1',
+                eventType,
+                courseCode,
+                eventDate,
+                startTime: '23:59',
+                location: 'OEE803',
+            }));
+            expect(committed.finalAnswer).toContain('成功');
+        });
+
+        it('accepts relaxed confirmation phrase like 确认一下 for calendar-event write', async () => {
+            const executor = new AgentExecutor('user-1', {
+                history: [],
+                sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
+            });
+
+            const draft = await executor.process('帮我记一下COMP7650 assignment3作业，2025-04-29');
+            expect(draft.finalAnswer).toContain('确认');
+            expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
+
+            const committed = await executor.process('确认一下');
+            expect(mockCreateUserCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+                userId: 'user-1',
+                eventType: 'assignment',
+                eventDate: '2025-04-29',
+                courseCode: 'COMP7650',
+            }));
+            expect(committed.finalAnswer).toContain('成功');
+        });
+
         it('after follow-up with complete info, goes directly to confirmation without asking for time/location', async () => {
             const executor = new AgentExecutor('user-1', {
                 history: [],
@@ -1247,22 +1360,20 @@ describe('AgentExecutor course publishing flow', () => {
             }));
         });
 
-        it('supports step-by-step information collection for assignment (course first, then date)', async () => {
+        it('supports step-by-step information collection for assignment (date required, course optional)', async () => {
             const executor = new AgentExecutor('user-1', {
                 history: [],
                 sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
             });
 
-            // 第一步：用户只说"帮我记个作业"，系统追问课程名和日期
+            // 第一步：用户只说"帮我记个作业"，系统只追问日期（标题可自动推导）
             const first = await executor.process('帮我记个作业');
-            expect(first.finalAnswer).toContain('课程名称');
             expect(first.finalAnswer).toContain('日期');
             expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
 
-            // 第二步：用户提供课程代码，系统追问日期
+            // 第二步：用户补充课程代码但仍未提供日期，系统继续追问日期
             const second = await executor.process('COMP3015');
             expect(second.finalAnswer).toContain('日期');
-            expect(second.finalAnswer).not.toContain('课程名称'); // 课程名已经有了
             expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
 
             // 第三步：用户提供日期，系统显示确认信息
@@ -1288,13 +1399,13 @@ describe('AgentExecutor course publishing flow', () => {
                 sessionState: { facts: {}, recentDecisions: [], openLoops: [] },
             });
 
-            // 第一步：用户说"COMP3015有个考试"，系统追问日期
-            const first = await executor.process('COMP3015有个考试');
+            // 第一步：用户说要记考试，系统追问日期
+            const first = await executor.process('帮我记一下COMP3015有个考试');
             expect(first.finalAnswer).toContain('日期');
             expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
 
-            // 第二步：用户提供日期，系统显示确认信息（时间和地点是可选的）
-            const second = await executor.process('下周三');
+            // 第二步：用户提供明确日期，系统显示确认信息（时间和地点是可选的）
+            const second = await executor.process('2025-05-15');
             expect(second.finalAnswer).toContain('确认');
             expect(second.finalAnswer).toContain('COMP3015');
             expect(mockCreateUserCalendarEvent).not.toHaveBeenCalled();
