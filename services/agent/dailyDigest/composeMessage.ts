@@ -87,18 +87,40 @@ const injectRefsIntoLine = (line: string, refs: { label: string, matchText: stri
     return rebuilt;
 };
 
+const assignItemsToLines = (summaryLines: string[], items: DigestItem[]): number[] =>
+    items.map((item) => {
+        const matchText = item.contextSnippet || item.title;
+        let bestLine = item.lineIndex !== undefined && item.lineIndex < summaryLines.length
+            ? item.lineIndex
+            : 0;
+        let bestScore = 0;
+
+        summaryLines.forEach((line, lineIdx) => {
+            const score = scoreClauseMatch(line, matchText);
+            if (score > bestScore) {
+                bestScore = score;
+                bestLine = lineIdx;
+            }
+        });
+
+        return bestLine;
+    });
+
 export const composeDailyDigestMessage = (summary: string, items: DigestItem[]): string => {
     const summaryLines = summary
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean);
 
+    const assignments = assignItemsToLines(summaryLines, items);
+
     let refIndex = 1;
     const formattedLines = summaryLines.map((line, index) => {
         const lineRefs = items
-            .filter((item) => item.lineIndex === index || (item.lineIndex === undefined && items.indexOf(item) === index))
+            .map((item, itemIdx) => ({ item, assignedLine: assignments[itemIdx] }))
+            .filter(({ assignedLine }) => assignedLine === index)
             .slice(0, DAILY_DIGEST_CONFIG.maxRefsPerLine)
-            .map((item) => ({
+            .map(({ item }) => ({
                 label: `[【${refIndex++}】](${item.url})`,
                 matchText: item.contextSnippet || item.title,
             }))

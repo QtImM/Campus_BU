@@ -52,6 +52,17 @@ describe('composeDailyDigestMessage', () => {
         );
     });
 
+    it('matches items to summary lines by content similarity, not lineIndex', () => {
+        const message = composeDailyDigestMessage('MIT发布前沿研究论文\nOpenAI推出新模型GPT-5', [
+            { title: 'OpenAI GPT-5', url: 'https://example.com/openai', lineIndex: 0, contextSnippet: 'OpenAI推出新模型GPT-5' },
+            { title: 'MIT研究', url: 'https://example.com/mit', lineIndex: 1, contextSnippet: 'MIT发布前沿研究论文' },
+        ]);
+
+        expect(message).toBe(
+            '· MIT发布前沿研究论文[【1】](https://example.com/mit)\n· OpenAI推出新模型GPT-5[【2】](https://example.com/openai)'
+        );
+    });
+
     it('limits each summary line to at most two references', () => {
         const message = composeDailyDigestMessage('OpenAI, Anthropic, Google, xAI latest updates', [
             { title: 'OpenAI', url: 'https://example.com/1', lineIndex: 0, contextSnippet: 'OpenAI latest updates' },
