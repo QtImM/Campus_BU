@@ -1,4 +1,4 @@
-import { ForumCategory, ForumComment, ForumPost, ForumSort } from '../types';
+import { ForumCategory, ForumComment, ForumContentType, ForumLanguage, ForumPost, ForumSort, ForumSourceRef } from '../types';
 import { ensureContentSafety } from './contentFilter';
 import { compressImageForUpload } from '../utils/image';
 import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
@@ -10,6 +10,20 @@ const FORUM_POSTS = 'forum_posts';
 const FORUM_COMMENTS = 'forum_comments';
 const FORUM_UPVOTES = 'forum_upvotes';
 
+// ── Helper: 原子地调整帖子的 reply_count / upvote_count ─────────────────────────
+// 对应 supabase migration 20260420_forum_editorial_support.sql 中的 RPC
+const incrementForumPostCounts = async (
+    postId: string,
+    opts: { replyDelta?: number; upvoteDelta?: number },
+) => {
+    const { error } = await supabase.rpc('forum_posts_increment_counts', {
+        p_post_id: postId,
+        p_reply_delta: opts.replyDelta ?? 0,
+        p_upvote_delta: opts.upvoteDelta ?? 0,
+    });
+    if (error) throw error;
+};
+
 // ── Mapper ────────────────────────────────────────────────────────────────────
 const mapRow = (row: any): ForumPost => {
     let images: string[] = [];
@@ -17,6 +31,14 @@ const mapRow = (row: any): ForumPost => {
     else if (typeof row.images === 'string') {
         try { images = JSON.parse(row.images); } catch { }
     }
+
+    let sources: ForumSourceRef[] | undefined;
+    if (Array.isArray(row.sources)) sources = row.sources;
+    else if (typeof row.sources === 'string') {
+        try { sources = JSON.parse(row.sources); } catch { }
+    }
+
+    const tags: string[] | undefined = Array.isArray(row.tags) ? row.tags : undefined;
 
     return {
         id: row.id,
@@ -34,6 +56,18 @@ const mapRow = (row: any): ForumPost => {
         isFollowingAuthor: false,
         lastReplyAt: new Date(row.last_reply_at),
         createdAt: new Date(row.created_at),
+
+        // ── 编辑部攻略字段（20260420 新增）──────────────────────────────────
+        contentType: (row.content_type as ForumContentType) || 'user_post',
+        sources,
+        lastVerifiedAt: row.last_verified_at ? new Date(row.last_verified_at) : undefined,
+        tags,
+        isPinned: row.is_pinned ?? false,
+        pinnedAt: row.pinned_at ? new Date(row.pinned_at) : undefined,
+        language: (row.language as ForumLanguage) || undefined,
+        translationGroup: row.translation_group || undefined,
+        summary: row.summary || undefined,
+        viewCount: row.view_count ?? 0,
     };
 };
 
@@ -250,19 +284,9 @@ export const addForumComment = async (data: {
 
     if (error) throw error;
 
-    // Bump reply_count + last_reply_at on the post (manual update, no RPC needed)
+    // 原子地把 reply_count + 1 并刷新 last_reply_at（RPC 会处理）
     try {
-        const { data: postRow } = await supabase
-            .from(FORUM_POSTS)
-            .select('reply_count')
-            .eq('id', data.postId)
-            .single();
-        if (postRow) {
-            await supabase.from(FORUM_POSTS).update({
-                reply_count: postRow.reply_count + 1,
-                last_reply_at: new Date().toISOString(),
-            }).eq('id', data.postId);
-        }
+        await incrementForumPostCounts(data.postId, { replyDelta: 1 });
     } catch { /* non-blocking */ }
 
     return {
@@ -324,17 +348,15 @@ export const toggleForumUpvote = async (postId: string, userId: string) => {
 
     if (existing) {
         await supabase.from(FORUM_UPVOTES).delete().eq('post_id', postId).eq('user_id', userId);
-        const { data: post } = await supabase.from(FORUM_POSTS).select('upvote_count').eq('id', postId).single();
-        if (post) {
-            await supabase.from(FORUM_POSTS).update({ upvote_count: Math.max(0, post.upvote_count - 1) }).eq('id', postId);
-        }
+        try {
+            await incrementForumPostCounts(postId, { upvoteDelta: -1 });
+        } catch { /* non-blocking */ }
         return { upvoted: false };
     } else {
         await supabase.from(FORUM_UPVOTES).insert([{ post_id: postId, user_id: userId }]);
-        const { data: post } = await supabase.from(FORUM_POSTS).select('upvote_count').eq('id', postId).single();
-        if (post) {
-            await supabase.from(FORUM_POSTS).update({ upvote_count: post.upvote_count + 1 }).eq('id', postId);
-        }
+        try {
+            await incrementForumPostCounts(postId, { upvoteDelta: 1 });
+        } catch { /* non-blocking */ }
         return { upvoted: true };
     }
 };
@@ -349,10 +371,9 @@ export const deleteForumPost = async (postId: string) => {
 export const deleteForumComment = async (commentId: string, postId: string) => {
     const { error } = await supabase.from(FORUM_COMMENTS).delete().eq('id', commentId);
     if (error) throw error;
-    const { data: post } = await supabase.from(FORUM_POSTS).select('reply_count').eq('id', postId).single();
-    if (post) {
-        await supabase.from(FORUM_POSTS).update({ reply_count: Math.max(0, post.reply_count - 1) }).eq('id', postId);
-    }
+    try {
+        await incrementForumPostCounts(postId, { replyDelta: -1 });
+    } catch { /* non-blocking */ }
 };
 
 // ── Upload image (reuses campus Storage bucket under forum/ prefix) ────────────

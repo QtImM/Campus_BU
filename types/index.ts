@@ -79,6 +79,20 @@ export interface Post {
 export type ForumCategory = 'general' | 'activity' | 'guide' | 'lost_found';
 export type ForumSort = 'latest_reply' | 'latest_post';
 
+// 帖子类型：普通用户帖 / 编辑部攻略 / 官方公告
+export type ForumContentType = 'user_post' | 'editorial' | 'official';
+
+// 多语言版本支持
+export type ForumLanguage = 'zh-Hans' | 'zh-Hant' | 'en';
+
+// 来源引用（编辑帖追溯信息出处）
+export interface ForumSourceRef {
+    type: 'official_website' | 'official_document' | 'student_feedback' | 'other';
+    url?: string;
+    description?: string;
+    accessed_at?: string; // ISO date string
+}
+
 export interface ForumPost {
     id: string;
     title: string;
@@ -95,6 +109,18 @@ export interface ForumPost {
     lastReplyAt: Date;
     createdAt: Date;
     isFollowingAuthor?: boolean; // Xiaohongshu badge requirement
+
+    // ── 编辑部攻略支持（20260420 新增）──────────────────────────────────
+    contentType?: ForumContentType;          // 默认 user_post
+    sources?: ForumSourceRef[];              // 来源引用数组
+    lastVerifiedAt?: Date;                   // 最后核实时间
+    tags?: string[];                         // 细分标签
+    isPinned?: boolean;                      // 是否置顶
+    pinnedAt?: Date;                         // 置顶时间
+    language?: ForumLanguage;                // 内容语言
+    translationGroup?: string;               // 多语言版本分组 UUID
+    summary?: string;                        // TL;DR 摘要
+    viewCount?: number;                      // 浏览量
 }
 
 export interface ForumComment {
