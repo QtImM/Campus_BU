@@ -263,7 +263,7 @@ const isCourseCommunityQuery = (query: string): boolean => {
 };
 
 const isCampusFaqQuery = (query: string): boolean => {
-    return /图书馆|圖書館|library|main lib|gpa|绩点|績點|平均分|校历|校曆|academic calendar|calendar|add\/drop|add drop|选课|選課|reg course|注册|註冊|学费|學費|tuition|fee|奖学金|獎學金|financial aid|资助|資助|宿舍|住宿|hall\b|residence|wifi|eduroam|internet|网络|網絡|it service|it support|ito|邮箱|郵箱|email|成绩单|成績單|transcript|student handbook|handbook|学生手册|學生手冊|admission|入学|入學|accept offer|录取|錄取|签证|簽證|visa|iang/i.test(query);
+    return /图书馆|圖書館|library|main lib|gpa|绩点|績點|平均分|校历|校曆|academic calendar|calendar|add\/drop|add drop|选课|選課|reg course|注册|註冊|学费|學費|tuition|fee|奖学金|獎學金|financial aid|资助|資助|宿舍|住宿|hall\b|residence|wifi|eduroam|internet|网络|網絡|it service|it support|ito|邮箱|郵箱|email|成绩单|成績單|transcript|student handbook|handbook|学生手册|學生手冊|admission|入学|入學|accept offer|录取|錄取|签证|簽證|visa|iang|留位费|留位費|deposit|押金|缴费|繳費|付款|payment|flywire|电汇|電匯|汇票|匯票|食堂|canteen|餐厅|餐廳|吃饭|吃飯|饭堂|飯堂|医疗|醫療|看病|医生|醫生|校医|校醫|诊所|診所|health|clinic|体育|體育|健身|gym|游泳|swimming|运动|運動|sport|打印|print|复印|複印|租房|租屋|rent|搬家|交通|transport|地铁|地鐵|巴士|bus|小巴|minibus|抵港|来港|來港|到港|入境|landing slip|d签|d簽|逗留签|逗留簽|offer|录取通知|錄取通知|新生|freshman|orientation|迎新|报到|報到|电话卡|電話卡|sim card|八达通|八達通|octopus|银行开户|銀行開戶|bank account|app|moodle|duo/i.test(query);
 };
 
 const isPersonalizedPrompt = (query: string): boolean => {
