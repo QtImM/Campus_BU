@@ -206,7 +206,6 @@ export default function ComposeScreen() {
                     value={content}
                     onChangeText={setContent}
                     placeholderTextColor="#9CA3AF"
-                    autoFocus
                 />
 
                 {/* Image Previews */}

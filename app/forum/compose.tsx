@@ -165,7 +165,6 @@ export default function ForumComposeScreen() {
                         onChangeText={setTitle}
                         multiline
                         maxLength={30}
-                        autoFocus
                     />
                     <Text style={[styles.charCount, title.length >= 30 && styles.charCountMax]}>
                         {title.length}/30

@@ -1759,7 +1759,6 @@ export default function MapScreen() {
                                         placeholder={t('map.modal.comment_placeholder')}
                                         placeholderTextColor="#999"
                                         multiline
-                                        autoFocus
                                         value={commentText}
                                         onChangeText={setCommentText}
                                     />
