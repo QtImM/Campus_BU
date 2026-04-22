@@ -11,6 +11,7 @@ import {
     Dimensions,
     FlatList,
     Image,
+    InteractionManager,
     Keyboard,
     KeyboardAvoidingView,
     Linking,
@@ -49,6 +50,17 @@ import { parseLegacyPostShareMessage, parsePostShareMessageContent } from '../..
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+type MessageListItem =
+    | { type: 'separator'; id: string; date: Date }
+    | { type: 'message'; id: string; message: DirectMessage };
+
+const getDayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+
+const isSameCalendarDay = (left: Date, right: Date) =>
+    left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate();
+
 const formatMessageTime = (date: Date) => date.toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -67,9 +79,12 @@ export default function ChatScreen() {
     const peerUserId = Array.isArray(params.id) ? params.id[0] : params.id;
     const { t } = useTranslation();
     const router = useRouter();
-    const flatListRef = useRef<FlatList>(null);
+    const flatListRef = useRef<FlatList<MessageListItem>>(null);
     const inputRef = useRef<TextInput>(null);
     const hasInitialScrollCompletedRef = useRef(false);
+    const pendingAutoScrollRef = useRef(false);
+    const scrollTimerRefs = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+    const interactionScrollHandleRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
     const { refreshCount } = useNotifications();
 
     const [loading, setLoading] = useState(true);
@@ -79,6 +94,7 @@ export default function ChatScreen() {
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [messages, setMessages] = useState<DirectMessage[]>([]);
     const [inputText, setInputText] = useState('');
+    const [replyTarget, setReplyTarget] = useState<DirectMessage | null>(null);
     const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
     const [previewIndex, setPreviewIndex] = useState<number | null>(null);
     const attachmentAnim = useRef(new Animated.Value(0)).current;
@@ -101,18 +117,13 @@ export default function ChatScreen() {
     }, [attachmentAnim, showAttachmentMenu]);
 
     useEffect(() => {
-        if (loading || messages.length === 0) return;
-        const raf = requestAnimationFrame(() => {
-            flatListRef.current?.scrollToEnd({ animated: false });
-        });
-        const timer = setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: false });
-        }, 120);
         return () => {
-            cancelAnimationFrame(raf);
-            clearTimeout(timer);
+            scrollTimerRefs.current.forEach(clearTimeout);
+            scrollTimerRefs.current = [];
+            interactionScrollHandleRef.current?.cancel?.();
+            interactionScrollHandleRef.current = null;
         };
-    }, [loading, messages.length]);
+    }, []);
 
     useEffect(() => {
         const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -124,6 +135,52 @@ export default function ChatScreen() {
             keyboardShowSubscription.remove();
         };
     }, []);
+
+    const clearScheduledScrolls = useCallback(() => {
+        scrollTimerRefs.current.forEach(clearTimeout);
+        scrollTimerRefs.current = [];
+        interactionScrollHandleRef.current?.cancel?.();
+        interactionScrollHandleRef.current = null;
+    }, []);
+
+    const scrollToBottom = useCallback(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+    }, []);
+
+    const scheduleScrollToBottom = useCallback(() => {
+        pendingAutoScrollRef.current = true;
+        clearScheduledScrolls();
+
+        const runScroll = () => {
+            requestAnimationFrame(() => {
+                scrollToBottom();
+            });
+        };
+
+        runScroll();
+        interactionScrollHandleRef.current = InteractionManager.runAfterInteractions(() => {
+            runScroll();
+        });
+
+        [120, 280, 520].forEach((delay, index, allDelays) => {
+            const timer = setTimeout(() => {
+                runScroll();
+                if (index === allDelays.length - 1) {
+                    pendingAutoScrollRef.current = false;
+                }
+            }, delay);
+            scrollTimerRefs.current.push(timer);
+        });
+    }, [clearScheduledScrolls, scrollToBottom]);
+
+    useEffect(() => {
+        if (loading || messages.length === 0) {
+            return;
+        }
+
+        scheduleScrollToBottom();
+        hasInitialScrollCompletedRef.current = true;
+    }, [loading, messages.length, scheduleScrollToBottom]);
 
     const loadThread = useCallback(async (silent = false) => {
         if (!peerUserId) {
@@ -198,9 +255,15 @@ export default function ChatScreen() {
     // Reset scroll state when switching conversations
     useEffect(() => {
         hasInitialScrollCompletedRef.current = false;
+        pendingAutoScrollRef.current = false;
+        setReplyTarget(null);
     }, [peerUserId]);
 
-    const sendOptimisticMessage = useCallback(async (optimisticMessage: DirectMessage, content: string) => {
+    const sendOptimisticMessage = useCallback(async (
+        optimisticMessage: DirectMessage,
+        content: string,
+        replyToMessageId?: string | null,
+    ) => {
         if (!currentUser?.uid || !peerUserId) {
             return;
         }
@@ -209,7 +272,7 @@ export default function ChatScreen() {
         setSending(true);
 
         try {
-            const result = await sendDirectMessage(currentUser.uid, peerUserId, content);
+            const result = await sendDirectMessage(currentUser.uid, peerUserId, content, replyToMessageId);
             setConversationId(result.conversationId);
             await loadThread(true);
         } catch (error) {
@@ -227,6 +290,7 @@ export default function ChatScreen() {
             return;
         }
 
+        const activeReplyTarget = replyTarget;
         setShowAttachmentMenu(false);
 
         try {
@@ -253,6 +317,7 @@ export default function ChatScreen() {
                 senderId: currentUser.uid,
                 receiverId: peerUserId,
                 content: createDirectImageMessageContent(imageUri),
+                replyToMessageId: activeReplyTarget?.id || null,
                 createdAt: new Date(),
                 readAt: null,
                 senderName: currentUser.displayName || 'Me',
@@ -263,17 +328,20 @@ export default function ChatScreen() {
             await sendOptimisticMessage(
                 optimisticMessage,
                 createDirectImageMessageContent(uploadedUrl),
+                activeReplyTarget?.id,
             );
+            setReplyTarget(null);
         } catch (error) {
             console.error('Error picking direct message image:', error);
         }
-    }, [conversationId, currentUser, peerUserId, sendOptimisticMessage, sending]);
+    }, [conversationId, currentUser, peerUserId, replyTarget, sendOptimisticMessage, sending]);
 
     const handleTakePhoto = useCallback(async () => {
         if (!currentUser?.uid || !peerUserId || sending) {
             return;
         }
 
+        const activeReplyTarget = replyTarget;
         setShowAttachmentMenu(false);
 
         try {
@@ -299,6 +367,7 @@ export default function ChatScreen() {
                 senderId: currentUser.uid,
                 receiverId: peerUserId,
                 content: createDirectImageMessageContent(imageUri),
+                replyToMessageId: activeReplyTarget?.id || null,
                 createdAt: new Date(),
                 readAt: null,
                 senderName: currentUser.displayName || 'Me',
@@ -309,11 +378,13 @@ export default function ChatScreen() {
             await sendOptimisticMessage(
                 optimisticMessage,
                 createDirectImageMessageContent(uploadedUrl),
+                activeReplyTarget?.id,
             );
+            setReplyTarget(null);
         } catch (error) {
             console.error('Error taking direct message photo:', error);
         }
-    }, [conversationId, currentUser, peerUserId, sendOptimisticMessage, sending]);
+    }, [conversationId, currentUser, peerUserId, replyTarget, sendOptimisticMessage, sending]);
 
     const handleSend = useCallback(async () => {
         const trimmed = inputText.trim();
@@ -321,12 +392,14 @@ export default function ChatScreen() {
             return;
         }
 
+        const activeReplyTarget = replyTarget;
         const optimisticMessage: DirectMessage = {
             id: `temp-${Date.now()}`,
             conversationId: conversationId || 'pending',
             senderId: currentUser.uid,
             receiverId: peerUserId,
             content: trimmed,
+            replyToMessageId: activeReplyTarget?.id || null,
             createdAt: new Date(),
             readAt: null,
             senderName: currentUser.displayName || 'Me',
@@ -335,21 +408,23 @@ export default function ChatScreen() {
 
         setMessages((previous) => [...previous, optimisticMessage]);
         setInputText('');
+        setReplyTarget(null);
         setSending(true);
 
         try {
-            const result = await sendDirectMessage(currentUser.uid, peerUserId, trimmed);
+            const result = await sendDirectMessage(currentUser.uid, peerUserId, trimmed, activeReplyTarget?.id);
             setConversationId(result.conversationId);
             await loadThread(true);
         } catch (error) {
             console.error('Error sending direct message:', error);
             setMessages((previous) => previous.filter((message) => message.id !== optimisticMessage.id));
             setInputText(trimmed);
+            setReplyTarget(activeReplyTarget);
             Alert.alert('发送失败', (error as any)?.message || '请稍后再试。');
         } finally {
             setSending(false);
         }
-    }, [conversationId, currentUser, inputText, loadThread, peerUserId, sending]);
+    }, [conversationId, currentUser, inputText, loadThread, peerUserId, replyTarget, sending]);
 
     const handleToggleAttachmentMenu = useCallback(() => {
         setShowAttachmentMenu((previous) => {
@@ -372,6 +447,75 @@ export default function ChatScreen() {
         }
         return t('messages.offline');
     }, [peer?.major, t]);
+
+    const messageMap = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
+
+    const messageItems = useMemo<MessageListItem[]>(() => {
+        const items: MessageListItem[] = [];
+        let previousDate: Date | null = null;
+
+        messages.forEach((message) => {
+            if (!previousDate || !isSameCalendarDay(previousDate, message.createdAt)) {
+                items.push({
+                    type: 'separator',
+                    id: `separator-${getDayKey(message.createdAt)}`,
+                    date: message.createdAt,
+                });
+            }
+
+            items.push({
+                type: 'message',
+                id: message.id,
+                message,
+            });
+            previousDate = message.createdAt;
+        });
+
+        return items;
+    }, [messages]);
+
+    const formatDaySeparator = useCallback((date: Date) => {
+        const now = new Date();
+        return date.toLocaleDateString(undefined, {
+            year: date.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            weekday: 'short',
+        });
+    }, []);
+
+    const getReplySenderLabel = useCallback((message: DirectMessage) => (
+        message.senderId === currentUser?.uid
+            ? t('messages.reply_you', '你')
+            : (message.senderName || peer?.name || t('messages.reply_other', '对方'))
+    ), [currentUser?.uid, peer?.name, t]);
+
+    const getReplyPreviewText = useCallback((message: DirectMessage) => {
+        if (isDirectImageContent(message.content)) {
+            return t('messages.quoted_image', '[图片]');
+        }
+
+        const filePayload = getDirectMessageFilePayload(message.content);
+        if (filePayload) {
+            return t('messages.quoted_file', '[文件] {{name}}', { name: filePayload.name });
+        }
+
+        const sharePayload = parsePostShareMessageContent(message.content) || parseLegacyPostShareMessage(message.content);
+        if (sharePayload) {
+            return (sharePayload.message || sharePayload.excerpt || '').trim()
+                || t('messages.share_card_preview', '【分享卡片】');
+        }
+
+        return message.content.trim();
+    }, [t]);
+
+    const handleReplyToMessage = useCallback((message: DirectMessage) => {
+        setReplyTarget(message);
+        setShowAttachmentMenu(false);
+        requestAnimationFrame(() => {
+            inputRef.current?.focus();
+        });
+    }, []);
 
     const previewImages = useMemo(() => messages
         .map((message) => ({
@@ -472,6 +616,10 @@ export default function ChatScreen() {
         const copyText = getDirectMessageCopyText(message.content);
         const actions: Array<{ text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }> = [
             {
+                text: t('messages.action_reply', '回复'),
+                onPress: () => handleReplyToMessage(message),
+            },
+            {
                 text: t('messages.action_copy', '复制'),
                 onPress: () => {
                     Clipboard.setStringAsync(copyText).then(() => {
@@ -542,7 +690,7 @@ export default function ChatScreen() {
             t('messages.action_sheet_desc', '请选择操作'),
             actions,
         );
-    }, [currentUser?.uid, handleBlockPeer, handleRecallDirectMessage, promptReportDirectMessage, t]);
+    }, [currentUser?.uid, handleBlockPeer, handleRecallDirectMessage, handleReplyToMessage, promptReportDirectMessage, t]);
 
     const renderMessage = ({ item }: { item: DirectMessage }) => {
         const isMe = item.senderId === currentUser?.uid;
@@ -552,6 +700,7 @@ export default function ChatScreen() {
         const isFileMessage = isDirectFileContent(item.content) && !!filePayload;
         const postSharePayload = parsePostShareMessageContent(item.content) || parseLegacyPostShareMessage(item.content);
         const isPostShareMessage = !!postSharePayload;
+        const replySourceMessage = item.replyToMessageId ? messageMap.get(item.replyToMessageId) : null;
         const fileExtensionLabel = filePayload ? getFileExtensionLabel(filePayload.name) : 'FILE';
         const avatarUri = isMe ? (currentUser?.avatarUrl || currentUser?.photoURL || '') : item.senderAvatar;
         const avatarLabel = isMe
@@ -577,6 +726,26 @@ export default function ChatScreen() {
                     isPostShareMessage && styles.postShareBubble,
                 ]}>
                     <Pressable onLongPress={() => openDirectMessageActions(item)}>
+                    {item.replyToMessageId && (
+                        <View style={[styles.replyQuoteCard, isMe ? styles.myReplyQuoteCard : styles.theirReplyQuoteCard]}>
+                            <Text
+                                style={[styles.replyQuoteName, isMe ? styles.myReplyQuoteName : styles.theirReplyQuoteName]}
+                                numberOfLines={1}
+                            >
+                                {replySourceMessage
+                                    ? getReplySenderLabel(replySourceMessage)
+                                    : t('messages.quoted_message_deleted', '原消息不可用')}
+                            </Text>
+                            <Text
+                                style={[styles.replyQuoteText, isMe ? styles.myReplyQuoteText : styles.theirReplyQuoteText]}
+                                numberOfLines={2}
+                            >
+                                {replySourceMessage
+                                    ? getReplyPreviewText(replySourceMessage)
+                                    : t('messages.quoted_message_deleted', '原消息不可用')}
+                            </Text>
+                        </View>
+                    )}
                     {isImageMessage ? (
                         <Pressable onPress={() => openImagePreview(item.id)} style={styles.imageMessagePressable}>
                             <CachedRemoteImage uri={imageUrl} style={styles.messageImage} />
@@ -672,6 +841,18 @@ export default function ChatScreen() {
         );
     };
 
+    const renderDaySeparator = ({ date }: { date: Date }) => (
+        <View style={styles.daySeparatorWrap}>
+            <View style={styles.daySeparatorLine} />
+            <Text style={styles.daySeparatorText}>{formatDaySeparator(date)}</Text>
+            <View style={styles.daySeparatorLine} />
+        </View>
+    );
+
+    const handleScrollToIndexFailed = useCallback(() => {
+        scheduleScrollToBottom();
+    }, [scheduleScrollToBottom]);
+
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <View style={styles.header}>
@@ -743,20 +924,22 @@ export default function ChatScreen() {
                 ) : (
                     <FlatList
                         ref={flatListRef}
-                        data={messages}
-                        renderItem={renderMessage}
+                        data={messageItems}
+                        renderItem={({ item }) => (
+                            item.type === 'separator'
+                                ? renderDaySeparator({ date: item.date })
+                                : renderMessage({ item: item.message })
+                        )}
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={[
                             styles.messageList,
                             messages.length === 0 && styles.messageListEmpty,
                         ]}
                         keyboardShouldPersistTaps="handled"
+                        onScrollToIndexFailed={handleScrollToIndexFailed}
                         onContentSizeChange={() => {
-                            if (messages.length > 0 && !hasInitialScrollCompletedRef.current) {
-                                flatListRef.current?.scrollToEnd({ animated: false });
-                                hasInitialScrollCompletedRef.current = true;
-                            } else if (messages.length > 0 && hasInitialScrollCompletedRef.current) {
-                                flatListRef.current?.scrollToEnd({ animated: false });
+                            if (messages.length > 0 && pendingAutoScrollRef.current) {
+                                scheduleScrollToBottom();
                             }
                         }}
                         ListEmptyComponent={
@@ -766,6 +949,28 @@ export default function ChatScreen() {
                             </View>
                         }
                     />
+                )}
+
+                {replyTarget && (
+                    <View style={styles.replyComposerBar}>
+                        <View style={styles.replyComposerBody}>
+                            <Text style={styles.replyComposerLabel} numberOfLines={1}>
+                                {t('messages.replying_to', '回复 {{name}}', { name: getReplySenderLabel(replyTarget) })}
+                            </Text>
+                            <Text style={styles.replyComposerPreview} numberOfLines={1}>
+                                {getReplyPreviewText(replyTarget)}
+                            </Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.replyComposerCancelButton}
+                            activeOpacity={0.7}
+                            onPress={() => setReplyTarget(null)}
+                        >
+                            <Text style={styles.replyComposerCancelText}>
+                                {t('messages.cancel_reply', '取消')}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
 
                 <View style={styles.inputWrapper}>
@@ -937,6 +1142,22 @@ const styles = StyleSheet.create({
         paddingVertical: 20,
         paddingHorizontal: 15,
     },
+    daySeparatorWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 18,
+        gap: 10,
+    },
+    daySeparatorLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#E5E7EB',
+    },
+    daySeparatorText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#94A3B8',
+    },
     messageListEmpty: {
         flexGrow: 1,
     },
@@ -1053,6 +1274,42 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 8,
     },
+    replyQuoteCard: {
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        marginBottom: 8,
+        borderLeftWidth: 3,
+    },
+    myReplyQuoteCard: {
+        backgroundColor: 'rgba(255,255,255,0.14)',
+        borderLeftColor: 'rgba(255,255,255,0.68)',
+    },
+    theirReplyQuoteCard: {
+        backgroundColor: '#F3F4F6',
+        borderLeftColor: '#CBD5E1',
+    },
+    replyQuoteName: {
+        fontSize: 12,
+        fontWeight: '700',
+        marginBottom: 3,
+    },
+    myReplyQuoteName: {
+        color: '#EFF6FF',
+    },
+    theirReplyQuoteName: {
+        color: '#334155',
+    },
+    replyQuoteText: {
+        fontSize: 12,
+        lineHeight: 17,
+    },
+    myReplyQuoteText: {
+        color: 'rgba(255,255,255,0.88)',
+    },
+    theirReplyQuoteText: {
+        color: '#64748B',
+    },
     postShareCardTitle: {
         marginLeft: 6,
         fontSize: 13,
@@ -1165,6 +1422,43 @@ const styles = StyleSheet.create({
     },
     theirTime: {
         color: '#9CA3AF',
+    },
+    replyComposerBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingTop: 10,
+        paddingBottom: 8,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+    },
+    replyComposerBody: {
+        flex: 1,
+        minWidth: 0,
+        paddingLeft: 10,
+        borderLeftWidth: 3,
+        borderLeftColor: '#1E3A8A',
+    },
+    replyComposerLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#1E3A8A',
+    },
+    replyComposerPreview: {
+        marginTop: 3,
+        fontSize: 13,
+        color: '#64748B',
+    },
+    replyComposerCancelButton: {
+        marginLeft: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+    },
+    replyComposerCancelText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#6B7280',
     },
     inputWrapper: {
         flexDirection: 'row',

@@ -16,6 +16,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const DIRECT_IMAGE_PREFIX = '[image]';
 const DIRECT_FILE_PREFIX = '[file]';
 const DIRECT_SHARE_CARD_PREVIEW = '[share_card]';
+const DIRECT_REPLY_COLUMN = 'reply_to_message_id';
+let hasDirectReplyColumn: boolean | null = null;
 
 type ConversationRow = {
     id: string;
@@ -32,6 +34,7 @@ type MessageRow = {
     sender_id: string;
     receiver_id: string;
     content: string;
+    reply_to_message_id?: string | null;
     created_at: string;
     read_at: string | null;
 };
@@ -48,6 +51,14 @@ const isMessageTableMissing = (error: any): boolean => {
     return error?.code === '42P01'
         || message.includes(CONVERSATIONS_TABLE)
         || message.includes(MESSAGES_TABLE);
+};
+
+const isDirectReplyColumnMissing = (error: any): boolean => {
+    if (error?.code !== '42703') {
+        return false;
+    }
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes(`${MESSAGES_TABLE}.${DIRECT_REPLY_COLUMN}`) || message.includes(DIRECT_REPLY_COLUMN);
 };
 
 const sortParticipantIds = (userA: string, userB: string): [string, string] =>
@@ -175,11 +186,105 @@ const mapMessage = (
         senderId: row.sender_id,
         receiverId: row.receiver_id,
         content: row.content,
+        replyToMessageId: row.reply_to_message_id ?? null,
         createdAt: new Date(row.created_at),
         readAt: row.read_at ? new Date(row.read_at) : null,
         senderName: sender?.name || 'Unknown',
         senderAvatar: sender?.avatar || '',
     };
+};
+
+const fetchConversationMessages = async (
+    conversationId: string,
+): Promise<MessageRow[]> => {
+    const shouldTryWithReplyColumn = hasDirectReplyColumn !== false;
+
+    if (shouldTryWithReplyColumn) {
+        const withReplyResult = await supabase
+            .from(MESSAGES_TABLE)
+            .select('id, conversation_id, sender_id, receiver_id, content, reply_to_message_id, created_at, read_at')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: true });
+
+        if (!withReplyResult.error) {
+            hasDirectReplyColumn = true;
+            return (withReplyResult.data || []) as MessageRow[];
+        }
+
+        if (!isDirectReplyColumnMissing(withReplyResult.error)) {
+            throw withReplyResult.error;
+        }
+
+        hasDirectReplyColumn = false;
+    }
+
+    const withoutReplyResult = await supabase
+        .from(MESSAGES_TABLE)
+        .select('id, conversation_id, sender_id, receiver_id, content, created_at, read_at')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+    if (withoutReplyResult.error) {
+        throw withoutReplyResult.error;
+    }
+
+    return ((withoutReplyResult.data || []) as MessageRow[]).map((row) => ({
+        ...row,
+        reply_to_message_id: null,
+    }));
+};
+
+const insertDirectMessageRow = async (params: {
+    conversationId: string;
+    senderId: string;
+    receiverId: string;
+    content: string;
+    replyToMessageId?: string | null;
+}): Promise<{ id: string }> => {
+    const { conversationId, senderId, receiverId, content, replyToMessageId } = params;
+    const shouldTryWithReplyColumn = hasDirectReplyColumn !== false;
+
+    if (shouldTryWithReplyColumn) {
+        const withReplyResult = await supabase
+            .from(MESSAGES_TABLE)
+            .insert({
+                conversation_id: conversationId,
+                sender_id: senderId,
+                receiver_id: receiverId,
+                content,
+                reply_to_message_id: replyToMessageId || null,
+            })
+            .select('id')
+            .single();
+
+        if (!withReplyResult.error) {
+            hasDirectReplyColumn = true;
+            return withReplyResult.data;
+        }
+
+        if (!isDirectReplyColumnMissing(withReplyResult.error)) {
+            throw withReplyResult.error;
+        }
+
+        hasDirectReplyColumn = false;
+    }
+
+    const withoutReplyResult = await supabase
+        .from(MESSAGES_TABLE)
+        .insert({
+            conversation_id: conversationId,
+            sender_id: senderId,
+            receiver_id: receiverId,
+            content,
+        })
+        .select('id')
+        .single();
+
+    if (withoutReplyResult.error) {
+        throw withoutReplyResult.error;
+    }
+
+    return withoutReplyResult.data;
 };
 
 export const fetchDirectConversations = async (
@@ -402,19 +507,16 @@ export const fetchDirectMessages = async (
         return { conversationId: null, peer, messages: [] };
     }
 
-    const { data: messageRows, error: messageError } = await supabase
-        .from(MESSAGES_TABLE)
-        .select('id, conversation_id, sender_id, receiver_id, content, created_at, read_at')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-
-    if (messageError) {
+    let messageRows: MessageRow[] = [];
+    try {
+        messageRows = await fetchConversationMessages(conversationId);
+    } catch (messageError) {
         console.error('Error fetching direct messages:', messageError);
         throw messageError;
     }
 
     const peerIds = Array.from(new Set(
-        ((messageRows || []) as MessageRow[]).flatMap((row) => [row.sender_id, row.receiver_id])
+        messageRows.flatMap((row) => [row.sender_id, row.receiver_id])
     ));
 
     if (peerIds.length === 0) {
@@ -440,7 +542,7 @@ export const fetchDirectMessages = async (
     return {
         conversationId,
         peer,
-        messages: ((messageRows || []) as MessageRow[]).map((row) => mapMessage(row, profileMap)),
+        messages: messageRows.map((row) => mapMessage(row, profileMap)),
     };
 };
 
@@ -448,6 +550,7 @@ export const sendDirectMessage = async (
     senderId: string,
     receiverId: string,
     content: string,
+    replyToMessageId?: string | null,
 ): Promise<{ conversationId: string; messageId: string }> => {
     if (!isUuid(senderId) || !isUuid(receiverId)) {
         throw new Error('Invalid direct message participants');
@@ -472,18 +575,16 @@ export const sendDirectMessage = async (
 
     const conversationId = await ensureDirectConversation(senderId, receiverId);
 
-    const { data, error } = await supabase
-        .from(MESSAGES_TABLE)
-        .insert({
-            conversation_id: conversationId,
-            sender_id: senderId,
-            receiver_id: receiverId,
+    let data: { id: string };
+    try {
+        data = await insertDirectMessageRow({
+            conversationId,
+            senderId,
+            receiverId,
             content: trimmedContent,
-        })
-        .select('id')
-        .single();
-
-    if (error) {
+            replyToMessageId,
+        });
+    } catch (error) {
         console.error('Error sending direct message:', error);
         throw error;
     }

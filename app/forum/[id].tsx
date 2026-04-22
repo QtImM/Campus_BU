@@ -179,15 +179,11 @@ export default function ForumPostDetailScreen() {
                 replyToName: replyTarget?.authorName || undefined,
             });
             setComments(prev => [...prev, c]);
-            setPost(prev => {
-                const updated = prev ? { ...prev, replyCount: prev.replyCount + 1 } : null;
-                if (updated) {
-                    DeviceEventEmitter.emit('forum_post_updated', {
-                        id: post.id,
-                        updates: { replyCount: updated.replyCount }
-                    });
-                }
-                return updated;
+            const nextReplyCount = post.replyCount + 1;
+            setPost(prev => prev ? { ...prev, replyCount: nextReplyCount } : null);
+            DeviceEventEmitter.emit('forum_post_updated', {
+                id: post.id,
+                updates: { replyCount: nextReplyCount }
             });
             setCommentText('');
             setReplyTarget(null);

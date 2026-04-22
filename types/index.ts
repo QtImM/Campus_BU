@@ -76,7 +76,7 @@ export interface Post {
 }
 
 // Forum Types (独立于发现板块)
-export type ForumCategory = 'general' | 'activity' | 'guide' | 'lost_found';
+export type ForumCategory = 'general' | 'activity' | 'guide' | 'lost_found' | 'marketplace' | 'teaming' | 'confession';
 export type ForumSort = 'latest_reply' | 'latest_post';
 
 // 帖子类型：普通用户帖 / 编辑部攻略 / 官方公告
@@ -190,6 +190,7 @@ export interface DirectMessage {
     senderId: string;
     receiverId: string;
     content: string;
+    replyToMessageId?: string | null;
     createdAt: Date;
     readAt?: Date | null;
     senderName: string;

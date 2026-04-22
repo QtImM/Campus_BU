@@ -177,6 +177,7 @@
                 "permission_message": "Please allow photo access to choose a schedule screenshot.",
                 "empty_import_title": "No import tasks generated",
                 "empty_import_message": "This screenshot did not produce any import tasks for manual review.",
+                "supported_formats": "Supported formats: JPG, PNG",
                 "import_failed_title": "Import failed",
                 "import_failed_message": "Screenshot recognition failed. Please check whether the OCR service is available."
             },
@@ -271,9 +272,17 @@
         "hours_ago": "{{count}}h ago",
         "action_sheet_title": "Message Actions",
         "action_sheet_desc": "Choose an action",
+        "action_reply": "Reply",
         "action_copy": "Copy",
         "action_report": "Report",
         "action_recall": "Recall",
+        "reply_you": "You",
+        "reply_other": "Them",
+        "replying_to": "Replying to {{name}}",
+        "cancel_reply": "Cancel",
+        "quoted_image": "[Image]",
+        "quoted_file": "[File] {{name}}",
+        "quoted_message_deleted": "Original message unavailable",
         "recall_title": "Recall Message",
         "recall_confirm": "Recall this message? Recalling will delete it.",
         "recall_action": "Recall",
@@ -392,6 +401,34 @@
             "guide": "Guide",
             "lost_found": "Lost"
         },
+        "sections": {
+            "all": "All Posts",
+            "general": "General",
+            "activity": "Campus Activities",
+            "guide": "Newbie Guide",
+            "lost_found": "Lost & Found",
+            "marketplace": "Marketplace",
+            "teaming": "Team Up",
+            "confession": "Confession"
+        },
+        "category_desc": {
+            "general": "The heart of our campus conversation. Share anything that doesn't fit elsewhere.",
+            "activity": "Share campus events, club activities and student life. Stay connected with what's happening now!",
+            "guide": "Essential survival tips for HKBU. From registration to graduation, we've got you covered.",
+            "lost_found": "The campus community coming together. Report lost items or help someone find theirs.",
+            "marketplace": "Trusted student-to-student trading. Find great deals on textbooks, electronics, and more.",
+            "teaming": "The best place to find your next project partner, teammates for sports or competitions.",
+            "confession": "A safe space to share your anonymous campus stories and express your feelings.",
+            "default": "Stay connected with your campus community and share your student life."
+        },
+        "category_ui": {
+            "intro_title": "Section Introduction",
+            "tab_all": "All",
+            "tab_latest": "Latest",
+            "tab_hot": "Hot",
+            "be_first_post": "Be the first to post",
+            "join": "Join"
+        },
         "sort": {
             "latest_reply": "Latest Reply",
             "latest_post": "Latest Post"
@@ -445,7 +482,13 @@
         },
         "row": {
             "replies": "Replies",
-            "likes": "Likes"
+            "likes": "Likes",
+            "views": "Views"
+        },
+        "badges": {
+            "hot": "Hot",
+            "featured": "Top",
+            "official": "Uni"
         }
     },
     "classroom_tab": {

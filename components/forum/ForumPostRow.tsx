@@ -102,8 +102,33 @@ export const ForumPostRow: React.FC<ForumPostRowProps> = React.memo(({ post, onP
                         )}
                     </TouchableOpacity>
 
-                    {/* Title */}
-                    <Text style={styles.title} numberOfLines={hasImage ? 2 : 3}>{post.title}</Text>
+                    {/* Title with Badges */}
+                    <Text style={styles.title} numberOfLines={hasImage ? 2 : 3}>
+                        {!!(post.contentType === 'official') && (
+                            <View style={[styles.inlineBadge, { backgroundColor: '#10B981' }]}>
+                                <Text style={styles.inlineBadgeText}>{t('forum.badges.official')}</Text>
+                            </View>
+                        )}
+                        {!!post.isPinned && (
+                            <View style={[styles.inlineBadge, { backgroundColor: '#6366F1' }]}>
+                                <Text style={styles.inlineBadgeText}>{t('forum.badges.featured')}</Text>
+                            </View>
+                        )}
+                        {!!(post.upvoteCount >= 10 || (post.viewCount && post.viewCount > 100)) && (
+                            <View style={[styles.inlineBadge, { backgroundColor: '#EF4444' }]}>
+                                <Text style={styles.inlineBadgeText}>{t('forum.badges.hot')}</Text>
+                            </View>
+                        )}
+                        <Text> </Text>
+                        {post.title}
+                    </Text>
+
+                    {/* Snippet (Small preview of content) */}
+                    {post.content && (
+                        <Text style={styles.snippet} numberOfLines={hasImage ? 1 : 2}>
+                            {post.content.replace(/\n/g, ' ')}
+                        </Text>
+                    )}
 
                     {/* Stats */}
                     <View style={styles.statsRow}>
@@ -115,6 +140,13 @@ export const ForumPostRow: React.FC<ForumPostRowProps> = React.memo(({ post, onP
                             <View style={styles.statItem}>
                                 <ThumbsUp size={14} color="#6B7280" />
                                 <Text style={styles.statText}>{post.upvoteCount} {t('forum.row.likes')}</Text>
+                            </View>
+                        )}
+                        {post.viewCount !== undefined && post.viewCount > 0 && (
+                            <View style={styles.statItem}>
+                                <Text style={styles.statText}>
+                                    {post.viewCount > 1000 ? `${(post.viewCount / 1000).toFixed(1)}k` : post.viewCount} {t('forum.row.views')}
+                                </Text>
                             </View>
                         )}
                         <Text style={styles.timeText}>{timeDisplay}</Text>
@@ -211,6 +243,28 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#9CA3AF',
         marginLeft: 'auto',
+    },
+    inlineBadge: {
+        borderRadius: 4,
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        marginRight: 4,
+        alignSelf: 'center',
+        justifyContent: 'center',
+        // Use a slight offset to align with text baseline
+        top: 1,
+    },
+    inlineBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '900',
+        lineHeight: 14,
+    },
+    snippet: {
+        fontSize: 13,
+        color: '#4B5563',
+        lineHeight: 18,
+        marginTop: 2,
     },
 
     // Right-side thumbnail
