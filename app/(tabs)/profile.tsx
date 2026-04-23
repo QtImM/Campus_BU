@@ -17,7 +17,7 @@ import { deleteAccount, getCurrentUser, getUserProfile, signOut, uploadAndUpdate
 import { getDailyDigestEnabled, setDailyDigestEnabled as updateDailyDigestEnabled } from '../../services/agent/dailyDigest';
 import { fetchAnonymousPostsByAuthor, fetchLikedPosts, fetchPostsByAuthor, togglePostLike } from '../../services/campus';
 import { getFollowCounts } from '../../services/follows';
-import { fetchNotifications, markAllAsRead, markAsRead, Notification, subscribeToNotifications } from '../../services/notifications';
+import { fetchNotifications, markAllAsRead, markAsRead, mergeNotificationsById, Notification, subscribeToNotifications } from '../../services/notifications';
 import { getPushNotificationsEnabled, setPushNotificationsEnabled as updatePushNotificationsEnabled } from '../../services/push_notifications';
 import { supabase } from '../../services/supabase';
 import { fetchUnreadModerationAlertCount } from '../../services/moderation';
@@ -239,7 +239,7 @@ export default function ProfileScreen() {
             if (user) {
                 unsubscribe = subscribeToNotifications(user.uid, (payload) => {
                     if (payload.new) {
-                        setNotifications(prev => [payload.new, ...prev]);
+                        setNotifications(prev => mergeNotificationsById(prev, [payload.new]));
                     }
                 });
             }

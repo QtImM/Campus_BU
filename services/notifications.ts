@@ -16,6 +16,25 @@ export interface NotificationCountSummary {
     hasUnread: boolean;
 }
 
+export const mergeNotificationsById = (
+    existing: Notification[],
+    incoming: Notification[],
+): Notification[] => {
+    const merged = new Map<string, Notification>();
+
+    for (const notification of existing) {
+        merged.set(notification.id, notification);
+    }
+
+    for (const notification of incoming) {
+        merged.set(notification.id, notification);
+    }
+
+    return Array.from(merged.values()).sort(
+        (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+    );
+};
+
 /**
  * Fetch all notifications for a specific user
  */
@@ -27,7 +46,7 @@ export const fetchNotifications = async (userId: string): Promise<Notification[]
         .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return mergeNotificationsById([], data || []);
 };
 
 /**
