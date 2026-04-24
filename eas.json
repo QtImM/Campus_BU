@@ -11,6 +11,12 @@
     "preview": {
       "distribution": "internal"
     },
+    "production-widget": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_ENABLE_SCHEDULE_WIDGET": "1"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "env": {

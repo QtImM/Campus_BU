@@ -378,12 +378,12 @@ const addWidgetTargetToXcodeProject = (config) =>
         addEmbedAppExtensionsBuildPhase(project, targetUuid, targetObj);
 
         const targetName = WIDGET_NAME;
-        updateBuildPropertyForTarget(project, 'PRODUCT_BUNDLE_IDENTIFIER', `"${widgetBundleId}"`, targetName);
-        updateBuildPropertyForTarget(project, 'INFOPLIST_FILE', `"${WIDGET_NAME}/Info.plist"`, targetName);
+        updateBuildPropertyForTarget(project, 'PRODUCT_BUNDLE_IDENTIFIER', widgetBundleId, targetName);
+        updateBuildPropertyForTarget(project, 'INFOPLIST_FILE', `${WIDGET_NAME}/Info.plist`, targetName);
         updateBuildPropertyForTarget(
             project,
             'CODE_SIGN_ENTITLEMENTS',
-            `"${WIDGET_NAME}/ScheduleWidget.entitlements"`,
+            `${WIDGET_NAME}/ScheduleWidget.entitlements`,
             targetName
         );
         updateBuildPropertyForTarget(project, 'SWIFT_VERSION', '5.0', targetName);

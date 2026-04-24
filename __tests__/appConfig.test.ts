@@ -21,4 +21,51 @@ describe('app config widget plugin gating', () => {
 
         expect(hasWidgetPlugin).toBe(false);
     });
+
+    it('includes the schedule widget plugin and extension metadata when explicitly enabled', () => {
+        process.env = {
+            ...originalEnv,
+            EAS_BUILD_PROFILE: 'production',
+            EXPO_ENABLE_SCHEDULE_WIDGET: '1',
+        };
+
+        const createConfig = require('../app.config').default as () => {
+            plugins?: unknown[];
+            extra?: {
+                eas?: {
+                    build?: {
+                        experimental?: {
+                            ios?: {
+                                appExtensions?: Array<{
+                                    targetName: string;
+                                    bundleIdentifier: string;
+                                    entitlements?: Record<string, unknown>;
+                                }>;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        const config = createConfig();
+        const pluginEntries = config.plugins ?? [];
+        const hasWidgetPlugin = pluginEntries.some((entry) =>
+            Array.isArray(entry) ? entry[0] === './plugins/withScheduleWidget' : entry === './plugins/withScheduleWidget'
+        );
+        const appExtensions =
+            config.extra?.eas?.build?.experimental?.ios?.appExtensions ?? [];
+
+        expect(hasWidgetPlugin).toBe(true);
+        expect(appExtensions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    targetName: 'ScheduleWidget',
+                    bundleIdentifier: 'com.budev.HKCampus.ScheduleWidget',
+                    entitlements: {
+                        'com.apple.security.application-groups': ['group.com.budev.HKCampus'],
+                    },
+                }),
+            ])
+        );
+    });
 });
