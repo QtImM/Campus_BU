@@ -2,15 +2,10 @@ import { createNotification } from '../../notifications';
 import { isDailyDigestPushSent, markDailyDigestPushSent } from './repository';
 import { DailyDigestPayload } from './types';
 
-const buildPushPreview = (summary: string): string => {
-    if (summary.length <= 80) {
-        return summary;
-    }
-    return `${summary.slice(0, 79)}…`;
-};
+const DAILY_DIGEST_PUSH_BODY = 'Open Agent to read today\'s AI news digest.';
 
 export const sendDailyDigestPush = async (userId: string, payload: DailyDigestPayload): Promise<boolean> => {
-    if (!userId) {
+    if (!userId || payload.items.length === 0) {
         return false;
     }
 
@@ -22,8 +17,9 @@ export const sendDailyDigestPush = async (userId: string, payload: DailyDigestPa
     await createNotification({
         user_id: userId,
         type: 'system',
-        title: `今日AI资讯摘要 ${payload.date}`,
-        content: buildPushPreview(payload.summary),
+        title: `AI news digest ${payload.date}`,
+        content: DAILY_DIGEST_PUSH_BODY,
+        related_id: `daily_digest:${payload.date}`,
     });
 
     await markDailyDigestPushSent(userId, payload.date);

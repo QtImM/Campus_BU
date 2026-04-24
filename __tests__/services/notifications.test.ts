@@ -2,7 +2,12 @@ jest.mock('../../services/supabase', () => ({
     supabase: {},
 }));
 
-import { mergeNotificationsById, Notification } from '../../services/notifications';
+import {
+    filterVisibleNotifications,
+    isDailyDigestNotification,
+    mergeNotificationsById,
+    Notification,
+} from '../../services/notifications';
 
 const makeNotification = (overrides: Partial<Notification> = {}): Notification => ({
     id: 'notif-1',
@@ -45,5 +50,33 @@ describe('mergeNotificationsById', () => {
         expect(mergeNotificationsById(existing, incoming)).toEqual([
             makeNotification({ id: 'notif-1', is_read: true, created_at: '2026-04-23T10:00:00.000Z' }),
         ]);
+    });
+});
+
+describe('daily digest notification visibility', () => {
+    it('identifies daily digest notification rows', () => {
+        expect(isDailyDigestNotification(makeNotification({
+            type: 'system',
+            title: 'AI news digest 2026-04-24',
+            related_id: 'daily_digest:2026-04-24',
+        }))).toBe(true);
+
+        expect(isDailyDigestNotification(makeNotification({
+            type: 'system',
+            title: 'System notice',
+            related_id: undefined,
+        }))).toBe(false);
+    });
+
+    it('hides daily digest rows from in-app notification lists', () => {
+        const visible = makeNotification({ id: 'visible-1', title: 'New Comment' });
+        const digest = makeNotification({
+            id: 'digest-1',
+            type: 'system',
+            title: 'AI news digest 2026-04-24',
+            related_id: 'daily_digest:2026-04-24',
+        });
+
+        expect(filterVisibleNotifications([digest, visible])).toEqual([visible]);
     });
 });

@@ -172,8 +172,8 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                     Array.isArray(params.digestDate) ? params.digestDate[0] : params.digestDate
                 );
                 const result = preferredDate
-                    ? await runDailyDigestJobForUser(currentUser.uid, preferredDate)
-                    : await runDailyDigestJobForUser(currentUser.uid);
+                    ? await runDailyDigestJobForUser(currentUser.uid, preferredDate, { sendPush: false })
+                    : await runDailyDigestJobForUser(currentUser.uid, undefined, { sendPush: false });
                 if (!result.ok || !result.payload || cancelled) {
                     return;
                 }
@@ -301,6 +301,7 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
             const digestResult = await runDailyDigestJobForUser(currentUser.uid, digestDate, {
                 ignoreEnabledCheck: true,
+                sendPush: false,
             });
 
             if (digestResult.ok && digestResult.payload) {
@@ -353,6 +354,7 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
             const digestResult = await runDailyDigestJobForUser(currentUser.uid, digestDate, {
                 ignoreEnabledCheck: true,
+                sendPush: false,
             });
 
             if (digestResult.ok && digestResult.payload) {

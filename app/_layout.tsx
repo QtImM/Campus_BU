@@ -4,6 +4,7 @@ import { Stack, useNavigationContainerRef, useRouter, useSegments } from 'expo-r
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-url-polyfill/auto';
 import { EULAModal } from '../components/common/EULAModal';
@@ -13,6 +14,7 @@ import { LoginPromptProvider } from '../context/LoginPromptContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import '../global.css';
 import { getUserProfile, onAuthChange, shouldSkipAuthRedirect } from '../services/auth';
+import { runScheduledDailyDigestIfDue } from '../services/agent/dailyDigest';
 import { prefetchBuildings } from '../services/buildings';
 import { prefetchLocalCourses } from '../services/courses';
 import { acceptCommunityEula, hasAcceptedCommunityEula } from '../services/moderation';
@@ -67,12 +69,17 @@ export default function RootLayout() {
     if (isExpoGo) return;
 
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { type?: string } | undefined;
+      const data = response.notification.request.content.data as { type?: string; relatedId?: string } | undefined;
       const title = String(response.notification.request.content.title || '');
       const match = title.match(/(\d{4}-\d{2}-\d{2})/);
       const digestDate = match?.[1];
+      const relatedId = data?.relatedId || '';
+      const isDailyDigestNotification =
+        relatedId.startsWith('daily_digest:')
+        || /ai news digest/i.test(title)
+        || title.includes('今日AI资讯摘要');
 
-      if (data?.type === 'system' && title.includes('今日AI资讯摘要')) {
+      if (data?.type === 'system' && isDailyDigestNotification) {
         router.push({
           pathname: '/agent/chat',
           params: digestDate ? { digestDate } : undefined,
@@ -198,6 +205,29 @@ export default function RootLayout() {
     if (!currentUser?.uid) return;
 
     void syncScheduleToWidgetForUser(currentUser.uid);
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+
+    const runDigestCheck = () => {
+      void runScheduledDailyDigestIfDue(currentUser.uid).catch((error) => {
+        console.warn('[DailyDigest] scheduled check failed:', error);
+      });
+    };
+
+    runDigestCheck();
+    const interval = setInterval(runDigestCheck, 60 * 1000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        runDigestCheck();
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
   }, [currentUser?.uid]);
 
   const handleAcceptEula = async () => {

@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { getCurrentUser } from '../services/auth';
 import { fetchDirectConversations, subscribeToDirectConversationList } from '../services/messages';
-import { fetchUnreadNotificationSummary, subscribeToNotifications } from '../services/notifications';
+import { fetchUnreadNotificationSummary, isDailyDigestNotification, subscribeToNotifications } from '../services/notifications';
 
 interface NotificationContextType {
     unreadCount: number;
@@ -60,6 +60,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
                 // Subscribe to real-time updates
                 notificationUnsubscribe = subscribeToNotifications(user.uid, (payload) => {
+                    if (payload.new && isDailyDigestNotification(payload.new)) {
+                        return;
+                    }
+
                     if (payload.eventType === 'INSERT' && payload.new && !payload.new.is_read) {
                         setHasUnread(true);
                         setUnreadCount(prev => prev + 1);

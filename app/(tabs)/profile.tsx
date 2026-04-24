@@ -17,7 +17,7 @@ import { deleteAccount, getCurrentUser, getUserProfile, signOut, uploadAndUpdate
 import { getDailyDigestEnabled, setDailyDigestEnabled as updateDailyDigestEnabled } from '../../services/agent/dailyDigest';
 import { fetchAnonymousPostsByAuthor, fetchLikedPosts, fetchPostsByAuthor, togglePostLike } from '../../services/campus';
 import { getFollowCounts } from '../../services/follows';
-import { fetchNotifications, markAllAsRead, markAsRead, mergeNotificationsById, Notification, subscribeToNotifications } from '../../services/notifications';
+import { fetchNotifications, isDailyDigestNotification, markAllAsRead, markAsRead, mergeNotificationsById, Notification, subscribeToNotifications } from '../../services/notifications';
 import { getPushNotificationsEnabled, setPushNotificationsEnabled as updatePushNotificationsEnabled } from '../../services/push_notifications';
 import { supabase } from '../../services/supabase';
 import { fetchUnreadModerationAlertCount } from '../../services/moderation';
@@ -238,7 +238,7 @@ export default function ProfileScreen() {
             const user = await getCurrentUser();
             if (user) {
                 unsubscribe = subscribeToNotifications(user.uid, (payload) => {
-                    if (payload.new) {
+                    if (payload.new && !isDailyDigestNotification(payload.new)) {
                         setNotifications(prev => mergeNotificationsById(prev, [payload.new]));
                     }
                 });
@@ -304,6 +304,7 @@ export default function ProfileScreen() {
             await markAllAsRead(userId);
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
             await refreshGlobalCount();
+            setShowNotifications(false);
         } catch (error) {
             console.error('Error marking all read:', error);
         }

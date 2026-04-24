@@ -86,6 +86,42 @@ describe('agent daily digest opt-in', () => {
         expect(mockSendPush).toHaveBeenCalledTimes(1);
     });
 
+    it('can fetch digest content without sending a push', async () => {
+        mockStorageGetItem.mockImplementation(async (key: string) => {
+            if (key === 'agent_daily_digest_enabled:user-1') return 'true';
+            return null;
+        });
+        mockFetchHtml.mockResolvedValue('<html></html>');
+        mockParseItems.mockReturnValue([
+            { title: 'Story A', url: 'https://example.com/a', lineIndex: 0, contextSnippet: 'Story A' },
+        ]);
+        mockParseSummary.mockReturnValue('Daily summary');
+
+        const result = await runDailyDigestJobForUser('user-1', new Date('2026-04-01T08:00:00Z'), {
+            sendPush: false,
+        });
+
+        expect(result.ok).toBe(true);
+        expect(mockSendPush).not.toHaveBeenCalled();
+    });
+
+    it('does not push when the source has no new digest items', async () => {
+        mockStorageGetItem.mockImplementation(async (key: string) => {
+            if (key === 'agent_daily_digest_enabled:user-1') return 'true';
+            return null;
+        });
+        mockFetchHtml.mockResolvedValue('<html></html>');
+        mockParseItems.mockReturnValue([]);
+        mockParseSummary.mockReturnValue(null);
+
+        const result = await runDailyDigestJobForUser('user-1', new Date('2026-04-01T08:00:00Z'), {
+            forceRefresh: true,
+        });
+
+        expect(result).toEqual({ ok: false, reason: 'no_new_content' });
+        expect(mockSendPush).not.toHaveBeenCalled();
+    });
+
     it('does not log the full daily digest content', async () => {
         const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 

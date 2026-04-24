@@ -19,5 +19,11 @@ export interface DigestJobResult {
     ok: boolean;
     payload?: DailyDigestPayload;
     fromCache?: boolean;
-    reason?: string;
+    reason?: 'missing_user_id' | 'disabled' | 'no_new_content' | 'job_failed';
+}
+
+export interface DailyDigestJobOptions {
+    ignoreEnabledCheck?: boolean;
+    sendPush?: boolean;
+    forceRefresh?: boolean;
 }

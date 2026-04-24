@@ -5,7 +5,7 @@ import { parseDailyDigestItems, parseDailyDigestSummaryText } from './parseSourc
 import { sendDailyDigestPush } from './push';
 import { getCachedDailyDigest, getDailyDigestEnabled, saveCachedDailyDigest } from './repository';
 import { buildDailyDigestSummary } from './summarize';
-import { DailyDigestPayload, DigestJobResult } from './types';
+import { DailyDigestJobOptions, DailyDigestPayload, DigestJobResult } from './types';
 
 const isLegacyListMessage = (message?: string): boolean =>
     Boolean(message && (
@@ -44,7 +44,7 @@ const logDailyDigestDebug = (stage: string, payload: {
 export const runDailyDigestJobForUser = async (
     userId: string,
     date: Date = new Date(),
-    options?: { ignoreEnabledCheck?: boolean }
+    options: DailyDigestJobOptions = {}
 ): Promise<DigestJobResult> => {
     if (!userId) {
         return {
@@ -64,7 +64,9 @@ export const runDailyDigestJobForUser = async (
     const dateStr = getDailyDigestDate(date);
     const cached = await getCachedDailyDigest(userId, dateStr);
 
-    if (cached && cached.items.length > 0 && hasStructuredLineRefs(cached.items) && !isLegacyListMessage(cached.message) && !isStaleCachedMessage(cached)) {
+    const shouldSendPush = options.sendPush !== false;
+
+    if (!options.forceRefresh && cached && cached.items.length > 0 && hasStructuredLineRefs(cached.items) && !isLegacyListMessage(cached.message) && !isStaleCachedMessage(cached)) {
         logDailyDigestDebug('cache_hit', {
             userId,
             date: dateStr,
@@ -72,7 +74,9 @@ export const runDailyDigestJobForUser = async (
             fromCache: true,
             items: cached.items,
         });
-        await sendDailyDigestPush(userId, cached);
+        if (shouldSendPush) {
+            await sendDailyDigestPush(userId, cached);
+        }
         return {
             ok: true,
             payload: cached,
@@ -85,6 +89,22 @@ export const runDailyDigestJobForUser = async (
         const html = await fetchDailyDigestSourceHtml(sourceUrl);
         const items = parseDailyDigestItems(html, sourceUrl);
         const extractedSummary = parseDailyDigestSummaryText(html);
+
+        if (items.length === 0) {
+            logDailyDigestDebug('no_new_content', {
+                userId,
+                date: dateStr,
+                sourceUrl,
+                fromCache: false,
+                extractedSummary,
+                items,
+            });
+            return {
+                ok: false,
+                reason: 'no_new_content',
+            };
+        }
+
         const summary = buildDailyDigestSummary(items, dateStr, extractedSummary);
         const message = composeDailyDigestMessage(summary, items);
 
@@ -108,7 +128,9 @@ export const runDailyDigestJobForUser = async (
         });
 
         await saveCachedDailyDigest(userId, payload);
-        await sendDailyDigestPush(userId, payload);
+        if (shouldSendPush) {
+            await sendDailyDigestPush(userId, payload);
+        }
 
         return {
             ok: true,
