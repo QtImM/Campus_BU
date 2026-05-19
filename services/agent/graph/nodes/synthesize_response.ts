@@ -42,20 +42,44 @@ export const synthesizeResponseNode = async (state: AgentGraphState): Promise<Ag
 
     const model = resolveModelName('fast');
     const timer = startTraceTimer();
-    const raw = await callDeepSeek(buildSynthesizerPrompt(state), { model });
-    const latencyMs = timer.getDuration();
 
-    return pushTraceWithDuration(
-        {
-            ...state,
-            finalResponse: raw,
-        },
-        'synthesize_response',
-        'llm synthesis',
-        timer.startedAt,
-        {
-            checkpoint: 'completed',
-            llmCalls: [{ model, success: true, latencyMs }],
-        }
-    );
+    try {
+        const raw = await callDeepSeek(buildSynthesizerPrompt(state), { model });
+        const latencyMs = timer.getDuration();
+
+        return pushTraceWithDuration(
+            {
+                ...state,
+                finalResponse: raw || '抱歉，我暂时无法生成回复，请稍后再试。',
+            },
+            'synthesize_response',
+            'llm synthesis',
+            timer.startedAt,
+            {
+                checkpoint: 'completed',
+                llmCalls: [{ model, success: true, latencyMs }],
+            }
+        );
+    } catch (error) {
+        const latencyMs = timer.getDuration();
+        console.error('[synthesizeResponseNode] LLM call failed:', error);
+
+        const fallbackFromEvidence = state.evidence.length > 0
+            ? `根据已有信息：${state.evidence[0].contentSnippet}`
+            : '';
+
+        return pushTraceWithDuration(
+            {
+                ...state,
+                finalResponse: fallbackFromEvidence || '抱歉，服务暂时出了点问题，请稍后再试。',
+            },
+            'synthesize_response',
+            'llm error fallback',
+            timer.startedAt,
+            {
+                checkpoint: 'completed',
+                llmCalls: [{ model, success: false, latencyMs }],
+            }
+        );
+    }
 };

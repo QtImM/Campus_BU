@@ -76,18 +76,33 @@ export const createCompiledAgentGraph = () => new StateGraph(AgentGraphAnnotatio
 
 export const createAgentGraphRuntime = (): GraphRuntime => ({
     async run(input: GraphEntryInput): Promise<GraphRunResult> {
-        const graph = createCompiledAgentGraph();
-        const result = await graph.invoke({
-            state: createInitialAgentGraphState(input),
-        });
+        try {
+            const graph = createCompiledAgentGraph();
+            const result = await graph.invoke({
+                state: createInitialAgentGraphState(input),
+            });
 
-        const finalState: AgentGraphState = result.state;
-        const response = toAgentResponse(finalState);
-        const sessionState = {
-            ...finalState.sessionState,
-            pendingAction: finalState.pendingAction,
-        };
+            const finalState: AgentGraphState = result.state;
+            const response = toAgentResponse(finalState);
+            const sessionState = {
+                ...finalState.sessionState,
+                pendingAction: finalState.pendingAction,
+            };
 
-        return { response, sessionState, finalState };
+            return { response, sessionState, finalState };
+        } catch (error) {
+            console.error('[AgentGraph] Graph execution failed:', error);
+            const fallbackState = createInitialAgentGraphState(input);
+            const errorResponse = toAgentResponse({
+                ...fallbackState,
+                finalResponse: '抱歉，校园助手遇到了一些问题，请稍后再试。',
+                errors: [`graph_runtime:${String(error)}`],
+            });
+            return {
+                response: errorResponse,
+                sessionState: input.sessionState,
+                finalState: fallbackState,
+            };
+        }
     },
 });
