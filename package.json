@@ -10,6 +10,8 @@
     "web": "expo start --web",
     "test": "jest",
     "agent:cli": "tsx scripts/agent_cli.ts",
+    "eval": "npx jest scripts/evaluate_agent.test.ts --no-coverage --testTimeout=120000",
+    "benchmark": "npx jest __tests__/services/agent/benchmark.test.ts --no-coverage --testTimeout=60000",
     "test:e2e": "%USERPROFILE%\\.maestro\\maestro\\bin\\maestro.bat test e2e/"
   },
   "dependencies": {

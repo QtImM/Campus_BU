@@ -1,0 +1,142 @@
+[
+  {
+    "id": "faq-01",
+    "query": "GPA怎么算？",
+    "expected_intent": "campus_faq",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "faq-02",
+    "query": "图书馆几点关门？",
+    "expected_intent": "campus_faq",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "faq-03",
+    "query": "tuition fee是多少？",
+    "expected_intent": "campus_faq",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "faq-04",
+    "query": "How do I connect to eduroam wifi?",
+    "expected_intent": "campus_faq",
+    "expected_decision": "answer",
+    "language": "en"
+  },
+  {
+    "id": "faq-05",
+    "query": "签证到期了怎么办？",
+    "expected_intent": "campus_faq",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "schedule-01",
+    "query": "今天有什么课？",
+    "expected_intent": "schedule_query",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "schedule-02",
+    "query": "明天的课表",
+    "expected_intent": "schedule_query",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "schedule-03",
+    "query": "What classes do I have today?",
+    "expected_intent": "schedule_query",
+    "expected_decision": "answer",
+    "language": "en"
+  },
+  {
+    "id": "community-read-01",
+    "query": "COMP3015评价怎么样？",
+    "expected_intent": "course_community_read",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "community-read-02",
+    "query": "这门课难吗？",
+    "expected_intent": "course_community_read",
+    "expected_decision": "clarify",
+    "language": "zh"
+  },
+  {
+    "id": "community-read-03",
+    "query": "COMP2006的teaming多不多？",
+    "expected_intent": "course_community_read",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "community-write-01",
+    "query": "帮我写个COMP3015的评价，5星，内容是课程内容很实用",
+    "expected_intent": "course_community_write",
+    "expected_decision": "act",
+    "language": "zh"
+  },
+  {
+    "id": "community-write-02",
+    "query": "我想组队找队友",
+    "expected_intent": "course_community_write",
+    "expected_decision": "act",
+    "language": "zh"
+  },
+  {
+    "id": "community-write-03",
+    "query": "帮我在COMP3015聊天室发一条消息",
+    "expected_intent": "course_community_write",
+    "expected_decision": "act",
+    "language": "zh"
+  },
+  {
+    "id": "building-01",
+    "query": "AAB在哪？",
+    "expected_intent": "building_query",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "building-02",
+    "query": "Where is the Science Building?",
+    "expected_intent": "building_query",
+    "expected_decision": "answer",
+    "language": "en"
+  },
+  {
+    "id": "date-01",
+    "query": "今天星期几？",
+    "expected_intent": "date_query",
+    "expected_decision": "answer",
+    "language": "zh"
+  },
+  {
+    "id": "edge-01",
+    "query": "",
+    "expected_intent": "unknown",
+    "expected_decision": "clarify",
+    "language": "zh"
+  },
+  {
+    "id": "edge-02",
+    "query": "asdfghjkl",
+    "expected_intent": "unknown",
+    "expected_decision": "clarify",
+    "language": "zh"
+  },
+  {
+    "id": "edge-03",
+    "query": "你好",
+    "expected_intent": "unknown",
+    "expected_decision": "answer",
+    "language": "zh"
+  }
+]

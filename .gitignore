@@ -60,3 +60,6 @@ backend/__pycache__/
 .windsurf/
 skills/
 skills-lock.json
+
+# benchmark history
+scripts/benchmark_history.json
