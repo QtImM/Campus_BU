@@ -10,10 +10,10 @@
 ## Release Notes
 
 - `production` profile uploads should include the schedule widget because `eas.json` sets `EXPO_ENABLE_SCHEDULE_WIDGET=1`.
-- `newArchEnabled` is temporarily set to `false` to reduce iOS native build risk while `react-native-shared-group-preferences` remains part of the widget data bridge.
+- `newArchEnabled` remains enabled because `react-native-reanimated` 4 requires the new architecture during iOS native builds.
 - `packageManager` stays pinned to `npm@10.9.2` so the committed lockfile matches the npm version used by EAS.
 
 ## Maintenance Reminder
 
 - If the next iOS production build is submitted to App Store Connect, increment both the app version and iOS build number before uploading.
-- Re-check whether the widget bridge can safely run with the new architecture before turning `newArchEnabled` back on.
+- Re-check whether the widget bridge remains stable with the new architecture, because the current dependency set requires it to stay enabled.

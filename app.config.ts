@@ -44,9 +44,8 @@ export default (): ExpoConfig => {
         icon: "./assets/images/HKCampusicon.png",
         scheme: "hkcampus",
         userInterfaceStyle: "automatic",
-        // Keep the iOS release path on the stable architecture until the
-        // shared app-group bridge is verified against the new architecture.
-        newArchEnabled: false,
+        // Reanimated 4 requires the new architecture during native iOS builds.
+        newArchEnabled: true,
         splash: {
             image: "./assets/images/HKCampusicon.png",
             resizeMode: "contain",

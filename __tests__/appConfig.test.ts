@@ -69,7 +69,7 @@ describe('app config widget plugin gating', () => {
         );
     });
 
-    it('uses the release version, disables new architecture, and keeps widget enabled for production uploads', () => {
+    it('uses the release version, enables new architecture, and keeps widget enabled for production uploads', () => {
         process.env = {
             ...originalEnv,
             EAS_BUILD_PROFILE: 'production',
@@ -92,7 +92,7 @@ describe('app config widget plugin gating', () => {
 
         expect(config.version).toBe('1.2.4');
         expect(config.ios?.buildNumber).toBe('2');
-        expect(config.newArchEnabled).toBe(false);
+        expect(config.newArchEnabled).toBe(true);
         expect(hasWidgetPlugin).toBe(true);
     });
 
