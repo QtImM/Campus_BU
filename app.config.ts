@@ -1,9 +1,13 @@
 import type { ExpoConfig } from "expo/config";
 
+const { version: appVersion } = require("./package.json");
+
 const SCHEDULE_WIDGET_PLUGIN = "./plugins/withScheduleWidget";
 const APP_GROUP = "group.com.budev.HKCampus";
 const WIDGET_TARGET_NAME = "ScheduleWidget";
 const WIDGET_BUNDLE_IDENTIFIER = "com.budev.HKCampus.ScheduleWidget";
+const IOS_BUILD_NUMBER = "2";
+const ANDROID_VERSION_CODE = 7;
 
 const isTruthy = (value: string | undefined): boolean =>
     ["1", "true", "yes", "on"].includes((value || "").trim().toLowerCase());
@@ -20,7 +24,6 @@ export default (): ExpoConfig => {
     const ocrApiUrl = (process.env.EXPO_PUBLIC_OCR_API_URL || "").trim();
     const deepseekBaseUrl = (process.env.EXPO_PUBLIC_DEEPSEEK_BASE_URL || "").trim();
     const widgetEnabled = shouldEnableScheduleWidget();
-    const buildNumber = "1";
     const appExtensions = widgetEnabled
         ? [
               {
@@ -36,12 +39,14 @@ export default (): ExpoConfig => {
     return {
         name: "HKCampus",
         slug: "HKCampus",
-        version: "1.2.3",
+        version: appVersion,
         orientation: "portrait",
         icon: "./assets/images/HKCampusicon.png",
         scheme: "hkcampus",
         userInterfaceStyle: "automatic",
-        newArchEnabled: true,
+        // Keep the iOS release path on the stable architecture until the
+        // shared app-group bridge is verified against the new architecture.
+        newArchEnabled: false,
         splash: {
             image: "./assets/images/HKCampusicon.png",
             resizeMode: "contain",
@@ -50,7 +55,7 @@ export default (): ExpoConfig => {
         ios: {
             supportsTablet: true,
             bundleIdentifier: "com.budev.HKCampus",
-            buildNumber,
+            buildNumber: IOS_BUILD_NUMBER,
             appleTeamId: "7HQ8YJC7KQ",
             infoPlist: {
                 ITSAppUsesNonExemptEncryption: false,
@@ -72,7 +77,7 @@ export default (): ExpoConfig => {
             edgeToEdgeEnabled: true,
             predictiveBackGestureEnabled: false,
             package: "com.budev.hkcampus",
-            versionCode: 6,
+            versionCode: ANDROID_VERSION_CODE,
             permissions: [
                 "android.permission.RECORD_AUDIO",
                 "android.permission.USE_BIOMETRIC",

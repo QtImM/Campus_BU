@@ -69,6 +69,33 @@ describe('app config widget plugin gating', () => {
         );
     });
 
+    it('uses the release version, disables new architecture, and keeps widget enabled for production uploads', () => {
+        process.env = {
+            ...originalEnv,
+            EAS_BUILD_PROFILE: 'production',
+            EXPO_ENABLE_SCHEDULE_WIDGET: '1',
+        };
+
+        const createConfig = require('../app.config').default as () => {
+            version?: string;
+            newArchEnabled?: boolean;
+            ios?: {
+                buildNumber?: string;
+            };
+            plugins?: unknown[];
+        };
+        const config = createConfig();
+        const pluginEntries = config.plugins ?? [];
+        const hasWidgetPlugin = pluginEntries.some((entry) =>
+            Array.isArray(entry) ? entry[0] === './plugins/withScheduleWidget' : entry === './plugins/withScheduleWidget'
+        );
+
+        expect(config.version).toBe('1.2.4');
+        expect(config.ios?.buildNumber).toBe('2');
+        expect(config.newArchEnabled).toBe(false);
+        expect(hasWidgetPlugin).toBe(true);
+    });
+
     it('uses the HKCampus brand asset for the home screen icons', () => {
         process.env = {
             ...originalEnv,
