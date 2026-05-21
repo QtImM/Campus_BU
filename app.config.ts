@@ -6,6 +6,7 @@ const SCHEDULE_WIDGET_PLUGIN = "./plugins/withScheduleWidget";
 const APP_GROUP = "group.com.budev.HKCampus";
 const WIDGET_TARGET_NAME = "ScheduleWidget";
 const WIDGET_BUNDLE_IDENTIFIER = "com.budev.HKCampus.ScheduleWidget";
+const SUPABASE_PROJECT_HOST = "fcbsekidlijtidqzkddx.supabase.co";
 const isTruthy = (value: string | undefined): boolean =>
     ["1", "true", "yes", "on"].includes((value || "").trim().toLowerCase());
 
@@ -56,6 +57,17 @@ export default (): ExpoConfig => {
             appleTeamId: "7HQ8YJC7KQ",
             infoPlist: {
                 ITSAppUsesNonExemptEncryption: false,
+                NSAppTransportSecurity: {
+                    NSAllowsArbitraryLoads: true,
+                    NSExceptionDomains: {
+                        [SUPABASE_PROJECT_HOST]: {
+                            NSIncludesSubdomains: true,
+                            NSExceptionAllowsInsecureHTTPLoads: true,
+                            NSExceptionMinimumTLSVersion: "TLSv1.0",
+                            NSExceptionRequiresForwardSecrecy: false,
+                        },
+                    },
+                },
                 NSPhotoLibraryUsageDescription:
                     "HKCampus accesses your photo library so you can choose images for your avatar, posts, messages, and schedule import.",
                 NSCameraUsageDescription:
@@ -120,6 +132,13 @@ export default (): ExpoConfig => {
         owner: "timchindev",
         experiments: {
             typedRoutes: true,
+            inlineModules: {
+                watchedDirectories: ["app"],
+            },
+        } as ExpoConfig["experiments"] & {
+            inlineModules: {
+                watchedDirectories: string[];
+            };
         },
         extra: {
             router: {},
