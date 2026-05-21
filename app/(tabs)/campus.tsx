@@ -104,6 +104,18 @@ export default function CampusScreen() {
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [sortOrder, setSortOrder] = useState<'latest' | 'top'>('latest');
 
+  const resolveCurrentUserSafely = useCallback(async () => {
+    try {
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      return user;
+    } catch (error) {
+      console.warn('[campus] failed to resolve current user, continuing as guest:', error);
+      setCurrentUser(null);
+      return null;
+    }
+  }, []);
+
   const scrollToTab = (tab: MainTab) => {
     pagerRef.current?.scrollTo({ x: tab === 'discover' ? 0 : SCREEN_W, animated: true });
     setMainTab(tab);
@@ -117,8 +129,7 @@ export default function CampusScreen() {
   const loadPosts = useCallback(async (isSilent = false, p = 0) => {
     try {
       if (!isSilent) setLoading(true);
-      const user = await getCurrentUser();
-      setCurrentUser(user);
+      const user = await resolveCurrentUserSafely();
       const data = await fetchPosts('All', user?.uid, p, POSTS_PAGE_SIZE);
       const hiddenIds = await getHiddenPostIds();
       const filtered = filterHiddenPosts(data, hiddenIds);
@@ -127,12 +138,12 @@ export default function CampusScreen() {
       setPostsPage(p);
       setHasMorePosts(data.length >= POSTS_PAGE_SIZE);
     } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
-  }, []);
+  }, [resolveCurrentUserSafely]);
 
   const loadForumPosts = async (isRefresh = false, p = 0) => {
     try {
       if (isRefresh) setForumRefreshing(true);
-      const user = await getCurrentUser();
+      const user = await resolveCurrentUserSafely();
       const data = await fetchForumPosts('all', 'recommended', user?.uid, p, FORUM_PAGE_SIZE);
       const hiddenIds = await getHiddenPostIds();
       const filtered = filterHiddenPosts(data, hiddenIds);

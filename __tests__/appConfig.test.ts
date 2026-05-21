@@ -90,8 +90,8 @@ describe('app config widget plugin gating', () => {
             Array.isArray(entry) ? entry[0] === './plugins/withScheduleWidget' : entry === './plugins/withScheduleWidget'
         );
 
-        expect(config.version).toBe('1.2.4');
-        expect(config.ios?.buildNumber).toBe('2');
+        expect(config.version).toBe('1.2.7');
+        expect(config.ios?.buildNumber).toBe('5');
         expect(config.newArchEnabled).toBe(true);
         expect(hasWidgetPlugin).toBe(true);
     });

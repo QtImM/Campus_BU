@@ -3,6 +3,7 @@ import 'fast-text-encoding';
 import { TextDecoder, TextEncoder } from 'fast-text-encoding';
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
+import { Platform } from 'react-native';
 
 // Silence i18next promotional info logs in development output.
 const originalConsoleInfo = console.info;
@@ -35,12 +36,12 @@ if (typeof AbortSignal !== 'undefined' && !AbortSignal.prototype.throwIfAborted)
 
 // polyfill process and location for LangChain/LangGraph
 if (typeof process === 'undefined') {
-    global.process = { env: {}, argv: [], version: '', platform: 'android', arch: 'arm64' };
+    global.process = { env: {}, argv: [], version: '', platform: Platform.OS, arch: 'arm64' };
 } else {
     if (!process.env) process.env = {};
     if (!process.argv) process.argv = [];
     if (!process.version) process.version = '';
-    if (!process.platform) process.platform = 'android';
+    if (!process.platform) process.platform = Platform.OS;
     if (!process.arch) process.arch = 'arm64';
 }
 
@@ -63,4 +64,3 @@ if (typeof window !== 'undefined' && !window.location) {
 
 // Load expo-router
 import 'expo-router/entry';
-

@@ -5,7 +5,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import 'react-native-url-polyfill/auto';
 import { EULAModal } from '../components/common/EULAModal';
 import { StartupAnimation } from '../components/common/StartupAnimation';
 import { CourseActivityProvider } from '../context/CourseActivityContext';

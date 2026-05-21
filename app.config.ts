@@ -6,7 +6,8 @@ const SCHEDULE_WIDGET_PLUGIN = "./plugins/withScheduleWidget";
 const APP_GROUP = "group.com.budev.HKCampus";
 const WIDGET_TARGET_NAME = "ScheduleWidget";
 const WIDGET_BUNDLE_IDENTIFIER = "com.budev.HKCampus.ScheduleWidget";
-const IOS_BUILD_NUMBER = "2";
+const SUPABASE_PROJECT_HOST = "fcbsekidlijtidqzkddx.supabase.co";
+const IOS_BUILD_NUMBER = "5";
 const ANDROID_VERSION_CODE = 7;
 
 const isTruthy = (value: string | undefined): boolean =>
@@ -44,7 +45,7 @@ export default (): ExpoConfig => {
         icon: "./assets/images/HKCampusicon.png",
         scheme: "hkcampus",
         userInterfaceStyle: "automatic",
-        // Reanimated 4 requires the new architecture during native iOS builds.
+        // Reanimated 4 on Expo SDK 54 requires the New Architecture for iOS builds.
         newArchEnabled: true,
         splash: {
             image: "./assets/images/HKCampusicon.png",
@@ -58,6 +59,17 @@ export default (): ExpoConfig => {
             appleTeamId: "7HQ8YJC7KQ",
             infoPlist: {
                 ITSAppUsesNonExemptEncryption: false,
+                NSAppTransportSecurity: {
+                    NSAllowsArbitraryLoads: true,
+                    NSExceptionDomains: {
+                        [SUPABASE_PROJECT_HOST]: {
+                            NSIncludesSubdomains: true,
+                            NSExceptionAllowsInsecureHTTPLoads: true,
+                            NSExceptionMinimumTLSVersion: "TLSv1.0",
+                            NSExceptionRequiresForwardSecrecy: false,
+                        },
+                    },
+                },
                 NSPhotoLibraryUsageDescription:
                     "HKCampus accesses your photo library so you can choose images for your avatar, posts, messages, and schedule import.",
                 NSCameraUsageDescription:

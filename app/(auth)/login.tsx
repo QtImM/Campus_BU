@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { signIn } from '../../services/auth';
+import { runSupabaseDiagnostics, type SupabaseDiagnosticItem } from '../../services/supabaseDiagnostics';
 import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../constants/authOptions';
 import { getAgreementGuardResult } from '../../services/authLegalAgreement';
 import { changeLanguage } from '../i18n/i18n';
@@ -20,6 +21,10 @@ export default function LoginScreen() {
     const [showDomainPicker, setShowDomainPicker] = useState(false);
     const [showLangPicker, setShowLangPicker] = useState(false);
     const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+    const [titleTapCount, setTitleTapCount] = useState(0);
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
+    const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+    const [diagnosticResults, setDiagnosticResults] = useState<SupabaseDiagnosticItem[]>([]);
 
     const ensureAgreementAccepted = (action: 'login' | 'send_otp' | 'register') => {
         const result = getAgreementGuardResult(hasAcceptedTerms, action);
@@ -36,6 +41,27 @@ export default function LoginScreen() {
     const handleLanguageChange = async (lang: string) => {
         await changeLanguage(lang);
         setShowLangPicker(false);
+    };
+
+    const handleTitleTap = () => {
+        const nextCount = titleTapCount + 1;
+        if (nextCount >= 5) {
+            setTitleTapCount(0);
+            setShowDiagnostics(true);
+            return;
+        }
+
+        setTitleTapCount(nextCount);
+    };
+
+    const handleRunDiagnostics = async () => {
+        setDiagnosticLoading(true);
+        try {
+            const results = await runSupabaseDiagnostics();
+            setDiagnosticResults(results);
+        } finally {
+            setDiagnosticLoading(false);
+        }
     };
 
     const handlePasswordLogin = async () => {
@@ -138,7 +164,9 @@ export default function LoginScreen() {
                     keyboardShouldPersistTaps="handled"
                 >
                     <View style={styles.header}>
-                    <Text style={styles.title}>HKCampus</Text>
+                    <TouchableOpacity activeOpacity={0.9} onPress={handleTitleTap}>
+                        <Text style={styles.title}>HKCampus</Text>
+                    </TouchableOpacity>
                     <Text style={styles.subtitle}>{t('auth.subtitle', 'Connect with your campus vibe')}</Text>
                     </View>
 
@@ -320,6 +348,51 @@ export default function LoginScreen() {
                         />
                     </View>
                 </TouchableOpacity>
+            </Modal>
+
+            <Modal
+                visible={showDiagnostics}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowDiagnostics(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.diagnosticModalContent}>
+                        <View style={styles.diagnosticHeaderRow}>
+                            <Text style={styles.modalTitle}>Supabase Diagnostics</Text>
+                            <TouchableOpacity onPress={() => setShowDiagnostics(false)}>
+                                <Text style={styles.closeText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={styles.diagnosticHint}>
+                            Tap "Run Check" in TestFlight and screenshot the results.
+                        </Text>
+                        <TouchableOpacity
+                            style={[styles.button, diagnosticLoading && styles.buttonDisabled]}
+                            onPress={handleRunDiagnostics}
+                            disabled={diagnosticLoading}
+                        >
+                            {diagnosticLoading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.buttonText}>Run Check</Text>
+                            )}
+                        </TouchableOpacity>
+                        <ScrollView style={styles.diagnosticResults}>
+                            {diagnosticResults.map((item) => (
+                                <View key={item.label} style={styles.diagnosticCard}>
+                                    <Text style={styles.diagnosticLabel}>
+                                        {item.ok ? 'OK' : 'FAIL'} · {item.label}
+                                    </Text>
+                                    <Text style={styles.diagnosticDetail}>{item.detail}</Text>
+                                </View>
+                            ))}
+                            {diagnosticResults.length === 0 && (
+                                <Text style={styles.diagnosticEmpty}>No results yet.</Text>
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
             </Modal>
         </KeyboardAvoidingView>
     );
@@ -562,6 +635,11 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#111827',
     },
+    closeText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1E3A8A',
+    },
     pickerItem: {
         padding: 20,
         borderBottomWidth: 1,
@@ -575,6 +653,51 @@ const styles = StyleSheet.create({
     pickerItemTextActive: {
         color: '#1E3A8A',
         fontWeight: 'bold',
+    },
+    diagnosticModalContent: {
+        backgroundColor: '#fff',
+        marginTop: 120,
+        marginHorizontal: 16,
+        borderRadius: 20,
+        padding: 20,
+        maxHeight: '70%',
+    },
+    diagnosticHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    diagnosticHint: {
+        fontSize: 13,
+        color: '#6B7280',
+        marginBottom: 16,
+    },
+    diagnosticResults: {
+        marginTop: 16,
+    },
+    diagnosticCard: {
+        backgroundColor: '#F9FAFB',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 10,
+    },
+    diagnosticLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#111827',
+        marginBottom: 6,
+    },
+    diagnosticDetail: {
+        fontSize: 12,
+        lineHeight: 18,
+        color: '#4B5563',
+    },
+    diagnosticEmpty: {
+        fontSize: 13,
+        color: '#6B7280',
+        textAlign: 'center',
+        paddingVertical: 16,
     },
     guestButton: {
         marginTop: 24,
