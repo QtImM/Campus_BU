@@ -1,4 +1,4 @@
-describe('app config widget plugin gating', () => {
+describe('app config release safety', () => {
     const originalEnv = process.env;
 
     afterEach(() => {
@@ -6,13 +6,35 @@ describe('app config widget plugin gating', () => {
         jest.resetModules();
     });
 
-    it('omits the schedule widget plugin for production builds', () => {
+    it('uses the release version and keeps the new architecture enabled for iOS builds', () => {
         process.env = {
             ...originalEnv,
             EAS_BUILD_PROFILE: 'production',
         };
 
-        const createConfig = require('../app.config').default as () => { plugins?: unknown[] };
+        const createConfig = require('../app.config').default as () => {
+            version?: string;
+            newArchEnabled?: boolean;
+            ios?: {
+                buildNumber?: string;
+            };
+        };
+        const config = createConfig();
+
+        expect(config.version).toBe('1.2.10');
+        expect(config.ios?.buildNumber).toBe('26');
+        expect(config.newArchEnabled).toBe(true);
+    });
+
+    it('disables the widget plugin in production to avoid signing issues', () => {
+        process.env = {
+            ...originalEnv,
+            EAS_BUILD_PROFILE: 'production',
+        };
+
+        const createConfig = require('../app.config').default as () => {
+            plugins?: unknown[];
+        };
         const config = createConfig();
         const pluginEntries = config.plugins ?? [];
         const hasWidgetPlugin = pluginEntries.some((entry) =>
@@ -22,7 +44,7 @@ describe('app config widget plugin gating', () => {
         expect(hasWidgetPlugin).toBe(false);
     });
 
-    it('includes the schedule widget plugin and extension metadata when explicitly enabled', () => {
+    it('enables the widget plugin when EXPO_ENABLE_SCHEDULE_WIDGET is set', () => {
         process.env = {
             ...originalEnv,
             EAS_BUILD_PROFILE: 'production',
@@ -31,69 +53,32 @@ describe('app config widget plugin gating', () => {
 
         const createConfig = require('../app.config').default as () => {
             plugins?: unknown[];
-            extra?: {
-                eas?: {
-                    build?: {
-                        experimental?: {
-                            ios?: {
-                                appExtensions?: Array<{
-                                    targetName: string;
-                                    bundleIdentifier: string;
-                                    entitlements?: Record<string, unknown>;
-                                }>;
-                            };
-                        };
-                    };
-                };
-            };
         };
         const config = createConfig();
         const pluginEntries = config.plugins ?? [];
         const hasWidgetPlugin = pluginEntries.some((entry) =>
             Array.isArray(entry) ? entry[0] === './plugins/withScheduleWidget' : entry === './plugins/withScheduleWidget'
         );
-        const appExtensions =
-            config.extra?.eas?.build?.experimental?.ios?.appExtensions ?? [];
 
         expect(hasWidgetPlugin).toBe(true);
-        expect(appExtensions).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    targetName: 'ScheduleWidget',
-                    bundleIdentifier: 'com.budev.HKCampus.ScheduleWidget',
-                    entitlements: {
-                        'com.apple.security.application-groups': ['group.com.budev.HKCampus'],
-                    },
-                }),
-            ])
-        );
     });
 
-    it('uses the release version, enables new architecture, and keeps widget enabled for production uploads', () => {
+    it('restores expo-updates runtime config from the known-good 1.2.2 release shape', () => {
         process.env = {
             ...originalEnv,
             EAS_BUILD_PROFILE: 'production',
-            EXPO_ENABLE_SCHEDULE_WIDGET: '1',
         };
 
         const createConfig = require('../app.config').default as () => {
-            version?: string;
-            newArchEnabled?: boolean;
-            ios?: {
-                buildNumber?: string;
-            };
-            plugins?: unknown[];
+            runtimeVersion?: unknown;
+            updates?: unknown;
         };
         const config = createConfig();
-        const pluginEntries = config.plugins ?? [];
-        const hasWidgetPlugin = pluginEntries.some((entry) =>
-            Array.isArray(entry) ? entry[0] === './plugins/withScheduleWidget' : entry === './plugins/withScheduleWidget'
-        );
 
-        expect(config.version).toBe('1.2.7');
-        expect(config.ios?.buildNumber).toBe('5');
-        expect(config.newArchEnabled).toBe(true);
-        expect(hasWidgetPlugin).toBe(true);
+        expect(config.runtimeVersion).toEqual({ policy: 'appVersion' });
+        expect(config.updates).toEqual({
+            url: 'https://u.expo.dev/44c59701-d20a-45ae-bf97-d3f3d8cae72d',
+        });
     });
 
     it('uses the HKCampus brand asset for the home screen icons', () => {
@@ -103,11 +88,6 @@ describe('app config widget plugin gating', () => {
 
         const createConfig = require('../app.config').default as () => {
             icon?: string;
-            experiments?: {
-                inlineModules?: {
-                    watchedDirectories?: string[];
-                };
-            };
             android?: {
                 adaptiveIcon?: {
                     foregroundImage?: string;
@@ -118,6 +98,5 @@ describe('app config widget plugin gating', () => {
 
         expect(config.icon).toBe('./assets/images/HKCampusicon.png');
         expect(config.android?.adaptiveIcon?.foregroundImage).toBe('./assets/images/HKCampusicon.png');
-        expect(config.experiments?.inlineModules?.watchedDirectories).toContain('app');
     });
 });

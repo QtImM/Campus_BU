@@ -7,8 +7,6 @@ const APP_GROUP = "group.com.budev.HKCampus";
 const WIDGET_TARGET_NAME = "ScheduleWidget";
 const WIDGET_BUNDLE_IDENTIFIER = "com.budev.HKCampus.ScheduleWidget";
 const SUPABASE_PROJECT_HOST = "fcbsekidlijtidqzkddx.supabase.co";
-const IOS_BUILD_NUMBER = "5";
-const ANDROID_VERSION_CODE = 7;
 
 const isTruthy = (value: string | undefined): boolean =>
     ["1", "true", "yes", "on"].includes((value || "").trim().toLowerCase());
@@ -25,6 +23,7 @@ export default (): ExpoConfig => {
     const ocrApiUrl = (process.env.EXPO_PUBLIC_OCR_API_URL || "").trim();
     const deepseekBaseUrl = (process.env.EXPO_PUBLIC_DEEPSEEK_BASE_URL || "").trim();
     const widgetEnabled = shouldEnableScheduleWidget();
+    const buildNumber = "26";
     const appExtensions = widgetEnabled
         ? [
               {
@@ -55,7 +54,7 @@ export default (): ExpoConfig => {
         ios: {
             supportsTablet: true,
             bundleIdentifier: "com.budev.HKCampus",
-            buildNumber: IOS_BUILD_NUMBER,
+            buildNumber,
             appleTeamId: "7HQ8YJC7KQ",
             infoPlist: {
                 ITSAppUsesNonExemptEncryption: false,
@@ -88,7 +87,7 @@ export default (): ExpoConfig => {
             edgeToEdgeEnabled: true,
             predictiveBackGestureEnabled: false,
             package: "com.budev.hkcampus",
-            versionCode: ANDROID_VERSION_CODE,
+            versionCode: 7,
             permissions: [
                 "android.permission.RECORD_AUDIO",
                 "android.permission.USE_BIOMETRIC",

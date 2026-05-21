@@ -402,6 +402,10 @@ const addWidgetTargetToXcodeProject = (config) =>
             project.addTargetDependency(mainTarget.uuid, [targetUuid]);
         }
 
+        // Use automatic signing for the widget target so Xcode/EAS can
+        // generate provisioning profiles without manual credential setup.
+        updateBuildPropertyForTarget(project, 'CODE_SIGN_STYLE', 'Automatic', targetName);
+
         if (nextConfig.ios?.appleTeamId) {
             updateBuildPropertyForTarget(
                 project,

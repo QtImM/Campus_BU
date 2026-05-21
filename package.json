@@ -1,7 +1,7 @@
 {
   "name": "hkcampus",
   "main": "./index.js",
-  "version": "1.2.7",
+  "version": "1.2.10",
   "scripts": {
     "start": "expo start --offline",
     "start:online": "expo start",
@@ -87,13 +87,7 @@
     "typescript": "~5.9.2"
   },
   "expo": {
-    "doctor": {
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "react-native-shared-group-preferences"
-        ]
-      }
-    }
+    "doctor": {}
   },
   "private": true,
   "packageManager": "npm@10.9.2"
