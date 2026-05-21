@@ -3,10 +3,10 @@ import { Check, ChevronDown, Eye, EyeOff, Globe } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
-import { signIn } from '../../services/auth';
-import { runSupabaseDiagnostics, type SupabaseDiagnosticItem } from '../../services/supabaseDiagnostics';
 import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../constants/authOptions';
+import { signIn } from '../../services/auth';
 import { getAgreementGuardResult } from '../../services/authLegalAgreement';
+import { runSupabaseDiagnostics, type SupabaseDiagnosticItem } from '../../services/supabaseDiagnostics';
 import { changeLanguage } from '../i18n/i18n';
 
 export default function LoginScreen() {
@@ -18,6 +18,7 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
     const [showDomainPicker, setShowDomainPicker] = useState(false);
     const [showLangPicker, setShowLangPicker] = useState(false);
     const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
@@ -83,28 +84,22 @@ export default function LoginScreen() {
         const fullEmail = emailSuffix === 'other' ? prefix.toLowerCase() : (prefix + emailSuffix).toLowerCase();
 
         setLoading(true);
+        setErrorMessage('');
         try {
             const user = await signIn(fullEmail, password);
             if (user) {
                 router.replace('/(tabs)/campus');
             }
         } catch (error: any) {
-            const isInvalidCredentials = error.message === 'Invalid login credentials' || error.status === 400 || error.status === 422;
+            const msg = error?.message || '';
+            const isInvalidCredentials = msg === 'Invalid login credentials' || error?.status === 400 || error?.status === 422;
 
             if (isInvalidCredentials) {
-                Alert.alert(
-                    t('common.error', 'Error'),
-                    t('auth.invalid_credentials', 'Invalid email or password. Please try again or register if you do not have an account.'),
-                    [
-                        { text: t('common.cancel'), style: 'cancel' },
-                        {
-                            text: t('auth.register_title'),
-                            onPress: () => router.push('/(auth)/register')
-                        }
-                    ]
-                );
+                setErrorMessage(t('auth.invalid_credentials', 'Invalid email or password. Please try again or register if you do not have an account.'));
+            } else if (/network request failed|failed to fetch|load failed/i.test(msg)) {
+                setErrorMessage(t('auth.network_error', 'Network error. Please check your internet connection and try again.'));
             } else {
-                Alert.alert(t('common.error', 'Error'), error.message || t('auth.login_failed', 'Login failed'));
+                setErrorMessage(msg || t('auth.login_failed', 'Login failed'));
             }
         } finally {
             setLoading(false);
@@ -164,140 +159,146 @@ export default function LoginScreen() {
                     keyboardShouldPersistTaps="handled"
                 >
                     <View style={styles.header}>
-                    <TouchableOpacity activeOpacity={0.9} onPress={handleTitleTap}>
-                        <Text style={styles.title}>HKCampus</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.subtitle}>{t('auth.subtitle', 'Connect with your campus vibe')}</Text>
+                        <TouchableOpacity activeOpacity={0.9} onPress={handleTitleTap}>
+                            <Text style={styles.title}>HKCampus</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.subtitle}>{t('auth.subtitle', 'Connect with your campus vibe')}</Text>
                     </View>
 
                     <View style={styles.form}>
-                    <Text style={styles.label}>{t('auth.email_label')}</Text>
+                        <Text style={styles.label}>{t('auth.email_label')}</Text>
 
-                    {emailSuffix === 'other' ? (
-                        <View style={[styles.inputContainer, styles.fullEmailContainer]}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="example@email.com"
-                                placeholderTextColor="#9CA3AF"
-                                value={emailPrefix}
-                                onChangeText={setEmailPrefix}
-                                autoCapitalize="none"
-                                keyboardType="email-address"
-                            />
-                            <TouchableOpacity
-                                style={styles.domainReset}
-                                onPress={() => setEmailSuffix('@life.hkbu.edu.hk')}
-                            >
-                                <ChevronDown size={16} color="#4B5563" />
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <View style={styles.emailRow}>
-                            <View style={[styles.inputContainer, { flex: 2 }]}>
+                        {emailSuffix === 'other' ? (
+                            <View style={[styles.inputContainer, styles.fullEmailContainer]}>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder={emailSuffix === '@life.hkbu.edu.hk' ? t('auth.email_placeholder') : t('auth.email_prefix_placeholder', 'example')}
+                                    placeholder="example@email.com"
                                     placeholderTextColor="#9CA3AF"
                                     value={emailPrefix}
                                     onChangeText={setEmailPrefix}
                                     autoCapitalize="none"
+                                    keyboardType="email-address"
                                 />
+                                <TouchableOpacity
+                                    style={styles.domainReset}
+                                    onPress={() => setEmailSuffix('@life.hkbu.edu.hk')}
+                                >
+                                    <ChevronDown size={16} color="#4B5563" />
+                                </TouchableOpacity>
                             </View>
-
-                            <TouchableOpacity
-                                style={styles.domainSelector}
-                                onPress={() => setShowDomainPicker(true)}
-                            >
-                                <Text style={styles.domainSelectorText}>{emailSuffix}</Text>
-                                <ChevronDown size={16} color="#4B5563" />
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    <Text style={styles.label}>{t('auth.password_label')}</Text>
-                    <View style={styles.passwordContainer}>
-                        <TextInput
-                            style={styles.passwordInput}
-                            placeholder={t('auth.password_placeholder')}
-                            placeholderTextColor="#9CA3AF"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry={!showPassword}
-                        />
-                        <TouchableOpacity
-                            onPress={() => setShowPassword(!showPassword)}
-                            style={styles.eyeIcon}
-                        >
-                            {showPassword ? <EyeOff size={20} color="#6B7280" /> : <Eye size={20} color="#6B7280" />}
-                        </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity
-                        style={[styles.button, loading && styles.buttonDisabled]}
-                        onPress={handlePasswordLogin}
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text style={styles.buttonText}>{t('auth.login_btn')}</Text>
+                            <View style={styles.emailRow}>
+                                <View style={[styles.inputContainer, { flex: 2 }]}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder={emailSuffix === '@life.hkbu.edu.hk' ? t('auth.email_placeholder') : t('auth.email_prefix_placeholder', 'example')}
+                                        placeholderTextColor="#9CA3AF"
+                                        value={emailPrefix}
+                                        onChangeText={setEmailPrefix}
+                                        autoCapitalize="none"
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={styles.domainSelector}
+                                    onPress={() => setShowDomainPicker(true)}
+                                >
+                                    <Text style={styles.domainSelectorText}>{emailSuffix}</Text>
+                                    <ChevronDown size={16} color="#4B5563" />
+                                </TouchableOpacity>
+                            </View>
                         )}
-                    </TouchableOpacity>
 
-                    <View style={styles.footerLinkRow}>
-                        <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
-                            <Text style={styles.forgotLink}>{t('auth.forgot_password_link', 'Forgot Password?')}</Text>
-                        </TouchableOpacity>
-
-                        <View style={styles.divider} />
-
-                        <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-                            <Text style={styles.registerLink}>{t('auth.go_to_register')}</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity
-                        style={styles.guestButton}
-                        onPress={() => {
-                            if (!ensureAgreementAccepted('login')) {
-                                return;
-                            }
-                            router.replace('/(tabs)/campus');
-                        }}
-                    >
-                        <Text style={styles.guestButtonText}>{t('auth.guest_login')}</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.agreementCard}>
-                        <Text style={styles.agreementNotice}>{t('auth.age_gate_notice', 'This app is intended for users 18+.')}</Text>
-                        <View style={[styles.agreementLinksRow, isEnglish && styles.agreementLinksRowEnglish]}>
-                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
-                                <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.user_agreement', 'Terms')}</Text>
-                            </TouchableOpacity>
-                            <Text style={[styles.agreementSeparator, isEnglish && styles.agreementSeparatorEnglish]}>{t('auth.and', ' / ')}</Text>
-                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
-                                <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
-                            </TouchableOpacity>
-                            <Text style={[styles.agreementSeparator, isEnglish && styles.agreementSeparatorEnglish]}>{t('auth.and', ' / ')}</Text>
-                            <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
-                                <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
+                        <Text style={styles.label}>{t('auth.password_label')}</Text>
+                        <View style={styles.passwordContainer}>
+                            <TextInput
+                                style={styles.passwordInput}
+                                placeholder={t('auth.password_placeholder')}
+                                placeholderTextColor="#9CA3AF"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry={!showPassword}
+                            />
+                            <TouchableOpacity
+                                onPress={() => setShowPassword(!showPassword)}
+                                style={styles.eyeIcon}
+                            >
+                                {showPassword ? <EyeOff size={20} color="#6B7280" /> : <Eye size={20} color="#6B7280" />}
                             </TouchableOpacity>
                         </View>
-                        <TouchableOpacity
-                            testID="auth-agreement-checkbox-login"
-                            style={styles.checkboxRow}
-                            activeOpacity={0.85}
-                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                            onPress={() => setHasAcceptedTerms((value) => !value)}
-                        >
-                            <View style={[styles.checkbox, hasAcceptedTerms && styles.checkboxChecked]}>
-                                {hasAcceptedTerms && <Check size={14} color="#FFFFFF" />}
+
+                        {errorMessage !== '' && (
+                            <View style={styles.errorBanner}>
+                                <Text style={styles.errorBannerText}>{errorMessage}</Text>
                             </View>
-                            <Text style={styles.checkboxText}>
-                                {t('auth.agreement_checkbox_prefix', 'I have read and agree to the terms, privacy policy, and community safety rules.')}
-                            </Text>
+                        )}
+
+                        <TouchableOpacity
+                            style={[styles.button, loading && styles.buttonDisabled]}
+                            onPress={handlePasswordLogin}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.buttonText}>{t('auth.login_btn')}</Text>
+                            )}
                         </TouchableOpacity>
-                    </View>
+
+                        <View style={styles.footerLinkRow}>
+                            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+                                <Text style={styles.forgotLink}>{t('auth.forgot_password_link', 'Forgot Password?')}</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.divider} />
+
+                            <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+                                <Text style={styles.registerLink}>{t('auth.go_to_register')}</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.guestButton}
+                            onPress={() => {
+                                if (!ensureAgreementAccepted('login')) {
+                                    return;
+                                }
+                                router.replace('/(tabs)/campus');
+                            }}
+                        >
+                            <Text style={styles.guestButtonText}>{t('auth.guest_login')}</Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.agreementCard}>
+                            <Text style={styles.agreementNotice}>{t('auth.age_gate_notice', 'This app is intended for users 18+.')}</Text>
+                            <View style={[styles.agreementLinksRow, isEnglish && styles.agreementLinksRowEnglish]}>
+                                <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                                    <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.user_agreement', 'Terms')}</Text>
+                                </TouchableOpacity>
+                                <Text style={[styles.agreementSeparator, isEnglish && styles.agreementSeparatorEnglish]}>{t('auth.and', ' / ')}</Text>
+                                <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
+                                    <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
+                                </TouchableOpacity>
+                                <Text style={[styles.agreementSeparator, isEnglish && styles.agreementSeparatorEnglish]}>{t('auth.and', ' / ')}</Text>
+                                <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
+                                    <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity
+                                testID="auth-agreement-checkbox-login"
+                                style={styles.checkboxRow}
+                                activeOpacity={0.85}
+                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                onPress={() => setHasAcceptedTerms((value) => !value)}
+                            >
+                                <View style={[styles.checkbox, hasAcceptedTerms && styles.checkboxChecked]}>
+                                    {hasAcceptedTerms && <Check size={14} color="#FFFFFF" />}
+                                </View>
+                                <Text style={styles.checkboxText}>
+                                    {t('auth.agreement_checkbox_prefix', 'I have read and agree to the terms, privacy policy, and community safety rules.')}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </ScrollView>
             </TouchableWithoutFeedback>
@@ -511,6 +512,20 @@ const styles = StyleSheet.create({
         padding: 16,
         fontSize: 16,
         color: '#111827',
+    },
+    errorBanner: {
+        backgroundColor: '#FEF2F2',
+        borderWidth: 1,
+        borderColor: '#FECACA',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 16,
+    },
+    errorBannerText: {
+        color: '#DC2626',
+        fontSize: 14,
+        lineHeight: 20,
+        textAlign: 'center',
     },
     eyeIcon: {
         padding: 12,
