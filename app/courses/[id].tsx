@@ -300,20 +300,7 @@ export default function CourseDetailScreen() {
         if (error) {
             Alert.alert('Error', 'Failed to send message');
         } else {
-            // Optimistic update for immediate feedback
-            const optimisticMsg = {
-                id: `temp_${Date.now()}`,
-                room_id: roomId,
-                sender_id: user.uid,
-                content: newMessage.trim(),
-                created_at: new Date().toISOString(),
-                users: {
-                    display_name: user.displayName || 'Me',
-                    avatar_url: user.avatarUrl || '👤',
-                    email: user.email || ''
-                }
-            };
-            setMessages(prev => [...prev, optimisticMsg]);
+            // Clear input immediately; the realtime subscription will add the message
             setNewMessage('');
             void refreshCourseActivity();
         }

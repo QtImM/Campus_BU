@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, processLock } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
 // Single-database mode: read Expo env vars first so the app and scripts stay
@@ -61,7 +61,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
-        lock: processLock,
     },
     global: {
         fetch: fetchWithTimeoutAndRetry,
