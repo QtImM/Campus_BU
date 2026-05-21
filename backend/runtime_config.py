@@ -39,8 +39,8 @@ def load_project_env() -> None:
 
 def configure_runtime_environment() -> None:
     """
-    Normalize writable cache/data directories for local dev and Cloud Run.
-    Cloud Run containers should write transient model caches under /tmp.
+    Normalize writable cache/data directories for the OCR runtime.
+    Local runs default to transient caches under /tmp unless OCR_RUNTIME_HOME overrides it.
     """
     load_project_env()
 

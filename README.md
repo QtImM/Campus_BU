@@ -39,7 +39,7 @@
 - Language: TypeScript
 - Backend/Data: Supabase Auth, Postgres, Storage, Edge Functions
 - AI: Custom agent routing, DeepSeek/OpenAI compatible APIs
-- Optional OCR backend: FastAPI + Python
+- OCR backend: FastAPI + Python
 - Test: Jest + React Native Testing Library + Maestro E2E
 
 ## 目录结构
@@ -144,7 +144,6 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-部署说明见 `docs/ocr/cloud_run_ocr.md`。
 
 ## 测试与质量保障
 

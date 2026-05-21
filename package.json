@@ -1,7 +1,7 @@
 {
   "name": "hkcampus",
   "main": "./index.js",
-  "version": "1.2.10",
+  "version": "1.2.12",
   "scripts": {
     "start": "expo start --offline",
     "start:online": "expo start",

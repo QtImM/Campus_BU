@@ -21,8 +21,8 @@ describe('app config release safety', () => {
         };
         const config = createConfig();
 
-        expect(config.version).toBe('1.2.10');
-        expect(config.ios?.buildNumber).toBe('26');
+        expect(config.version).toBe('1.2.12');
+        expect(config.ios?.buildNumber).toBe('1');
         expect(config.newArchEnabled).toBe(true);
     });
 
