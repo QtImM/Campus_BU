@@ -22,7 +22,7 @@ export default (): ExpoConfig => {
     const ocrApiUrl = (process.env.EXPO_PUBLIC_OCR_API_URL || "").trim();
     const deepseekBaseUrl = (process.env.EXPO_PUBLIC_DEEPSEEK_BASE_URL || "").trim();
     const widgetEnabled = shouldEnableScheduleWidget();
-    const buildNumber = "1";
+    const buildNumber = "2";
     const appExtensions = widgetEnabled
         ? [
               {
