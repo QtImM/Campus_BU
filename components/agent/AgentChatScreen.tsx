@@ -496,6 +496,7 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
             // Show modal if actionPayload indicates a review surface
             if (response.actionPayload && AGENT_CONFIG.ACTION_AGENT_REVIEW_MODAL_ENABLED) {
                 const surface = response.actionPayload.action.uiSchema.surface;
+                console.log('[AgentChat] actionPayload surface:', surface, 'phase:', response.actionPayload.action.phase);
                 if (surface === 'review_modal') {
                     setActivePayload(response.actionPayload);
                     setShowReviewModal(true);
@@ -503,6 +504,8 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                     setActivePayload(response.actionPayload);
                     setShowReviewConfirmModal(true);
                 }
+            } else {
+                console.log('[AgentChat] no modal - actionPayload:', !!response.actionPayload, 'REVIEW_MODAL_ENABLED:', AGENT_CONFIG.ACTION_AGENT_REVIEW_MODAL_ENABLED);
             }
         } catch (error: any) {
             setMessages(prev => [...prev, {

@@ -199,7 +199,14 @@ export const runActionAgent = async (
             }
 
             // Still missing fields
-            const text = `还需要补充：${missingFields.map(f => f === 'courseCode' ? '课程代码' : f === 'rating' ? '评分' : f === 'content' ? '评价内容' : f).join('、')}`;
+            const isBareNumber = /^\d{3,6}$/.test(input.input.trim()) && !/^[1-5]$/.test(input.input.trim());
+            const missingLabels = missingFields.map(f => {
+                if (f === 'courseCode') return isBareNumber ? '完整课程代码（如 COMP1006，数字代码可能对应多个课程）' : '课程代码';
+                if (f === 'rating') return '评分';
+                if (f === 'content') return '评价内容';
+                return f;
+            });
+            const text = `还需要补充：${missingLabels.join('、')}`;
             return {
                 finalAnswer: text,
                 actionPayload: buildActionPayload({

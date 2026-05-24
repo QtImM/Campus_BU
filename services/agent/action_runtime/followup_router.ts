@@ -23,8 +23,17 @@ export const classifyFollowup = (input: string): FollowupKind => {
 };
 
 const extractCourseCode = (value: string): string | undefined => {
-    const match = value.toUpperCase().match(/\b([A-Z]{2,6}\s?\d{4}[A-Z]?)\b/);
-    return match ? match[1].replace(/\s+/g, '') : undefined;
+    // Standard format: COMP3015, COMP 3015A
+    const alphaMatch = value.toUpperCase().match(/\b([A-Z]{2,6}\s?\d{4}[A-Z]?)\b/);
+    if (alphaMatch) return alphaMatch[1].replace(/\s+/g, '');
+    // Bare number not accepted to avoid ambiguity (e.g. 1006 could be COMP1006, GENH1006)
+    return undefined;
+};
+
+/** Check if input looks like a bare course number without department prefix */
+const isBareCourseNumber = (value: string): boolean => {
+    const trimmed = value.trim();
+    return /^\d{3,6}$/.test(trimmed) && !/^[1-5]$/.test(trimmed);
 };
 
 const extractRating = (value: string): number | undefined => {
