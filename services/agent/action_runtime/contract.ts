@@ -163,7 +163,7 @@ export const REVIEW_PRESETS = {
     },
 };
 
-export const createReviewUiSchema = (phase: ActionPhase): UiSchema => {
+export const createReviewUiSchema = (phase: ActionPhase, options?: { courseLocked?: boolean; courseName?: string }): UiSchema => {
     if (phase === 'confirm') {
         return {
             surface: 'review_confirm_modal',
@@ -173,13 +173,16 @@ export const createReviewUiSchema = (phase: ActionPhase): UiSchema => {
     if (phase === 'result') {
         return { surface: 'result_card' };
     }
+    const courseLabel = options?.courseName
+        ? `课程：${options.courseName}`
+        : '课程代码';
     return {
         surface: 'review_modal',
         title: '发布课程评价',
         submitLabel: '提交评价',
         cancelLabel: '取消',
         fields: [
-            { name: 'courseCode', label: '课程代码', component: 'course_picker', required: true, placeholder: '例如 COMP3015' },
+            { name: 'courseCode', label: courseLabel, component: 'course_picker', required: true, readonly: options?.courseLocked, placeholder: '例如 COMP3015' },
             { name: 'rating', label: '评分', component: 'rating_picker', required: true, scale: 5 },
             { name: 'content', label: '评价内容', component: 'textarea', required: true, placeholder: '写下你的上课体验' },
             { name: 'anonymous', label: '匿名发布', component: 'switch', required: false },
@@ -188,9 +191,9 @@ export const createReviewUiSchema = (phase: ActionPhase): UiSchema => {
     };
 };
 
-export const createUiSchema = (actionType: ActionType, phase: ActionPhase): UiSchema => {
+export const createUiSchema = (actionType: ActionType, phase: ActionPhase, options?: { courseLocked?: boolean; courseName?: string }): UiSchema => {
     switch (actionType) {
-        case 'post_course_review': return createReviewUiSchema(phase);
+        case 'post_course_review': return createReviewUiSchema(phase, options);
         case 'post_course_teaming': return { surface: phase === 'confirm' ? 'teaming_confirm_modal' : 'teaming_modal' };
         case 'send_course_chat_message': return { surface: phase === 'confirm' ? 'chat_confirm_modal' : 'chat_modal' };
         case 'create_user_calendar_event': return { surface: phase === 'confirm' ? 'calendar_confirm_modal' : 'calendar_modal' };
@@ -293,6 +296,8 @@ export const buildActionPayload = (params: {
     phaseOverride?: ActionPhase;
     statusOverride?: ActionStatus;
     fieldErrors?: Record<string, string>;
+    courseLocked?: boolean;
+    courseName?: string;
 }): ActionPayload => {
     const missingFields = computeMissingFields(params.actionType, params.draft);
     const { phase, status } = derivePhaseAndStatus(missingFields, {
@@ -314,7 +319,7 @@ export const buildActionPayload = (params: {
         missingFields,
         editableFields: isResult ? [] : getEditableFields(params.actionType),
         draft: params.draft,
-        uiSchema: createUiSchema(params.actionType, phase),
+        uiSchema: createUiSchema(params.actionType, phase, { courseLocked: params.courseLocked, courseName: params.courseName }),
         summary: buildSummary(params.actionType, params.draft, phase),
         ...(params.fieldErrors ? { fieldErrors: params.fieldErrors } : {}),
     };

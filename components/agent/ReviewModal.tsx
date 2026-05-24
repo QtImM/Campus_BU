@@ -44,6 +44,10 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         anonymous: false,
     };
 
+    const courseField = payload?.action.uiSchema.fields?.find(f => f.name === 'courseCode');
+    const isCourseLocked = courseField?.readonly ?? false;
+    const courseLabel = courseField?.label ?? '课程代码';
+
     const [courseCode, setCourseCode] = useState(draft.courseCode ?? '');
     const [rating, setRating] = useState<number | null>(draft.rating);
     const [content, setContent] = useState(draft.content);
@@ -110,15 +114,21 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
                     <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
                         {/* Course Code */}
-                        <Text style={styles.label}>课程代码 *</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="例如 COMP3015"
-                            placeholderTextColor="#9CA3AF"
-                            value={courseCode}
-                            onChangeText={setCourseCode}
-                            autoCapitalize="characters"
-                        />
+                        <Text style={styles.label}>{courseLabel} *</Text>
+                        {isCourseLocked ? (
+                            <View style={styles.lockedField}>
+                                <Text style={styles.lockedText}>{courseCode || '—'}</Text>
+                            </View>
+                        ) : (
+                            <TextInput
+                                style={styles.input}
+                                placeholder="例如 COMP3015"
+                                placeholderTextColor="#9CA3AF"
+                                value={courseCode}
+                                onChangeText={setCourseCode}
+                                autoCapitalize="characters"
+                            />
+                        )}
 
                         {/* Rating */}
                         <Text style={styles.label}>评分 *</Text>
@@ -271,6 +281,19 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         fontSize: 15,
         color: '#111827',
+    },
+    lockedField: {
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#D1D5DB',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    lockedText: {
+        fontSize: 15,
+        color: '#6B7280',
+        fontWeight: '500',
     },
     textarea: {
         minHeight: 100,

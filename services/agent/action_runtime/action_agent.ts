@@ -8,6 +8,7 @@
  */
 
 import { callDeepSeek } from '../llm';
+import { supabase } from '../../supabase';
 import type {
     ActionAgentInput,
     ActionAgentResult,
@@ -120,6 +121,40 @@ const injectPresetContent = (draft: PostCourseReviewDraft): PostCourseReviewDraf
         }
     }
     return draft;
+};
+
+// ─── Course Lookup ──────────────────────────────────────────────────
+
+const normalizeCourseCode = (value: string): string =>
+    (value || '').toUpperCase().replace(/\s+/g, '');
+
+const lookupCourse = async (courseCode: string): Promise<{ found: boolean; courseId?: string; courseName?: string }> => {
+    const normalized = normalizeCourseCode(courseCode);
+    if (!normalized) return { found: false };
+
+    // Try by code
+    const { data: byCode } = await supabase
+        .from('courses')
+        .select('id, code, name')
+        .eq('code', normalized)
+        .maybeSingle();
+
+    if (byCode) {
+        return { found: true, courseId: byCode.id, courseName: byCode.name };
+    }
+
+    // Try by ID
+    const { data: byId } = await supabase
+        .from('courses')
+        .select('id, code, name')
+        .eq('id', courseCode)
+        .maybeSingle();
+
+    if (byId) {
+        return { found: true, courseId: byId.id, courseName: byId.name };
+    }
+
+    return { found: false };
 };
 
 // ─── Main Entry Point ───────────────────────────────────────────────
@@ -245,6 +280,116 @@ export const runActionAgent = async (
         draft = injectPresetContent(draft);
     }
 
+    // ─── Course verification for reviews ─────────────────────────────
+    if (actionType === 'post_course_review') {
+        const d = draft as PostCourseReviewDraft;
+
+        // No course code → ask for it
+        if (!d.courseCode) {
+            const text = '请先告诉我你要评价的课程代码（如 COMP1006）';
+            return {
+                finalAnswer: text,
+                actionPayload: buildActionPayload({
+                    actionType,
+                    draft,
+                    requestId,
+                    sessionId,
+                    messageText: text,
+                }),
+                pendingDraft: {
+                    actionType,
+                    phase: 'draft',
+                    status: 'awaiting_user_input',
+                    draft,
+                    missingFields: ['courseCode'],
+                    uiSchema: createUiSchema(actionType, 'draft'),
+                    summary: buildSummary(actionType, draft, 'draft'),
+                    source: 'action_agent',
+                    requestId,
+                    sessionId,
+                },
+                toolExecuted: false,
+            };
+        }
+
+        // Verify course exists
+        const course = await lookupCourse(d.courseCode);
+        if (!course.found) {
+            const text = `课程 ${d.courseCode} 不存在，请检查课程代码后重新输入（如 COMP1006）`;
+            return {
+                finalAnswer: text,
+                actionPayload: null,
+                pendingDraft: null,
+                toolExecuted: false,
+            };
+        }
+
+        // Course found → lock course code, ask for remaining fields
+        const verifiedDraft = { ...d, courseCode: normalizeCourseCode(d.courseCode) } as PostCourseReviewDraft;
+        const missingFields = computeMissingFields('post_course_review', verifiedDraft);
+
+        if (missingFields.length === 0) {
+            // All fields present (e.g. user said "评价COMP1006 5星 很好") → go to confirm
+            const text = `找到课程 ${course.courseName || verifiedDraft.courseCode}，请确认评价内容。`;
+            return {
+                finalAnswer: text,
+                actionPayload: buildActionPayload({
+                    actionType: 'post_course_review',
+                    draft: verifiedDraft,
+                    requestId,
+                    sessionId,
+                    messageText: text,
+                    phaseOverride: 'confirm',
+                    statusOverride: 'ready_for_confirmation',
+                    courseLocked: true,
+                    courseName: course.courseName ?? undefined,
+                }),
+                pendingDraft: {
+                    actionType: 'post_course_review',
+                    phase: 'confirm',
+                    status: 'ready_for_confirmation',
+                    draft: verifiedDraft,
+                    missingFields: [],
+                    uiSchema: createUiSchema('post_course_review', 'confirm'),
+                    summary: buildSummary('post_course_review', verifiedDraft, 'confirm'),
+                    source: 'action_agent',
+                    requestId,
+                    sessionId,
+                },
+                toolExecuted: false,
+            };
+        }
+
+        // Course found but missing rating/content → show modal with locked course
+        const text = `找到课程 ${course.courseName || verifiedDraft.courseCode}，请在弹窗中填写评分和评价内容。`;
+        return {
+            finalAnswer: text,
+            actionPayload: buildActionPayload({
+                actionType: 'post_course_review',
+                draft: verifiedDraft,
+                requestId,
+                sessionId,
+                messageText: text,
+                courseLocked: true,
+                courseName: course.courseName ?? undefined,
+            }),
+            pendingDraft: {
+                actionType: 'post_course_review',
+                phase: 'draft',
+                status: 'awaiting_user_input',
+                draft: verifiedDraft,
+                missingFields,
+                uiSchema: createUiSchema('post_course_review', 'draft', { courseLocked: true, courseName: course.courseName ?? undefined }),
+                summary: buildSummary('post_course_review', verifiedDraft, 'draft'),
+                source: 'action_agent',
+                requestId,
+                sessionId,
+            },
+            toolExecuted: false,
+        };
+    }
+
+    // ─── Non-review action types ────────────────────────────────────
     const missingFields = computeMissingFields(actionType, draft);
     const summary = buildSummary(actionType, draft, 'draft');
 
@@ -262,7 +407,7 @@ export const runActionAgent = async (
     };
 
     const text = missingFields.length > 0
-        ? `我可以帮你${actionType === 'post_course_review' ? '发课程评价' : actionType === 'post_course_teaming' ? '发组队信息' : actionType === 'send_course_chat_message' ? '发消息' : actionType === 'create_user_calendar_event' ? '创建日历事件' : '写课表'}，还需要补充：${missingFields.map(f => f === 'courseCode' ? '课程代码' : f === 'rating' ? '评分' : f === 'content' ? '评价内容' : f).join('、')}`
+        ? `我可以帮你${actionType === 'post_course_teaming' ? '发组队信息' : actionType === 'send_course_chat_message' ? '发消息' : actionType === 'create_user_calendar_event' ? '创建日历事件' : '写课表'}，还需要补充：${missingFields.map(f => f === 'courseCode' ? '课程代码' : f === 'rating' ? '评分' : f === 'content' ? '评价内容' : f).join('、')}`
         : '参数已齐全，请确认是否提交。';
 
     return {

@@ -82,6 +82,7 @@ export type UiFieldDefinition = {
     label: string;
     component: string;
     required: boolean;
+    readonly?: boolean;
     placeholder?: string;
     scale?: number;
 };
