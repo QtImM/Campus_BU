@@ -87,6 +87,11 @@ export const runDailyDigestJobForUser = async (
     try {
         const sourceUrl = buildDailyDigestSourceUrl(dateStr);
         const html = await fetchDailyDigestSourceHtml(sourceUrl);
+
+        if (!html) {
+            return { ok: false, reason: 'not_published' };
+        }
+
         const items = parseDailyDigestItems(html, sourceUrl);
         const extractedSummary = parseDailyDigestSummaryText(html);
 

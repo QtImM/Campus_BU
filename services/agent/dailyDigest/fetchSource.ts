@@ -17,12 +17,15 @@ const fetchWithTimeout = async (url: string, timeoutMs: number): Promise<Respons
     }
 };
 
-export const fetchDailyDigestSourceHtml = async (url: string): Promise<string> => {
+export const fetchDailyDigestSourceHtml = async (url: string): Promise<string | null> => {
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= DAILY_DIGEST_CONFIG.maxRetries; attempt += 1) {
         try {
             const response = await fetchWithTimeout(url, DAILY_DIGEST_CONFIG.requestTimeoutMs);
+            if (response.status === 404) {
+                return null;
+            }
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
