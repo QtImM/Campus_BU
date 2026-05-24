@@ -126,7 +126,7 @@ const injectPresetContent = (draft: PostCourseReviewDraft): PostCourseReviewDraf
 
 export const runActionAgent = async (
     input: ActionAgentInput,
-    executeTool?: (toolName: string, toolInput: Record<string, any>) => Promise<{ success: boolean }>
+    executeTool?: (toolName: string, toolInput: Record<string, any>) => Promise<{ success: boolean; error?: string }>
 ): Promise<ActionAgentResult> => {
     const { pendingDraft, requestId, sessionId } = input;
 
@@ -150,7 +150,7 @@ export const runActionAgent = async (
                         if (result.success) {
                             return buildSuccessResult(pendingDraft, requestId, sessionId);
                         }
-                        return buildFailureResult(pendingDraft, requestId, sessionId);
+                        return buildFailureResult(pendingDraft, requestId, sessionId, result.error);
                     } catch {
                         return buildFailureResult(pendingDraft, requestId, sessionId);
                     }

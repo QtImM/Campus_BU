@@ -55,10 +55,24 @@ export const buildSuccessResult = (
 export const buildFailureResult = (
     pendingDraft: PendingDraft,
     requestId: string,
-    sessionId: string
+    sessionId: string,
+    toolError?: string
 ): ActionAgentResult => {
     const d = pendingDraft.draft as Record<string, any>;
-    const text = FAILURE_MESSAGES[pendingDraft.actionType](d);
+    const defaultText = FAILURE_MESSAGES[pendingDraft.actionType](d);
+
+    // Generate more specific error message based on tool error
+    let text = defaultText;
+    if (toolError) {
+        if (/COURSE_NOT_FOUND|MISSING_COURSE_ID|not available/i.test(toolError)) {
+            text = `课程 ${d.courseCode || '未知'} 不存在，请检查课程代码后重试。`;
+        } else if (/content.*safety|社区规范|不符合/i.test(toolError)) {
+            text = '评价内容不符合社区规范，请修改后再发布。';
+        } else if (/duplicate|重复|already exists/i.test(toolError)) {
+            text = '你已经评价过这门课了。';
+        }
+    }
+
     const payload = buildActionPayload({
         actionType: pendingDraft.actionType,
         draft: pendingDraft.draft,

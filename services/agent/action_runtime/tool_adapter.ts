@@ -20,6 +20,11 @@ export type ToolCallInput = {
     input: Record<string, any>;
 };
 
+export type ToolCallResult = {
+    success: boolean;
+    error?: string;
+};
+
 export const buildToolCallFromDraft = (draft: PendingDraft, userId: string): ToolCallInput => {
     const d = draft.draft as Record<string, any>;
 
@@ -104,30 +109,30 @@ export const buildToolCallFromDraft = (draft: PendingDraft, userId: string): Too
 export const executeToolCall = async (
     toolName: string,
     input: Record<string, any>
-): Promise<{ success: boolean }> => {
+): Promise<ToolCallResult> => {
     if (toolName === 'post_course_review') {
         const result = await postCourseReviewTool(input);
-        return { success: result.success };
+        return { success: result.success, error: result.resultSummary };
     }
 
     if (toolName === 'post_course_teaming') {
         const result = await postCourseTeamingTool(input);
-        return { success: result.success };
+        return { success: result.success, error: result.resultSummary };
     }
 
     if (toolName === 'send_course_chat_message') {
         const result = await sendCourseChatMessageTool(input as any);
-        return { success: result.success };
+        return { success: result.success, error: result.resultSummary };
     }
 
     if (toolName === 'create_user_calendar_event') {
         const result = await createCalendarEventTool(input as any);
-        return { success: result.success };
+        return { success: result.success, error: result.resultSummary };
     }
 
     if (toolName === 'write_user_schedule_entry') {
         const result = await writeUserScheduleTool(input);
-        return { success: result.success };
+        return { success: result.success, error: result.resultSummary };
     }
 
     throw new Error(`Unsupported action runtime tool: ${toolName}`);
