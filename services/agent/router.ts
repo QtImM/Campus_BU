@@ -43,7 +43,7 @@ export const classifyIntent = (query: string): RouteDecision => {
 
     scores.schedule_query += score(normalized, /课表|課表|今天.*课|今天.*堂|今日.*堂|今日.*课|明天.*课|明天.*堂|有咩堂|下一节|next class|today.*class|tomorrow.*class|class.*today|class.*tomorrow|what.*class|周[一二三四五六日天].*课|星期[一二三四五六日天].*课/, 7);
     scores.course_community_read += score(normalized, /课程|課程|这门课|這門課|评价|評價|点评|點評|聊天室|群聊|chatroom|teaming|队友|隊友|口碑|活跃|活躍/, 7);
-    scores.course_community_write += score(normalized, /帮我发|幫我發|发布|發布|写.*评价|寫.*評價|发.*聊天室|發.*聊天室|发.*消息|發.*消息|我想组队|我希望组队|找队友|找隊友|组队.*找|組隊.*找/, 9);
+    scores.course_community_write += score(normalized, /帮我发|幫我發|发布|發布|想.*评价|想.*評價|要.*评价|要.*評價|写.*评价|寫.*評價|发.*聊天室|發.*聊天室|发.*消息|發.*消息|我想组队|我希望组队|找队友|找隊友|组队.*找|組隊.*找/, 9);
     scores.building_query += score(normalized, /建筑|建築|大楼|大樓|教学楼|教學樓|where is|building|aab|wlb|dlb|scm|swt/, 6);
     scores.nearby_place_query += score(normalized, /附近|最近|离我最近|離我最近|near me|nearest|around me|我在哪|where am i|当前位置|當前位置/, 8);
     scores.date_query += score(normalized, /今天.*周几|今天星期几|今天週幾|明天.*周几|明天星期几|today.*what day|tomorrow.*what day/, 8);

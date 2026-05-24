@@ -30,7 +30,7 @@ import { buildSuccessResult, buildFailureResult, buildCancelResult } from './tem
 // ─── Action Type Detection (local, no LLM) ──────────────────────────
 
 const ACTION_PATTERNS: Array<{ pattern: RegExp; actionType: ActionType }> = [
-    { pattern: /发.*评价|写.*评价|发布.*评价|发.*review|写.*review|post.*review/i, actionType: 'post_course_review' },
+    { pattern: /发.*评价|写.*评价|发布.*评价|(?:想|要|给.*写|帮我写|帮我发).*评价|评价.*课|评价一下|write.*review|post.*review/i, actionType: 'post_course_review' },
     { pattern: /组队|找队友|teaming|队友/i, actionType: 'post_course_teaming' },
     { pattern: /聊天室|群聊|发.*消息|chatroom|send.*message/i, actionType: 'send_course_chat_message' },
     { pattern: /日历|calendar|记.*日历|创建.*事件/i, actionType: 'create_user_calendar_event' },
