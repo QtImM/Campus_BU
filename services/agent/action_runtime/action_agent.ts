@@ -7,11 +7,13 @@
  * See docs/agent/action-agent-contract-and-flow.md §8 and migration doc §3.2.
  */
 
+import i18n from '../../../app/i18n/i18n';
 import { callDeepSeek } from '../llm';
 import { supabase } from '../../supabase';
 import type {
     ActionAgentInput,
     ActionAgentResult,
+    ActionPayload,
     ActionType,
     PendingDraft,
     PostCourseReviewDraft,
@@ -27,6 +29,45 @@ import { getPresetContentForRating } from './followup_router';
 import { processFollowup, classifyFollowup } from './followup_router';
 import { buildToolCallFromDraft } from './tool_adapter';
 import { buildSuccessResult, buildFailureResult, buildCancelResult } from './template_response';
+
+// ─── Add Course Modal Payload ──────────────────────────────────────
+
+const buildAddCourseModalPayload = (
+    courseCode: string,
+    requestId: string,
+    sessionId: string,
+): ActionPayload => ({
+    type: 'agent_action',
+    version: '1.0',
+    requestId,
+    sessionId,
+    message: {
+        text: i18n.t('courses.course_not_found', { code: courseCode }),
+        tone: 'warning',
+    },
+    action: {
+        actionType: 'post_course_review',
+        phase: 'draft',
+        status: 'awaiting_user_input',
+        canConfirm: false,
+        canSubmit: false,
+        canCancel: true,
+        requiresConfirmation: false,
+        missingFields: [],
+        editableFields: [],
+        draft: { courseCode, rating: null, content: '', anonymous: false },
+        uiSchema: {
+            surface: 'add_course_modal',
+            title: i18n.t('courses.add_course.title'),
+        },
+        summary: { title: i18n.t('courses.add_course.title'), lines: [] },
+    },
+    next: {
+        expectedUserAction: 'fill_or_edit_draft',
+        allowedInputs: ['free_text', 'cancel'],
+    },
+    meta: { source: 'action_agent', latencyTier: 'fast' },
+});
 
 // ─── Action Type Detection (local, no LLM) ──────────────────────────
 
@@ -315,10 +356,10 @@ export const runActionAgent = async (
         // Verify course exists
         const course = await lookupCourse(d.courseCode);
         if (!course.found) {
-            const text = `课程 ${d.courseCode} 不存在，请检查课程代码后重新输入（如 COMP1006）`;
+            const text = i18n.t('courses.course_not_found', { code: d.courseCode });
             return {
                 finalAnswer: text,
-                actionPayload: null,
+                actionPayload: buildAddCourseModalPayload(d.courseCode!, requestId, sessionId),
                 pendingDraft: null,
                 toolExecuted: false,
             };

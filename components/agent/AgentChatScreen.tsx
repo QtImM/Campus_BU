@@ -27,6 +27,7 @@ import { supabase } from '../../services/supabase';
 import { GuestLoginModal } from '../common/GuestLoginModal';
 import { ReviewModal } from './ReviewModal';
 import { ReviewConfirmModal } from './ReviewConfirmModal';
+import { AddCourseModal } from './AddCourseModal';
 
 interface AgentChatScreenProps {
     showBackButton?: boolean;
@@ -119,6 +120,8 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     const [activePayload, setActivePayload] = useState<ActionPayload | null>(null);
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [showReviewConfirmModal, setShowReviewConfirmModal] = useState(false);
+    const [showAddCourseModal, setShowAddCourseModal] = useState(false);
+    const [addCourseCode, setAddCourseCode] = useState('');
     const [keyboardVisible, setKeyboardVisible] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [loadingSession, setLoadingSession] = useState(true);
@@ -479,9 +482,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                 throw new Error('请先登录后再使用校园助手。');
             }
 
-            console.log('[AgentChat] response.finalAnswer:', response.finalAnswer?.slice(0, 80) ?? '(empty)');
-            console.log('[AgentChat] response.actionPayload:', response.actionPayload ? 'present' : 'null');
-
             const displayContent = response.finalAnswer?.trim() || '抱歉，暂时无法生成回复，请稍后再试。';
 
             setMessages(prev => prev.map(m => m.id === streamId ? {
@@ -496,7 +496,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
             // Show modal if actionPayload indicates a review surface
             if (response.actionPayload && AGENT_CONFIG.ACTION_AGENT_REVIEW_MODAL_ENABLED) {
                 const surface = response.actionPayload.action.uiSchema.surface;
-                console.log('[AgentChat] actionPayload surface:', surface, 'phase:', response.actionPayload.action.phase);
                 if (surface === 'review_modal') {
                     setActivePayload(response.actionPayload);
                     setShowReviewModal(true);
@@ -504,8 +503,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                     setActivePayload(response.actionPayload);
                     setShowReviewConfirmModal(true);
                 }
-            } else {
-                console.log('[AgentChat] no modal - actionPayload:', !!response.actionPayload, 'REVIEW_MODAL_ENABLED:', AGENT_CONFIG.ACTION_AGENT_REVIEW_MODAL_ENABLED);
             }
         } catch (error: any) {
             setMessages(prev => [...prev, {
@@ -559,6 +556,20 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
         if (activePayload) {
             setShowReviewModal(true);
         }
+    };
+
+    const handleAddCourseSubmit = (result: { success: boolean; courseCode: string }) => {
+        setShowAddCourseModal(false);
+        if (result.success) {
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: `课程 ${result.courseCode} 已提交审核，审核通过后会通知你。`
+            }]);
+        }
+    };
+
+    const handleAddCourseCancel = () => {
+        setShowAddCourseModal(false);
     };
 
     const bottomComposerOffset = showBackButton
@@ -646,7 +657,13 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                                     msg.isTyping || msg.content === '' ? (
                                         <TypingDots />
                                     ) : (
-                                        renderFormattedText(msg.content, false)
+                                        renderFormattedText(msg.content, false, (action) => {
+                                            if (action === 'add_course_modal') {
+                                                const codeMatch = msg.content.match(/(?:课程| Course\s+)(\S+?)\s*(?:不存在|not found)/i);
+                                                setAddCourseCode(codeMatch?.[1] || '');
+                                                setShowAddCourseModal(true);
+                                            }
+                                        })
                                     )
                                 ) : (
                                     renderFormattedText(msg.content, true)
@@ -719,6 +736,13 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                 onConfirm={handleReviewConfirm}
                 onCancel={handleReviewCancel}
                 onEdit={handleReviewEdit}
+            />
+
+            <AddCourseModal
+                visible={showAddCourseModal}
+                courseCode={addCourseCode}
+                onSubmit={handleAddCourseSubmit}
+                onCancel={handleAddCourseCancel}
             />
         </KeyboardAvoidingView >
     );
@@ -1005,18 +1029,18 @@ const styles = StyleSheet.create({
     },
 });
 
-function renderFormattedText(text: string, isUser: boolean = false) {
+function renderFormattedText(
+    text: string,
+    isUser: boolean = false,
+    onAction?: (actionName: string) => void,
+) {
     if (!text) return null;
     const lines = text.split('\n');
     const textColor = isUser ? '#fff' : '#1F2937';
-    const tokenRegex = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|https?:\/\/[^\s]+)/g;
+    const tokenRegex = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\[([^\]]+)\]\((action:[^\s)]+)\)|https?:\/\/[^\s]+)/g;
 
     const openUrl = async (url: string) => {
         try {
-            const canOpen = await Linking.canOpenURL(url);
-            if (!canOpen) {
-                return;
-            }
             await Linking.openURL(url);
         } catch (error) {
             console.warn('[AgentChat] Failed to open url:', error);
@@ -1069,22 +1093,34 @@ function renderFormattedText(text: string, isUser: boolean = false) {
                     }
 
                     const fullMatch = match[0];
-                    const markdownLabel = match[2];
-                    const referenceUrl = match[3];
-                    const href = referenceUrl || fullMatch;
-                    const label = markdownLabel || fullMatch;
+                    const httpLabel = match[2];
+                    const httpUrl = match[3];
+                    const actionLabel = match[4];
+                    const actionTarget = match[5];
 
-                    renderedParts.push(
-                        <Text
-                            key={`link-${i}-${match.index}`}
-                            style={isUser ? styles.inlineLinkUser : styles.inlineLink}
-                            onPress={() => {
-                                void openUrl(href);
-                            }}
-                        >
-                            {label}
-                        </Text>
-                    );
+                    if (actionTarget && onAction) {
+                        renderedParts.push(
+                            <Text
+                                key={`action-${i}-${match.index}`}
+                                style={isUser ? styles.inlineLinkUser : styles.inlineLink}
+                                onPress={() => onAction(actionTarget.replace('action:', ''))}
+                            >
+                                {actionLabel}
+                            </Text>
+                        );
+                    } else {
+                        const href = httpUrl || fullMatch;
+                        const label = httpLabel || fullMatch;
+                        renderedParts.push(
+                            <Text
+                                key={`link-${i}-${match.index}`}
+                                style={isUser ? styles.inlineLinkUser : styles.inlineLink}
+                                onPress={() => { void openUrl(href); }}
+                            >
+                                {label}
+                            </Text>
+                        );
+                    }
 
                     lastIndex = match.index + fullMatch.length;
                     match = tokenRegex.exec(displayLine);

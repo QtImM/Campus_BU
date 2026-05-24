@@ -35,9 +35,7 @@ export class AgentExecutor {
     }
 
     async process(prompt: string, onUpdate?: (text: string) => void): Promise<AgentResponse> {
-        console.log('[AgentExecutor] process called, prompt:', prompt.slice(0, 40));
         const response = await this.processWithGraph(prompt, onUpdate);
-        console.log('[AgentExecutor] process result, finalAnswer:', response.finalAnswer?.slice(0, 60) ?? '(empty/undefined)');
         return response;
     }
 
@@ -48,18 +46,15 @@ export class AgentExecutor {
 
         // ─── Route to Action Agent for write operations ─────────────
         const useAction = this.shouldUseActionAgent(prompt);
-        console.log('[AgentExecutor] shouldUseActionAgent:', useAction);
         if (useAction) {
             try {
                 response = await this.processWithActionAgent(prompt);
-                console.log('[AgentExecutor] Action Agent returned, finalAnswer:', response.finalAnswer?.slice(0, 60));
             } catch (error) {
                 console.error('[AgentExecutor] Action Agent failed, falling back to graph:', error);
                 response = await this.processWithLegacyGraph(prompt, onUpdate);
             }
         } else {
             response = await this.processWithLegacyGraph(prompt, onUpdate);
-            console.log('[AgentExecutor] Legacy graph returned, finalAnswer:', response.finalAnswer?.slice(0, 60));
         }
 
         if (!response.finalAnswer) {
