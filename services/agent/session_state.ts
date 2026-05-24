@@ -7,6 +7,7 @@ export const createInitialSessionState = (): AgentSessionState => ({
     recentDecisions: [],
     openLoops: [],
     pendingAction: null,
+    pendingDraft: null,
 });
 
 export const updateSessionStateWithTurn = (
@@ -60,8 +61,8 @@ export const formatSessionState = (state: AgentSessionState): string => {
         state.recentDecisions.length > 0 ? `recentDecisions: ${state.recentDecisions.join(' | ')}` : '',
         state.summary ? `latestSummary: ${state.summary}` : '',
         state.pendingAction ? `pendingAction: ${state.pendingAction.type} (missing: ${state.pendingAction.missingRequiredFields.join(', ') || 'none'})` : '',
+        state.pendingDraft ? `pendingDraft: ${state.pendingDraft.actionType} (status: ${state.pendingDraft.status}, missing: ${state.pendingDraft.missingFields.join(', ') || 'none'})` : '',
     ].filter(Boolean);
 
     return lines.length > 0 ? lines.join('\n') : 'No structured session state.';
 };
-

@@ -334,6 +334,7 @@ const mergeChatAction = (
 };
 
 export const prepareActionNode = async (state: AgentGraphState): Promise<AgentGraphState> => {
+    console.log('[prepareActionNode] called, proposedActionType:', state.plan.proposedActionType, 'existing:', state.pendingAction?.type ?? 'null');
     const existing = state.pendingAction;
     const isFollowUp = isSlotFillingFollowUp(state.input, existing);
 

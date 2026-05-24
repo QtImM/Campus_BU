@@ -15,12 +15,15 @@ export const getIntentBranch = (
 export const getPlannerBranch = (
     plan: Pick<GraphPlanState, 'decision'>
 ) => {
+    console.log('[getPlannerBranch] decision:', plan.decision);
     if (plan.decision === 'answer') return 'synthesize_response';
     if (plan.decision === 'clarify') return 'clarify_user';
+    console.log('[getPlannerBranch] falling through to prepare_action for decision:', plan.decision);
     return 'prepare_action';
 };
 
 export const getPostPrepareBranch = (pendingAction: PendingAction | null) => {
+    console.log('[getPostPrepareBranch] pendingAction:', pendingAction?.type ?? 'null');
     if (!pendingAction) return 'clarify_user';
     if (pendingAction.missingRequiredFields.length > 0) return 'clarify_user';
     return 'confirm_action';

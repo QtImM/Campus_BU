@@ -24,6 +24,24 @@ const sampleReviewAction: PendingAction = {
     safeToExecute: true,
 };
 
+const samplePendingDraft = {
+    actionType: 'post_course_review' as const,
+    phase: 'draft' as const,
+    status: 'awaiting_user_input' as const,
+    draft: {
+        courseCode: 'COMP3015',
+        rating: null,
+        content: '',
+        anonymous: false,
+    },
+    missingFields: ['rating', 'content'],
+    uiSchema: { surface: 'review_modal' },
+    summary: { title: '课程评价草稿', lines: ['课程：COMP3015'] },
+    source: 'action_agent' as const,
+    requestId: 'req-1',
+    sessionId: 'session-1',
+};
+
 describe('PendingAction in AgentSessionState', () => {
     it('accepts a PendingAction in session state', () => {
         const state: AgentSessionState = {
@@ -148,5 +166,17 @@ describe('formatSessionState includes pendingAction', () => {
         const state = createInitialSessionState();
         const formatted = formatSessionState(state);
         expect(formatted).not.toContain('pendingAction');
+    });
+
+    it('renders pendingDraft summary when present', () => {
+        const state: AgentSessionState = {
+            ...createInitialSessionState(),
+            pendingDraft: samplePendingDraft,
+        };
+
+        const formatted = formatSessionState(state);
+        expect(formatted).toContain('pendingDraft');
+        expect(formatted).toContain('post_course_review');
+        expect(formatted).toContain('awaiting_user_input');
     });
 });

@@ -4,6 +4,14 @@
  */
 const rawDeepSeekApiKey = (process.env.EXPO_PUBLIC_DEEPSEEK_API_KEY || '').trim();
 
+const parseBooleanFlag = (value: string | undefined, defaultValue: boolean): boolean => {
+    if (value == null || value.trim() === '') return defaultValue;
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    return defaultValue;
+};
+
 const looksLikePlaceholderKey = (key: string): boolean => {
     if (!key) return true;
     const normalized = key.toLowerCase();
@@ -24,5 +32,7 @@ export const AGENT_CONFIG = {
         process.env.EXPO_PUBLIC_AGENT_FAST_MODEL ||
         'deepseek-v4-pro',
     DEEPSEEK_ENABLED: !looksLikePlaceholderKey(rawDeepSeekApiKey),
+    ACTION_AGENT_ENABLED: parseBooleanFlag(process.env.EXPO_PUBLIC_ACTION_AGENT_ENABLED, true),
+    ACTION_AGENT_REVIEW_MODAL_ENABLED: parseBooleanFlag(process.env.EXPO_PUBLIC_ACTION_AGENT_REVIEW_MODAL_ENABLED, true),
     IS_PROD: false, // Set to true to use real backend proxy in future
 };

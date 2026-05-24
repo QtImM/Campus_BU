@@ -4,6 +4,7 @@ import { pushTraceWithDuration, startTraceTimer } from '../telemetry';
 import { buildClarifierPrompt } from '../prompts/clarifier';
 
 export const clarifyUserNode = async (state: AgentGraphState): Promise<AgentGraphState> => {
+    console.log('[clarifyUserNode] called');
     const model = resolveModelName('fast');
     const timer = startTraceTimer();
     let latencyMs: number | undefined;

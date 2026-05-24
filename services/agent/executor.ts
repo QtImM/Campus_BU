@@ -1,12 +1,17 @@
 import { createInitialSessionState, updateSessionStateWithTurn } from './session_state';
+import { AGENT_CONFIG } from './config';
 import { summarizeHistory } from './summarizer';
 import { callDeepSeek, resolveModelName } from './llm';
 import { AgentContext, AgentGeoPoint, AgentResponse } from './types';
+import { runActionAgent, detectActionType, executeToolCall } from './action_runtime';
+import type { PendingDraft } from './action_runtime';
 
 /**
  * Thin adapter that owns entrypoint wiring and conversation context assembly.
  * All agent behavior (intent routing, tool execution, confirmation flow, memory)
  * lives in the LangGraph runtime.
+ *
+ * Write operations are routed to the Action Agent runtime when ACTION_AGENT_ENABLED.
  */
 export class AgentExecutor {
     private context: AgentContext;
@@ -30,12 +35,99 @@ export class AgentExecutor {
     }
 
     async process(prompt: string, onUpdate?: (text: string) => void): Promise<AgentResponse> {
-        return this.processWithGraph(prompt, onUpdate);
+        console.log('[AgentExecutor] process called, prompt:', prompt.slice(0, 40));
+        const response = await this.processWithGraph(prompt, onUpdate);
+        console.log('[AgentExecutor] process result, finalAnswer:', response.finalAnswer?.slice(0, 60) ?? '(empty/undefined)');
+        return response;
     }
 
     async processWithGraph(prompt: string, onUpdate?: (text: string) => void): Promise<AgentResponse> {
         this.pushHistory('user', prompt);
 
+        let response: AgentResponse;
+
+        // ─── Route to Action Agent for write operations ─────────────
+        const useAction = this.shouldUseActionAgent(prompt);
+        console.log('[AgentExecutor] shouldUseActionAgent:', useAction);
+        if (useAction) {
+            try {
+                response = await this.processWithActionAgent(prompt);
+                console.log('[AgentExecutor] Action Agent returned, finalAnswer:', response.finalAnswer?.slice(0, 60));
+            } catch (error) {
+                console.error('[AgentExecutor] Action Agent failed, falling back to graph:', error);
+                response = await this.processWithLegacyGraph(prompt, onUpdate);
+            }
+        } else {
+            response = await this.processWithLegacyGraph(prompt, onUpdate);
+            console.log('[AgentExecutor] Legacy graph returned, finalAnswer:', response.finalAnswer?.slice(0, 60));
+        }
+
+        if (!response.finalAnswer) {
+            console.warn('[AgentExecutor] finalAnswer is empty/undefined, response:', JSON.stringify(response).slice(0, 200));
+            response.finalAnswer = '抱歉，我暂时无法生成回复，请稍后再试。';
+        }
+
+        this.pushHistory('assistant', response.finalAnswer);
+        if (onUpdate) onUpdate(response.finalAnswer);
+
+        return response;
+    }
+
+    /**
+     * Determine if the input should be routed to the Action Agent.
+     * Phase 1: only post_course_review is routed to Action Agent.
+     * Other write operations continue through the legacy graph.
+     */
+    private shouldUseActionAgent(prompt: string): boolean {
+        if (!AGENT_CONFIG.ACTION_AGENT_ENABLED) {
+            return false;
+        }
+
+        // If there's a pending draft, always use Action Agent for follow-ups
+        if (this.context.sessionState.pendingDraft) {
+            return true;
+        }
+
+        // Phase 1: only route post_course_review to Action Agent
+        const actionType = detectActionType(prompt);
+        return actionType === 'post_course_review';
+    }
+
+    /**
+     * Process input through the Action Agent runtime.
+     */
+    private async processWithActionAgent(prompt: string): Promise<AgentResponse> {
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+        const result = await runActionAgent({
+            input: prompt,
+            userId: this.context.userId,
+            sessionId: this.context.sessionId,
+            requestId,
+            pendingDraft: this.context.sessionState.pendingDraft ?? null,
+            history: this.context.history,
+        }, executeToolCall);
+
+        // Update session state with the new pending draft
+        this.context.sessionState = {
+            ...this.context.sessionState,
+            pendingDraft: result.pendingDraft,
+        };
+
+        return {
+            finalAnswer: result.finalAnswer,
+            steps: [{
+                thought: `action_agent: ${result.actionPayload?.action.phase || 'unknown'}`,
+                path: 'llm',
+            }],
+            actionPayload: result.actionPayload,
+        };
+    }
+
+    /**
+     * Process input through the legacy LangGraph runtime.
+     */
+    private async processWithLegacyGraph(prompt: string, onUpdate?: (text: string) => void): Promise<AgentResponse> {
         let response: AgentResponse;
 
         try {
@@ -56,11 +148,6 @@ export class AgentExecutor {
             AgentExecutor.graphImportFailed = true;
             console.error('[AgentExecutor] Graph runtime unavailable, falling back to lightweight chat mode:', error);
             response = await this.processWithFallbackLLM(prompt, onUpdate);
-        }
-
-        if (response.finalAnswer) {
-            this.pushHistory('assistant', response.finalAnswer);
-            if (onUpdate) onUpdate(response.finalAnswer);
         }
 
         return response;
@@ -106,9 +193,6 @@ export class AgentExecutor {
         ];
 
         const finalAnswer = await callDeepSeek(messages, { model: modelName });
-        if (onUpdate) {
-            onUpdate(finalAnswer);
-        }
 
         return {
             finalAnswer,

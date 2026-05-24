@@ -34,6 +34,7 @@ export type AgentResponse = {
     steps: AgentStep[];
     finalAnswer?: string;
     quickReplies?: string[];
+    actionPayload?: import('./action_runtime/types').ActionPayload | null;
     debug?: {
         trace: Array<Record<string, any>>;
     };
@@ -110,6 +111,7 @@ export type AgentSessionState = {
     referencedBuilding?: string;
     summary?: string;
     pendingAction?: PendingAction | null;
+    pendingDraft?: import('./action_runtime/types').PendingDraft | null;
 };
 
 export type MemoryCandidateType =

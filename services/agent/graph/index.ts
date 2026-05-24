@@ -69,6 +69,7 @@ export const createCompiledAgentGraph = () => new StateGraph(AgentGraphAnnotatio
     .addConditionalEdges('confirm_action', (wrapper: AgentGraphWrapperState) => (
         getConfirmationBranch(wrapper.state.confirmation)
     ))
+    .addEdge('clarify_user', 'synthesize_response')
     .addEdge('execute_tools', 'synthesize_response')
     .addEdge('synthesize_response', 'write_memory')
     .addEdge('write_memory', END)
@@ -83,6 +84,7 @@ export const createAgentGraphRuntime = (): GraphRuntime => ({
             });
 
             const finalState: AgentGraphState = result.state;
+            console.log('[AgentGraph] graph completed, finalResponse:', finalState.finalResponse?.slice(0, 60) ?? '(empty)', 'trace nodes:', finalState.trace.map(t => t.node).join(' → '));
             const response = toAgentResponse(finalState);
             const sessionState = {
                 ...finalState.sessionState,
@@ -93,6 +95,13 @@ export const createAgentGraphRuntime = (): GraphRuntime => ({
         } catch (error) {
             console.error('[AgentGraph] Graph execution failed:', error);
             const fallbackState = createInitialAgentGraphState(input);
+            fallbackState.trace.push({
+                node: 'error_fallback',
+                summary: String(error).slice(0, 100),
+                startedAt: new Date().toISOString(),
+                finishedAt: new Date().toISOString(),
+                durationMs: 0,
+            });
             const errorResponse = toAgentResponse({
                 ...fallbackState,
                 finalResponse: '抱歉，校园助手遇到了一些问题，请稍后再试。',

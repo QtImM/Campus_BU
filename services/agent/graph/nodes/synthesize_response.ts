@@ -4,6 +4,7 @@ import { pushTrace, pushTraceWithDuration, startTraceTimer } from '../telemetry'
 import { buildSynthesizerPrompt } from '../prompts/synthesizer';
 
 export const synthesizeResponseNode = async (state: AgentGraphState): Promise<AgentGraphState> => {
+    console.log('[synthesizeResponseNode] called, finalResponse so far:', state.finalResponse?.slice(0, 40) ?? '(empty)');
     if (state.clarification.needed && state.clarification.question) {
         return pushTrace(
             {

@@ -20,9 +20,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { runDailyDigestJobForUser } from '../../services/agent/dailyDigest';
 import { AgentExecutor } from '../../services/agent/executor';
 import { AgentStep } from '../../services/agent/types';
+import type { ActionPayload } from '../../services/agent/action_runtime/types';
+import { AGENT_CONFIG } from '../../services/agent/config';
 import { getCurrentUser } from '../../services/auth';
 import { supabase } from '../../services/supabase';
 import { GuestLoginModal } from '../common/GuestLoginModal';
+import { ReviewModal } from './ReviewModal';
+import { ReviewConfirmModal } from './ReviewConfirmModal';
 
 interface AgentChatScreenProps {
     showBackButton?: boolean;
@@ -107,10 +111,14 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
         content: string,
         steps?: AgentStep[],
         quickReplies?: string[],
+        actionPayload?: ActionPayload | null,
         id?: string,
         isTyping?: boolean
     }[]>([]);
     const [loading, setLoading] = useState(false);
+    const [activePayload, setActivePayload] = useState<ActionPayload | null>(null);
+    const [showReviewModal, setShowReviewModal] = useState(false);
+    const [showReviewConfirmModal, setShowReviewConfirmModal] = useState(false);
     const [keyboardVisible, setKeyboardVisible] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [loadingSession, setLoadingSession] = useState(true);
@@ -471,13 +479,31 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                 throw new Error('请先登录后再使用校园助手。');
             }
 
+            console.log('[AgentChat] response.finalAnswer:', response.finalAnswer?.slice(0, 80) ?? '(empty)');
+            console.log('[AgentChat] response.actionPayload:', response.actionPayload ? 'present' : 'null');
+
+            const displayContent = response.finalAnswer?.trim() || '抱歉，暂时无法生成回复，请稍后再试。';
+
             setMessages(prev => prev.map(m => m.id === streamId ? {
                 ...m,
-                content: response.finalAnswer || m.content,
+                content: displayContent,
                 steps: response.steps,
                 quickReplies: response.quickReplies,
+                actionPayload: response.actionPayload,
                 isTyping: false
             } : m));
+
+            // Show modal if actionPayload indicates a review surface
+            if (response.actionPayload && AGENT_CONFIG.ACTION_AGENT_REVIEW_MODAL_ENABLED) {
+                const surface = response.actionPayload.action.uiSchema.surface;
+                if (surface === 'review_modal') {
+                    setActivePayload(response.actionPayload);
+                    setShowReviewModal(true);
+                } else if (surface === 'review_confirm_modal') {
+                    setActivePayload(response.actionPayload);
+                    setShowReviewConfirmModal(true);
+                }
+            }
         } catch (error: any) {
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -501,6 +527,37 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
             setLoading(false);
         }
     };
+    const handleReviewSubmit = (draft: { courseCode: string | null; rating: number | null; content: string; anonymous: boolean }) => {
+        setShowReviewModal(false);
+        setActivePayload(null);
+        const parts = [];
+        if (draft.courseCode) parts.push(draft.courseCode);
+        if (draft.rating) parts.push(`${draft.rating}星`);
+        if (draft.content) parts.push(draft.content);
+        if (draft.anonymous) parts.push('匿名');
+        handleSend(parts.join(' '));
+    };
+
+    const handleReviewConfirm = () => {
+        setShowReviewConfirmModal(false);
+        setActivePayload(null);
+        handleSend('确认');
+    };
+
+    const handleReviewCancel = () => {
+        setShowReviewModal(false);
+        setShowReviewConfirmModal(false);
+        setActivePayload(null);
+        handleSend('取消');
+    };
+
+    const handleReviewEdit = () => {
+        setShowReviewConfirmModal(false);
+        if (activePayload) {
+            setShowReviewModal(true);
+        }
+    };
+
     const bottomComposerOffset = showBackButton
         ? Math.max(insets.bottom, 16)
         : keyboardVisible
@@ -644,6 +701,21 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
             <GuestLoginModal
                 visible={showGuestModal}
                 onClose={() => setShowGuestModal(false)}
+            />
+
+            <ReviewModal
+                visible={showReviewModal}
+                payload={activePayload}
+                onSubmit={handleReviewSubmit}
+                onCancel={handleReviewCancel}
+            />
+
+            <ReviewConfirmModal
+                visible={showReviewConfirmModal}
+                payload={activePayload}
+                onConfirm={handleReviewConfirm}
+                onCancel={handleReviewCancel}
+                onEdit={handleReviewEdit}
             />
         </KeyboardAvoidingView >
     );
