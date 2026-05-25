@@ -1,9 +1,16 @@
 import { composeDailyDigestMessage } from './composeMessage';
-import { buildDailyDigestSourceUrl, getDailyDigestDate } from './config';
+import { buildDailyDigestSourceUrl, DAILY_DIGEST_CONFIG, getDailyDigestDate } from './config';
 import { fetchDailyDigestSourceHtml } from './fetchSource';
 import { parseDailyDigestItems, parseDailyDigestSummaryText } from './parseSource';
 import { sendDailyDigestPush } from './push';
-import { getCachedDailyDigest, getDailyDigestEnabled, saveCachedDailyDigest } from './repository';
+import {
+    getCachedDailyDigest,
+    getDatabaseDailyDigest,
+    getDailyDigestEnabled,
+    getLatestDatabaseDailyDigest,
+    saveCachedDailyDigest,
+    saveDatabaseDailyDigest,
+} from './repository';
 import { buildDailyDigestSummary } from './summarize';
 import { DailyDigestJobOptions, DailyDigestPayload, DigestJobResult } from './types';
 
@@ -22,6 +29,27 @@ const hasStructuredLineRefs = (items?: DailyDigestPayload['items']): boolean =>
 
 const isStaleCachedMessage = (payload: DailyDigestPayload): boolean =>
     composeDailyDigestMessage(payload.summary, payload.items) !== payload.message;
+
+const normalizePayload = (payload: DailyDigestPayload | null | undefined): DailyDigestPayload | null => {
+    if (!payload || payload.items.length === 0 || !hasStructuredLineRefs(payload.items)) {
+        return null;
+    }
+
+    if (isLegacyListMessage(payload.message) || isStaleCachedMessage(payload)) {
+        return {
+            ...payload,
+            message: composeDailyDigestMessage(payload.summary, payload.items),
+        };
+    }
+
+    return payload;
+};
+
+const addDays = (date: Date, offsetDays: number): Date => {
+    const next = new Date(date);
+    next.setDate(next.getDate() + offsetDays);
+    return next;
+};
 
 const logDailyDigestDebug = (stage: string, payload: {
     userId: string,
@@ -62,85 +90,161 @@ export const runDailyDigestJobForUser = async (
     }
 
     const dateStr = getDailyDigestDate(date);
-    const cached = await getCachedDailyDigest(userId, dateStr);
-
     const shouldSendPush = options.sendPush !== false;
+    const todayStr = getDailyDigestDate(new Date());
+    const shouldFallbackToRecent = dateStr === todayStr;
 
-    if (!options.forceRefresh && cached && cached.items.length > 0 && hasStructuredLineRefs(cached.items) && !isLegacyListMessage(cached.message) && !isStaleCachedMessage(cached)) {
-        logDailyDigestDebug('cache_hit', {
-            userId,
-            date: dateStr,
-            sourceUrl: cached.sourceUrl,
-            fromCache: true,
-            items: cached.items,
-        });
-        if (shouldSendPush) {
-            await sendDailyDigestPush(userId, cached);
+    if (!options.forceRefresh) {
+        const cached = await getCachedDailyDigest(userId, dateStr);
+
+        const normalizedCached = normalizePayload(cached);
+        if (normalizedCached) {
+            logDailyDigestDebug('cache_hit', {
+                userId,
+                date: dateStr,
+                sourceUrl: normalizedCached.sourceUrl,
+                fromCache: true,
+                items: normalizedCached.items,
+            });
+            if (shouldSendPush) {
+                await sendDailyDigestPush(userId, normalizedCached);
+            }
+            return {
+                ok: true,
+                payload: normalizedCached,
+                fromCache: true,
+            };
         }
-        return {
-            ok: true,
-            payload: cached,
-            fromCache: true,
-        };
+
+        const stored = await getDatabaseDailyDigest(dateStr);
+        const normalizedStored = normalizePayload(stored);
+        if (normalizedStored) {
+            await saveCachedDailyDigest(userId, normalizedStored);
+            if (shouldSendPush) {
+                await sendDailyDigestPush(userId, normalizedStored);
+            }
+            return {
+                ok: true,
+                payload: normalizedStored,
+                fromCache: true,
+            };
+        }
+
+        if (shouldFallbackToRecent) {
+            const latestStored = await getLatestDatabaseDailyDigest(dateStr);
+            const normalizedLatestStored = normalizePayload(latestStored);
+            if (normalizedLatestStored) {
+                await saveCachedDailyDigest(userId, normalizedLatestStored);
+                if (shouldSendPush) {
+                    await sendDailyDigestPush(userId, normalizedLatestStored);
+                }
+                return {
+                    ok: true,
+                    payload: normalizedLatestStored,
+                    fromCache: true,
+                };
+            }
+        }
     }
 
     try {
-        const sourceUrl = buildDailyDigestSourceUrl(dateStr);
-        const html = await fetchDailyDigestSourceHtml(sourceUrl);
+        let sawPublishedPage = false;
 
-        if (!html) {
-            return { ok: false, reason: 'not_published' };
-        }
+        for (let offset = 0; offset <= (shouldFallbackToRecent ? DAILY_DIGEST_CONFIG.maxFallbackDays : 0); offset += 1) {
+            const targetDate = addDays(date, -offset);
+            const targetDateStr = getDailyDigestDate(targetDate);
 
-        const items = parseDailyDigestItems(html, sourceUrl);
-        const extractedSummary = parseDailyDigestSummaryText(html);
+            if (!options.forceRefresh) {
+                const fallbackCached = await getCachedDailyDigest(userId, targetDateStr);
+                const normalizedFallbackCached = normalizePayload(fallbackCached);
+                if (normalizedFallbackCached) {
+                    if (shouldSendPush) {
+                        await sendDailyDigestPush(userId, normalizedFallbackCached);
+                    }
+                    return {
+                        ok: true,
+                        payload: normalizedFallbackCached,
+                        fromCache: true,
+                    };
+                }
 
-        if (items.length === 0) {
-            logDailyDigestDebug('no_new_content', {
+                const fallbackStored = await getDatabaseDailyDigest(targetDateStr);
+                const normalizedFallbackStored = normalizePayload(fallbackStored);
+                if (normalizedFallbackStored) {
+                    await saveCachedDailyDigest(userId, normalizedFallbackStored);
+                    if (shouldSendPush) {
+                        await sendDailyDigestPush(userId, normalizedFallbackStored);
+                    }
+                    return {
+                        ok: true,
+                        payload: normalizedFallbackStored,
+                        fromCache: true,
+                    };
+                }
+            }
+
+            const sourceUrl = buildDailyDigestSourceUrl(targetDateStr);
+            const html = await fetchDailyDigestSourceHtml(sourceUrl);
+
+            if (!html) {
+                continue;
+            }
+
+            sawPublishedPage = true;
+
+            const items = parseDailyDigestItems(html, sourceUrl);
+            const extractedSummary = parseDailyDigestSummaryText(html);
+
+            if (items.length === 0) {
+                logDailyDigestDebug('no_new_content', {
+                    userId,
+                    date: targetDateStr,
+                    sourceUrl,
+                    fromCache: false,
+                    extractedSummary,
+                    items,
+                });
+                continue;
+            }
+
+            const summary = buildDailyDigestSummary(items, targetDateStr, extractedSummary);
+            const message = composeDailyDigestMessage(summary, items);
+
+            const payload: DailyDigestPayload = {
+                digestId: `digest_${targetDateStr}`,
+                date: targetDateStr,
+                sourceUrl,
+                summary,
+                items,
+                message,
+                createdAt: new Date().toISOString(),
+            };
+
+            logDailyDigestDebug('fetched', {
                 userId,
-                date: dateStr,
+                date: targetDateStr,
                 sourceUrl,
                 fromCache: false,
                 extractedSummary,
                 items,
             });
+
+            await saveCachedDailyDigest(userId, payload);
+            await saveDatabaseDailyDigest(payload);
+            if (shouldSendPush) {
+                await sendDailyDigestPush(userId, payload);
+            }
+
             return {
-                ok: false,
-                reason: 'no_new_content',
+                ok: true,
+                payload,
+                fromCache: false,
             };
         }
 
-        const summary = buildDailyDigestSummary(items, dateStr, extractedSummary);
-        const message = composeDailyDigestMessage(summary, items);
-
-        const payload: DailyDigestPayload = {
-            digestId: `digest_${dateStr}`,
-            date: dateStr,
-            sourceUrl,
-            summary,
-            items,
-            message,
-            createdAt: new Date().toISOString(),
-        };
-
-        logDailyDigestDebug('fetched', {
-            userId,
-            date: dateStr,
-            sourceUrl,
-            fromCache: false,
-            extractedSummary,
-            items,
-        });
-
-        await saveCachedDailyDigest(userId, payload);
-        if (shouldSendPush) {
-            await sendDailyDigestPush(userId, payload);
-        }
-
         return {
-            ok: true,
-            payload,
-            fromCache: false,
+            ok: false,
+            reason: sawPublishedPage ? 'no_new_content' : 'not_published',
         };
     } catch (error) {
         console.error('[DailyDigest] job failed:', error);

@@ -3,6 +3,7 @@ export const DAILY_DIGEST_SOURCE_HOST = 'https://hex2077.dev';
 export const DAILY_DIGEST_CONFIG = {
     requestTimeoutMs: 12000,
     maxRetries: 2,
+    maxFallbackDays: 7,
     maxItems: 24,
     maxRefsPerLine: 2,
     summaryMaxChars: 220,

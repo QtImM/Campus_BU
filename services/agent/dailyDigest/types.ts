@@ -19,7 +19,7 @@ export interface DigestJobResult {
     ok: boolean;
     payload?: DailyDigestPayload;
     fromCache?: boolean;
-    reason?: 'missing_user_id' | 'disabled' | 'no_new_content' | 'job_failed';
+    reason?: 'missing_user_id' | 'disabled' | 'no_new_content' | 'not_published' | 'job_failed';
 }
 
 export interface DailyDigestJobOptions {

@@ -23,7 +23,6 @@ import { AgentStep } from '../../services/agent/types';
 import type { ActionPayload } from '../../services/agent/action_runtime/types';
 import { AGENT_CONFIG } from '../../services/agent/config';
 import { getCurrentUser } from '../../services/auth';
-import { supabase } from '../../services/supabase';
 import { GuestLoginModal } from '../common/GuestLoginModal';
 import { ReviewModal } from './ReviewModal';
 import { ReviewConfirmModal } from './ReviewConfirmModal';
@@ -139,24 +138,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
         if (Number.isNaN(parsed.getTime())) {
             return null;
         }
-        return parsed;
-    };
-
-    const parseDigestDateFromText = (value?: string | null): Date | null => {
-        if (!value) {
-            return null;
-        }
-
-        const match = value.match(/(\d{4}-\d{2}-\d{2})/);
-        if (!match) {
-            return null;
-        }
-
-        const parsed = new Date(`${match[1]}T00:00:00+08:00`);
-        if (Number.isNaN(parsed.getTime())) {
-            return null;
-        }
-
         return parsed;
     };
 
@@ -293,36 +274,13 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
         }
 
         try {
-            const { data } = await supabase
-                .from('notifications')
-                .select('title, content, created_at')
-                .eq('user_id', currentUser.uid)
-                .eq('type', 'system')
-                .order('created_at', { ascending: false })
-                .limit(20);
-
-            const digestNotification = (data || []).find((item) =>
-                /AI资讯摘要|AI資訊摘要|AI news digest/i.test(String(item.title || ''))
-            );
-
-            const digestDate =
-                parseDigestDateFromText(digestNotification?.title)
-                || parseDigestDateFromText(digestNotification?.content)
-                || (digestNotification?.created_at ? new Date(digestNotification.created_at) : new Date());
-
-            const digestResult = await runDailyDigestJobForUser(currentUser.uid, digestDate, {
+            const digestResult = await runDailyDigestJobForUser(currentUser.uid, undefined, {
                 ignoreEnabledCheck: true,
                 sendPush: false,
             });
 
             if (digestResult.ok && digestResult.payload) {
                 return digestResult.payload.message;
-            }
-
-            if (digestNotification) {
-                const matchedDate = digestNotification.title?.match(/(\d{4}-\d{2}-\d{2})/)?.[1];
-                const fallbackHeader = matchedDate ? `最新资讯摘要 ${matchedDate}` : '最新资讯摘要';
-                return `${fallbackHeader}\n${digestNotification.content || ''}`.trim();
             }
 
             return '暂时没有读取到数据库里的最新资讯，请稍后再试。';
@@ -346,24 +304,7 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
         }
 
         try {
-            const { data } = await supabase
-                .from('notifications')
-                .select('title, content, created_at')
-                .eq('user_id', currentUser.uid)
-                .eq('type', 'system')
-                .order('created_at', { ascending: false })
-                .limit(20);
-
-            const digestNotification = (data || []).find((item) =>
-                /AI资讯摘要|AI資訊摘要|AI news digest/i.test(String(item.title || ''))
-            );
-
-            const digestDate =
-                parseDigestDateFromText(digestNotification?.title)
-                || parseDigestDateFromText(digestNotification?.content)
-                || (digestNotification?.created_at ? new Date(digestNotification.created_at) : new Date());
-
-            const digestResult = await runDailyDigestJobForUser(currentUser.uid, digestDate, {
+            const digestResult = await runDailyDigestJobForUser(currentUser.uid, undefined, {
                 ignoreEnabledCheck: true,
                 sendPush: false,
             });
@@ -385,20 +326,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                         },
                     ];
                 });
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-                return;
-            }
-
-            if (digestNotification) {
-                const matchedDate = digestNotification.title?.match(/(\d{4}-\d{2}-\d{2})/)?.[1];
-                const fallbackHeader = matchedDate ? `最新资讯摘要 ${matchedDate}` : '最新资讯摘要';
-                setMessages((prev) => [
-                    ...prev,
-                    {
-                        role: 'assistant',
-                        content: `${fallbackHeader}\n${digestNotification.content || ''}`.trim(),
-                    },
-                ]);
                 scrollViewRef.current?.scrollToEnd({ animated: true });
                 return;
             }
