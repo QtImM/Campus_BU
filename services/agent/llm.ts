@@ -125,6 +125,89 @@ async function callDeepSeekStreamViaFetch(
     return fullText;
 }
 
+export type DeepSeekMessageWithTools = {
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string | null;
+    tool_calls?: Array<{
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+    }> | null;
+    tool_call_id?: string;
+};
+
+export type DeepSeekToolSchema = {
+    type: 'function';
+    function: {
+        name: string;
+        description: string;
+        parameters: {
+            type: 'object';
+            properties: Record<string, {
+                type: string;
+                description: string;
+                enum?: string[];
+            }>;
+            required: string[];
+        };
+    };
+};
+
+export type DeepSeekToolCallResponse = {
+    content: string | null;
+    tool_calls: Array<{
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+    }> | null;
+};
+
+/**
+ * Call DeepSeek with function calling support for ReAct loop.
+ */
+export async function callDeepSeekWithTools(
+    messages: DeepSeekMessageWithTools[],
+    tools: DeepSeekToolSchema[],
+    options?: { model?: string }
+): Promise<DeepSeekToolCallResponse> {
+    assertDeepSeekConfigured();
+    const model = options?.model || AGENT_CONFIG.FAST_MODEL;
+
+    try {
+        const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+            },
+            body: JSON.stringify({
+                model,
+                messages,
+                tools,
+                tool_choice: 'auto',
+                temperature: 0.7,
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`DeepSeek API error: ${response.status} - ${err}`);
+        }
+
+        const data = await response.json();
+        const message = data.choices[0]?.message;
+
+        return {
+            content: message?.content ?? null,
+            tool_calls: message?.tool_calls ?? null,
+        };
+    } catch (e) {
+        console.error('[LLM] DeepSeek callWithTools failed:', e);
+        throw e;
+    }
+}
+
 export function callDeepSeekStream(
     messages: { role: string, content: string }[],
     onToken?: (text: string) => void,

@@ -34,5 +34,8 @@ export const AGENT_CONFIG = {
     DEEPSEEK_ENABLED: !looksLikePlaceholderKey(rawDeepSeekApiKey),
     ACTION_AGENT_ENABLED: parseBooleanFlag(process.env.EXPO_PUBLIC_ACTION_AGENT_ENABLED, true),
     ACTION_AGENT_REVIEW_MODAL_ENABLED: parseBooleanFlag(process.env.EXPO_PUBLIC_ACTION_AGENT_REVIEW_MODAL_ENABLED, true),
+    REACT_RUNTIME_ENABLED: parseBooleanFlag(process.env.EXPO_PUBLIC_REACT_RUNTIME_ENABLED, true),
+    REACT_MAX_ITERATIONS: parseInt(process.env.EXPO_PUBLIC_REACT_MAX_ITERATIONS || '5', 10),
+    REACT_TIMEOUT_MS: parseInt(process.env.EXPO_PUBLIC_REACT_TIMEOUT_MS || '30000', 10),
     IS_PROD: false, // Set to true to use real backend proxy in future
 };

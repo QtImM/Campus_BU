@@ -5,11 +5,12 @@ import { callDeepSeek, resolveModelName } from './llm';
 import { AgentContext, AgentGeoPoint, AgentResponse } from './types';
 import { runActionAgent, detectActionType, executeToolCall } from './action_runtime';
 import type { PendingDraft } from './action_runtime';
+import { runReactAgent } from './react_runtime';
 
 /**
  * Thin adapter that owns entrypoint wiring and conversation context assembly.
  * All agent behavior (intent routing, tool execution, confirmation flow, memory)
- * lives in the LangGraph runtime.
+ * lives in the ReAct runtime.
  *
  * Write operations are routed to the Action Agent runtime when ACTION_AGENT_ENABLED.
  */
@@ -50,11 +51,11 @@ export class AgentExecutor {
             try {
                 response = await this.processWithActionAgent(prompt);
             } catch (error) {
-                console.error('[AgentExecutor] Action Agent failed, falling back to graph:', error);
-                response = await this.processWithLegacyGraph(prompt, onUpdate);
+                console.error('[AgentExecutor] Action Agent failed, falling back to React loop:', error);
+                response = await this.processWithReactLoop(prompt, onUpdate);
             }
         } else {
-            response = await this.processWithLegacyGraph(prompt, onUpdate);
+            response = await this.processWithReactLoop(prompt, onUpdate);
         }
 
         if (!response.finalAnswer) {
@@ -70,8 +71,8 @@ export class AgentExecutor {
 
     /**
      * Determine if the input should be routed to the Action Agent.
-     * Phase 1: only post_course_review is routed to Action Agent.
-     * Other write operations continue through the legacy graph.
+     * All detected write operations must route to the Action Agent
+     * because the legacy graph path is no longer used.
      */
     private shouldUseActionAgent(prompt: string): boolean {
         if (!AGENT_CONFIG.ACTION_AGENT_ENABLED) {
@@ -83,9 +84,8 @@ export class AgentExecutor {
             return true;
         }
 
-        // Phase 1: only route post_course_review to Action Agent
         const actionType = detectActionType(prompt);
-        return actionType === 'post_course_review';
+        return actionType !== null;
     }
 
     /**
@@ -120,14 +120,16 @@ export class AgentExecutor {
     }
 
     /**
-     * Process input through the legacy LangGraph runtime.
+     * Process input through the ReAct runtime.
+     * Falls back to fallback LLM if REACT_RUNTIME_ENABLED is false or runtime fails.
      */
-    private async processWithLegacyGraph(prompt: string, onUpdate?: (text: string) => void): Promise<AgentResponse> {
-        let response: AgentResponse;
+    private async processWithReactLoop(prompt: string, onUpdate?: (text: string) => void): Promise<AgentResponse> {
+        if (!AGENT_CONFIG.REACT_RUNTIME_ENABLED) {
+            return this.processWithFallbackLLM(prompt, onUpdate);
+        }
 
         try {
-            const { runAgentGraph } = require('.') as typeof import('.');
-            const result = await runAgentGraph({
+            const result = await runReactAgent({
                 input: prompt,
                 userId: this.context.userId,
                 sessionId: this.context.sessionId,
@@ -137,15 +139,19 @@ export class AgentExecutor {
                 deviceLocation: this.context.deviceLocation,
             });
 
-            this.context.sessionState = result.sessionState;
-            response = result.response;
+            return {
+                finalAnswer: result.finalAnswer,
+                steps: [{
+                    thought: result.error
+                        ? `react: ${result.error}`
+                        : `react: ${result.iterations} iterations, tools: [${result.toolsUsed.join(', ')}]`,
+                    path: 'llm',
+                }],
+            };
         } catch (error) {
-            AgentExecutor.graphImportFailed = true;
-            console.error('[AgentExecutor] Graph runtime unavailable, falling back to lightweight chat mode:', error);
-            response = await this.processWithFallbackLLM(prompt, onUpdate);
+            console.error('[AgentExecutor] ReAct runtime failed, falling back to lightweight chat mode:', error);
+            return this.processWithFallbackLLM(prompt, onUpdate);
         }
-
-        return response;
     }
 
     private pushHistory(role: 'user' | 'assistant' | 'tool', content: string) {
