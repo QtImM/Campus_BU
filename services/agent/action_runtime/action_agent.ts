@@ -17,6 +17,7 @@ import type {
     ActionType,
     PendingDraft,
     PostCourseReviewDraft,
+    PostTeacherReviewDraft,
 } from './types';
 import {
     buildActionPayload,
@@ -72,6 +73,8 @@ const buildAddCourseModalPayload = (
 // ─── Action Type Detection (local, no LLM) ──────────────────────────
 
 const ACTION_PATTERNS: Array<{ pattern: RegExp; actionType: ActionType }> = [
+    // Teacher review MUST come before course review to take priority when "老师/教师/professor" is mentioned
+    { pattern: /评价.*(老师|教师|教授|professor|prof)|(?:老师|教师|教授|professor|prof).*评价|(?:想|要|给.*写|帮我写|帮我发).*(?:老师|教师|教授).*评价|review.*(?:teacher|professor|prof)/i, actionType: 'post_teacher_review' },
     { pattern: /发.*评价|写.*评价|发布.*评价|(?:想|要|给.*写|帮我写|帮我发).*评价|评价.*课|评价一下|write.*review|post.*review/i, actionType: 'post_course_review' },
     { pattern: /组队|找队友|teaming|队友/i, actionType: 'post_course_teaming' },
     { pattern: /聊天室|群聊|发.*消息|chatroom|send.*message/i, actionType: 'send_course_chat_message' },
@@ -101,6 +104,14 @@ post_course_review 字段：
 - rating: number | null (1-5 星)
 - content: string (评价内容)
 - anonymous: boolean (是否匿名，默认 false)
+
+post_teacher_review 字段：
+- teacherName: string | null (教师姓名，如 Dr. Chan, Prof. Lee)
+- rating: number | null (1-5 星，总体评分)
+- difficulty: number | null (1-5，难度)
+- workload: number | null (1-5，工作量)
+- content: string (评价内容)
+- tags: string[] (标签数组，如 ["讲课清晰", "给分大方"])
 
 post_course_teaming 字段：
 - courseCode: string | null
@@ -195,6 +206,37 @@ const lookupCourse = async (courseCode: string): Promise<{ found: boolean; cours
 
     if (byId) {
         return { found: true, courseId: byId.id, courseName: byId.name };
+    }
+
+    return { found: false };
+};
+
+// ─── Teacher Lookup ────────────────────────────────────────────────
+
+const lookupTeacher = async (teacherName: string): Promise<{ found: boolean; teacherId?: string; teacherName?: string }> => {
+    if (!teacherName) return { found: false };
+
+    // Try exact name match (case-insensitive)
+    const { data: exact } = await supabase
+        .from('teachers')
+        .select('id, name')
+        .ilike('name', teacherName)
+        .maybeSingle();
+
+    if (exact) {
+        return { found: true, teacherId: exact.id, teacherName: exact.name };
+    }
+
+    // Try fuzzy match (contains)
+    const { data: fuzzy } = await supabase
+        .from('teachers')
+        .select('id, name')
+        .ilike('name', `%${teacherName}%`)
+        .limit(1)
+        .maybeSingle();
+
+    if (fuzzy) {
+        return { found: true, teacherId: fuzzy.id, teacherName: fuzzy.name };
     }
 
     return { found: false };
@@ -428,6 +470,132 @@ export const runActionAgent = async (
                 missingFields,
                 uiSchema: createUiSchema('post_course_review', 'draft', { courseLocked: true, courseName: course.courseName ?? undefined }),
                 summary: buildSummary('post_course_review', verifiedDraft, 'draft'),
+                source: 'action_agent',
+                requestId,
+                sessionId,
+            },
+            toolExecuted: false,
+        };
+    }
+
+    // ─── Teacher review verification ──────────────────────────────────
+    if (actionType === 'post_teacher_review') {
+        const d = draft as PostTeacherReviewDraft;
+
+        // No teacher name → ask for it
+        if (!d.teacherName) {
+            const text = '请先告诉我你要评价的教师姓名（如 Dr. Chan、李老师）';
+            return {
+                finalAnswer: text,
+                actionPayload: buildActionPayload({
+                    actionType,
+                    draft,
+                    requestId,
+                    sessionId,
+                    messageText: text,
+                }),
+                pendingDraft: {
+                    actionType,
+                    phase: 'draft',
+                    status: 'awaiting_user_input',
+                    draft,
+                    missingFields: ['teacherName'],
+                    uiSchema: createUiSchema(actionType, 'draft'),
+                    summary: buildSummary(actionType, draft, 'draft'),
+                    source: 'action_agent',
+                    requestId,
+                    sessionId,
+                },
+                toolExecuted: false,
+            };
+        }
+
+        // Verify teacher exists in DB
+        const teacher = await lookupTeacher(d.teacherName);
+        if (!teacher.found) {
+            const text = `未找到教师「${d.teacherName}」，请确认姓名是否正确，或检查拼写。`;
+            return {
+                finalAnswer: text,
+                actionPayload: buildActionPayload({
+                    actionType,
+                    draft,
+                    requestId,
+                    sessionId,
+                    messageText: text,
+                    messageTone: 'warning',
+                }),
+                pendingDraft: {
+                    actionType,
+                    phase: 'draft',
+                    status: 'awaiting_user_input',
+                    draft,
+                    missingFields: ['teacherName'],
+                    uiSchema: createUiSchema(actionType, 'draft'),
+                    summary: buildSummary(actionType, draft, 'draft'),
+                    source: 'action_agent',
+                    requestId,
+                    sessionId,
+                },
+                toolExecuted: false,
+            };
+        }
+
+        // Teacher found → lock teacherId
+        const verifiedDraft = { ...d, teacherId: teacher.teacherId, teacherName: teacher.teacherName } as PostTeacherReviewDraft;
+        const teacherMissing = computeMissingFields('post_teacher_review', verifiedDraft);
+
+        if (teacherMissing.length === 0) {
+            const text = `找到教师 ${teacher.teacherName}，请确认评价内容。`;
+            return {
+                finalAnswer: text,
+                actionPayload: buildActionPayload({
+                    actionType: 'post_teacher_review',
+                    draft: verifiedDraft,
+                    requestId,
+                    sessionId,
+                    messageText: text,
+                    phaseOverride: 'confirm',
+                    statusOverride: 'ready_for_confirmation',
+                    teacherLocked: true,
+                    teacherName: teacher.teacherName,
+                }),
+                pendingDraft: {
+                    actionType: 'post_teacher_review',
+                    phase: 'confirm',
+                    status: 'ready_for_confirmation',
+                    draft: verifiedDraft,
+                    missingFields: [],
+                    uiSchema: createUiSchema('post_teacher_review', 'confirm'),
+                    summary: buildSummary('post_teacher_review', verifiedDraft, 'confirm'),
+                    source: 'action_agent',
+                    requestId,
+                    sessionId,
+                },
+                toolExecuted: false,
+            };
+        }
+
+        // Teacher found but missing rating/content → show modal
+        const text = `找到教师 ${teacher.teacherName}，请在弹窗中填写评分和评价内容。`;
+        return {
+            finalAnswer: text,
+            actionPayload: buildActionPayload({
+                actionType: 'post_teacher_review',
+                draft: verifiedDraft,
+                requestId,
+                sessionId,
+                messageText: text,
+                teacherLocked: true,
+                teacherName: teacher.teacherName,
+            }),
+            pendingDraft: {
+                actionType: 'post_teacher_review',
+                phase: 'draft',
+                status: 'awaiting_user_input',
+                draft: verifiedDraft,
+                missingFields: teacherMissing,
+                uiSchema: createUiSchema('post_teacher_review', 'draft', { teacherLocked: true, teacherName: teacher.teacherName }),
+                summary: buildSummary('post_teacher_review', verifiedDraft, 'draft'),
                 source: 'action_agent',
                 requestId,
                 sessionId,

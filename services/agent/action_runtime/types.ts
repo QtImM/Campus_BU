@@ -9,6 +9,7 @@
 
 export type ActionType =
     | 'post_course_review'
+    | 'post_teacher_review'
     | 'post_course_teaming'
     | 'send_course_chat_message'
     | 'create_user_calendar_event'
@@ -33,6 +34,16 @@ export type PostCourseReviewDraft = {
     rating: number | null;
     content: string;
     anonymous: boolean;
+};
+
+export type PostTeacherReviewDraft = {
+    teacherName: string | null;
+    teacherId: string | null;
+    rating: number | null;
+    difficulty: number | null;
+    workload: number | null;
+    content: string;
+    tags: string[];
 };
 
 export type PostCourseTeamingDraft = {
@@ -70,6 +81,7 @@ export type WriteUserScheduleEntryDraft = {
 
 export type ActionDraft =
     | PostCourseReviewDraft
+    | PostTeacherReviewDraft
     | PostCourseTeamingDraft
     | SendCourseChatMessageDraft
     | CreateUserCalendarEventDraft

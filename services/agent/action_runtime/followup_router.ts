@@ -6,7 +6,7 @@
  * See docs/agent/action-agent-contract-and-flow.md §12 and migration doc §3.2.
  */
 
-import type { ActionDraft, ActionType, PendingDraft, PostCourseReviewDraft } from './types';
+import type { ActionDraft, ActionType, PendingDraft, PostCourseReviewDraft, PostTeacherReviewDraft } from './types';
 import { computeMissingFields, REVIEW_PRESETS, buildSummary } from './contract';
 
 export type FollowupKind = 'cancel' | 'confirm' | 'field_edit' | 'free_text' | 'unknown';
@@ -73,10 +73,25 @@ const fillReviewDraft = (existing: PostCourseReviewDraft, input: string): PostCo
     return { ...existing, courseCode, rating, content };
 };
 
+const fillTeacherReviewDraft = (existing: PostTeacherReviewDraft, input: string): PostTeacherReviewDraft => {
+    const rating = extractRating(input) ?? existing.rating;
+    // If input is not a rating, treat it as content
+    const extractedContent = extractReviewContent(input);
+    const content = extractedContent
+        ? extractedContent
+        : (!existing.content && input.length >= 2 && input.length <= 240 && !extractRating(input))
+            ? input.trim()
+            : existing.content;
+
+    return { ...existing, rating, content };
+};
+
 const fillDraftByActionType = (actionType: ActionType, draft: ActionDraft, input: string): ActionDraft => {
     switch (actionType) {
         case 'post_course_review':
             return fillReviewDraft(draft as PostCourseReviewDraft, input);
+        case 'post_teacher_review':
+            return fillTeacherReviewDraft(draft as PostTeacherReviewDraft, input);
         default:
             return draft;
     }

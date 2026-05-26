@@ -19,6 +19,7 @@ import type {
     CreateUserCalendarEventDraft,
     ExpectedUserAction,
     PostCourseReviewDraft,
+    PostTeacherReviewDraft,
     PostCourseTeamingDraft,
     SendCourseChatMessageDraft,
     UiSchema,
@@ -67,9 +68,20 @@ export const createDefaultScheduleEntryDraft = (): WriteUserScheduleEntryDraft =
     weekText: '',
 });
 
+export const createDefaultTeacherReviewDraft = (): PostTeacherReviewDraft => ({
+    teacherName: null,
+    teacherId: null,
+    rating: null,
+    difficulty: null,
+    workload: null,
+    content: '',
+    tags: [],
+});
+
 export const createDefaultDraft = (actionType: ActionType): ActionDraft => {
     switch (actionType) {
         case 'post_course_review': return createDefaultReviewDraft();
+        case 'post_teacher_review': return createDefaultTeacherReviewDraft();
         case 'post_course_teaming': return createDefaultTeamingDraft();
         case 'send_course_chat_message': return createDefaultChatMessageDraft();
         case 'create_user_calendar_event': return createDefaultCalendarEventDraft();
@@ -85,6 +97,14 @@ export const computeMissingFields = (actionType: ActionType, draft: ActionDraft)
             const d = draft as PostCourseReviewDraft;
             return [
                 ...(!d.courseCode ? ['courseCode'] : []),
+                ...(d.rating == null ? ['rating'] : []),
+                ...(!d.content ? ['content'] : []),
+            ];
+        }
+        case 'post_teacher_review': {
+            const d = draft as PostTeacherReviewDraft;
+            return [
+                ...(!d.teacherName ? ['teacherName'] : []),
                 ...(d.rating == null ? ['rating'] : []),
                 ...(!d.content ? ['content'] : []),
             ];
@@ -127,6 +147,7 @@ export const computeMissingFields = (actionType: ActionType, draft: ActionDraft)
 
 const ALL_EDITABLE_FIELDS: Record<ActionType, string[]> = {
     post_course_review: ['courseCode', 'rating', 'content', 'anonymous'],
+    post_teacher_review: ['teacherName', 'rating', 'difficulty', 'workload', 'content', 'tags'],
     post_course_teaming: ['courseCode', 'section', 'content', 'contactMethod'],
     send_course_chat_message: ['courseCode', 'content'],
     create_user_calendar_event: ['title', 'eventType', 'eventDate', 'startTime', 'endTime', 'location', 'note', 'courseCode'],
@@ -191,9 +212,39 @@ export const createReviewUiSchema = (phase: ActionPhase, options?: { courseLocke
     };
 };
 
-export const createUiSchema = (actionType: ActionType, phase: ActionPhase, options?: { courseLocked?: boolean; courseName?: string }): UiSchema => {
+export const createTeacherReviewUiSchema = (phase: ActionPhase, options?: { teacherLocked?: boolean; teacherName?: string }): UiSchema => {
+    if (phase === 'confirm') {
+        return {
+            surface: 'teacher_review_confirm_modal',
+            title: '确认发布教师评价',
+        };
+    }
+    if (phase === 'result') {
+        return { surface: 'result_card' };
+    }
+    const teacherLabel = options?.teacherName
+        ? `教师：${options.teacherName}`
+        : '教师姓名';
+    return {
+        surface: 'teacher_review_modal',
+        title: '发布教师评价',
+        submitLabel: '提交评价',
+        cancelLabel: '取消',
+        fields: [
+            { name: 'teacherName', label: teacherLabel, component: 'teacher_picker', required: true, readonly: options?.teacherLocked, placeholder: '例如 Dr. Chan' },
+            { name: 'rating', label: '总体评分', component: 'rating_picker', required: true, scale: 5 },
+            { name: 'difficulty', label: '难度', component: 'rating_picker', required: false, scale: 5 },
+            { name: 'workload', label: '工作量', component: 'rating_picker', required: false, scale: 5 },
+            { name: 'content', label: '评价内容', component: 'textarea', required: true, placeholder: '写下你对这位老师的评价' },
+            { name: 'tags', label: '标签', component: 'tag_picker', required: false, placeholder: '选择标签' },
+        ],
+    };
+};
+
+export const createUiSchema = (actionType: ActionType, phase: ActionPhase, options?: { courseLocked?: boolean; courseName?: string; teacherLocked?: boolean; teacherName?: string }): UiSchema => {
     switch (actionType) {
         case 'post_course_review': return createReviewUiSchema(phase, options);
+        case 'post_teacher_review': return createTeacherReviewUiSchema(phase, options);
         case 'post_course_teaming': return { surface: phase === 'confirm' ? 'teaming_confirm_modal' : 'teaming_modal' };
         case 'send_course_chat_message': return { surface: phase === 'confirm' ? 'chat_confirm_modal' : 'chat_modal' };
         case 'create_user_calendar_event': return { surface: phase === 'confirm' ? 'calendar_confirm_modal' : 'calendar_modal' };
@@ -205,9 +256,14 @@ export const createUiSchema = (actionType: ActionType, phase: ActionPhase, optio
 
 const labelMap: Record<string, string> = {
     courseCode: '课程',
+    teacherName: '教师',
+    teacherId: '教师ID',
     rating: '评分',
+    difficulty: '难度',
+    workload: '工作量',
     content: '内容',
     anonymous: '匿名',
+    tags: '标签',
     section: '小组',
     contactMethod: '联系方式',
     title: '标题',
@@ -226,8 +282,9 @@ const dayOfWeekLabels = ['', '周一', '周二', '周三', '周四', '周五', '
 
 const formatFieldValue = (key: string, value: any): string => {
     if (value == null || value === '') return '未填写';
-    if (key === 'rating') return `${value}/5`;
+    if (key === 'rating' || key === 'difficulty' || key === 'workload') return `${value}/5`;
     if (key === 'anonymous') return value ? '是' : '否';
+    if (key === 'tags' && Array.isArray(value)) return value.length > 0 ? value.join(', ') : '无';
     if (key === 'dayOfWeek' && typeof value === 'number') return dayOfWeekLabels[value] || String(value);
     return String(value);
 };
@@ -236,6 +293,7 @@ export const buildSummary = (actionType: ActionType, draft: ActionDraft, phase: 
     const d = draft as Record<string, any>;
     const titleMap: Record<ActionType, Record<ActionPhase, string>> = {
         post_course_review: { draft: '课程评价草稿', confirm: '待发布课程评价', submitting: '提交中', result: '已发布课程评价' },
+        post_teacher_review: { draft: '教师评价草稿', confirm: '待发布教师评价', submitting: '提交中', result: '已发布教师评价' },
         post_course_teaming: { draft: '组队草稿', confirm: '待发布组队', submitting: '提交中', result: '已发布组队' },
         send_course_chat_message: { draft: '消息草稿', confirm: '待发送消息', submitting: '提交中', result: '已发送消息' },
         create_user_calendar_event: { draft: '日历事件草稿', confirm: '待创建事件', submitting: '提交中', result: '已创建事件' },
@@ -267,7 +325,7 @@ const buildNextStep = (actionType: ActionType, phase: ActionPhase, missingFields
     if (missingFields.length === 0) {
         inputs.push('confirm');
     }
-    if (actionType === 'post_course_review') {
+    if (actionType === 'post_course_review' || actionType === 'post_teacher_review') {
         inputs.push('preset_select');
     }
     return { expectedUserAction: 'fill_or_edit_draft', allowedInputs: inputs };
@@ -298,6 +356,8 @@ export const buildActionPayload = (params: {
     fieldErrors?: Record<string, string>;
     courseLocked?: boolean;
     courseName?: string;
+    teacherLocked?: boolean;
+    teacherName?: string;
 }): ActionPayload => {
     const missingFields = computeMissingFields(params.actionType, params.draft);
     const { phase, status } = derivePhaseAndStatus(missingFields, {
@@ -319,7 +379,7 @@ export const buildActionPayload = (params: {
         missingFields,
         editableFields: isResult ? [] : getEditableFields(params.actionType),
         draft: params.draft,
-        uiSchema: createUiSchema(params.actionType, phase, { courseLocked: params.courseLocked, courseName: params.courseName }),
+        uiSchema: createUiSchema(params.actionType, phase, { courseLocked: params.courseLocked, courseName: params.courseName, teacherLocked: params.teacherLocked, teacherName: params.teacherName }),
         summary: buildSummary(params.actionType, params.draft, phase),
         ...(params.fieldErrors ? { fieldErrors: params.fieldErrors } : {}),
     };

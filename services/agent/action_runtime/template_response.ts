@@ -10,6 +10,7 @@ import { buildActionPayload, getEditableFields } from './contract';
 
 const SUCCESS_MESSAGES: Record<ActionType, (draft: Record<string, any>) => string> = {
     post_course_review: (d) => `已帮你发布到 ${d.courseCode || '课程'} 的课程评价。`,
+    post_teacher_review: (d) => `已帮你发布对 ${d.teacherName || '教师'} 的教师评价。`,
     post_course_teaming: (d) => `已帮你发布到 ${d.courseCode || '课程'} 的组队信息。`,
     send_course_chat_message: (d) => `已帮你发送到 ${d.courseCode || '课程'} 聊天室。`,
     create_user_calendar_event: (d) => `已帮你创建日历事件：${d.title || '事件'}。`,
@@ -18,6 +19,7 @@ const SUCCESS_MESSAGES: Record<ActionType, (draft: Record<string, any>) => strin
 
 const FAILURE_MESSAGES: Record<ActionType, (draft: Record<string, any>) => string> = {
     post_course_review: (d) => `发布 ${d.courseCode || '课程'} 的评价失败了，请稍后重试。`,
+    post_teacher_review: (d) => `发布对 ${d.teacherName || '教师'} 的评价失败了，请稍后重试。`,
     post_course_teaming: (d) => `发布 ${d.courseCode || '课程'} 的组队信息失败了，请稍后重试。`,
     send_course_chat_message: (d) => `发送到 ${d.courseCode || '课程'} 聊天室失败了，请稍后重试。`,
     create_user_calendar_event: (d) => `创建日历事件失败了，请稍后重试。`,

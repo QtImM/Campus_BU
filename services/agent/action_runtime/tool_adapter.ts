@@ -14,6 +14,7 @@ import {
     postCourseTeamingTool,
     sendCourseChatMessageTool,
 } from '../graph/tools/course_community_tools';
+import { submitTeacherReview } from '../../teachers';
 
 export type ToolCallInput = {
     toolName: string;
@@ -42,6 +43,20 @@ export const buildToolCallFromDraft = (draft: PendingDraft, userId: string): Too
                     content: d.content,
                     semester: 'Current',
                     isAnonymous: d.anonymous ?? false,
+                },
+            };
+
+        case 'post_teacher_review':
+            return {
+                toolName: 'post_teacher_review',
+                input: {
+                    teacherId: d.teacherId,
+                    authorId: userId,
+                    rating: d.rating,
+                    difficulty: d.difficulty ?? 3,
+                    workload: d.workload ?? 3,
+                    content: d.content,
+                    tags: d.tags ?? [],
                 },
             };
 
@@ -113,6 +128,23 @@ export const executeToolCall = async (
     if (toolName === 'post_course_review') {
         const result = await postCourseReviewTool(input);
         return { success: result.success, error: result.resultSummary };
+    }
+
+    if (toolName === 'post_teacher_review') {
+        try {
+            await submitTeacherReview({
+                teacherId: input.teacherId,
+                authorId: input.authorId,
+                rating: input.rating,
+                difficulty: input.difficulty,
+                workload: input.workload,
+                content: input.content,
+                tags: input.tags,
+            });
+            return { success: true };
+        } catch (error: any) {
+            return { success: false, error: error?.message || 'teacher review submission failed' };
+        }
     }
 
     if (toolName === 'post_course_teaming') {
