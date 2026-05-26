@@ -67,13 +67,17 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
     const handleRatingSelect = useCallback((selected: number) => {
         setRating(selected);
-        // Auto-fill preset content if content is empty
-        if (!content.trim()) {
-            const templates = PRESET_TEMPLATES[String(selected) as keyof typeof PRESET_TEMPLATES];
+        const templates = PRESET_TEMPLATES[String(selected) as keyof typeof PRESET_TEMPLATES];
+        // Auto-fill preset content if content is empty OR content is a preset from a different rating
+        const isCurrentContentAPreset = Object.values(PRESET_TEMPLATES).flat().includes(content.trim());
+        if (!content.trim() || isCurrentContentAPreset) {
             if (templates && templates.length > 0) {
                 setContent(templates[0]);
                 setShowPresets(true);
             }
+        } else {
+            // Content is user-written, just show presets without overwriting
+            setShowPresets(true);
         }
     }, [content]);
 

@@ -828,14 +828,6 @@ export default function CourseDetailScreen() {
             <View style={styles.reviewFooter}>
                 <Text style={styles.date}>{item.createdAt.toLocaleDateString()}</Text>
                 <View style={styles.reviewActions}>
-                    {user && item.authorId === user.uid && (
-                        <TouchableOpacity
-                            onPress={() => handleDeleteReview(item)}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                        >
-                            <Trash2 size={14} color="#EF4444" />
-                        </TouchableOpacity>
-                    )}
                     <TouchableOpacity
                         style={styles.likeButton}
                         onPress={() => handleLike(item.id)}
@@ -852,9 +844,9 @@ export default function CourseDetailScreen() {
                             {item.likes}
                         </Text>
                     </TouchableOpacity>
-                    {item.authorId === user?.uid && (
+                    {user && item.authorId === user.uid && (
                         <TouchableOpacity style={styles.deleteTag} onPress={() => handleDeleteReview(item)}>
-                            <Trash2 size={12} color="#B91C1C" />
+                            <Trash2 size={14} color="#EF4444" />
                         </TouchableOpacity>
                     )}
                 </View>
