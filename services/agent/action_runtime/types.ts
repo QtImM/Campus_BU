@@ -32,6 +32,7 @@ export type ActionStatus =
 export type PostCourseReviewDraft = {
     courseCode: string | null;
     rating: number | null;
+    difficulty: number | null;
     content: string;
     anonymous: boolean;
 };

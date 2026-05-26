@@ -39,7 +39,7 @@ export const buildToolCallFromDraft = (draft: PendingDraft, userId: string): Too
                     authorName: 'Anonymous',
                     authorAvatar: 'Student',
                     rating: d.rating,
-                    difficulty: 3,
+                    difficulty: d.difficulty ?? 3,
                     content: d.content,
                     semester: 'Current',
                     isAnonymous: d.anonymous ?? false,

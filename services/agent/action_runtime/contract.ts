@@ -31,6 +31,7 @@ import type {
 export const createDefaultReviewDraft = (): PostCourseReviewDraft => ({
     courseCode: null,
     rating: null,
+    difficulty: null,
     content: '',
     anonymous: false,
 });
@@ -146,7 +147,7 @@ export const computeMissingFields = (actionType: ActionType, draft: ActionDraft)
 // ─── Editable Fields ────────────────────────────────────────────────
 
 const ALL_EDITABLE_FIELDS: Record<ActionType, string[]> = {
-    post_course_review: ['courseCode', 'rating', 'content', 'anonymous'],
+    post_course_review: ['courseCode', 'rating', 'difficulty', 'content', 'anonymous'],
     post_teacher_review: ['teacherName', 'rating', 'difficulty', 'workload', 'content', 'tags'],
     post_course_teaming: ['courseCode', 'section', 'content', 'contactMethod'],
     send_course_chat_message: ['courseCode', 'content'],
@@ -205,6 +206,7 @@ export const createReviewUiSchema = (phase: ActionPhase, options?: { courseLocke
         fields: [
             { name: 'courseCode', label: courseLabel, component: 'course_picker', required: true, readonly: options?.courseLocked, placeholder: '例如 COMP3015' },
             { name: 'rating', label: '评分', component: 'rating_picker', required: true, scale: 5 },
+            { name: 'difficulty', label: '难度 (1=简单, 5=困难)', component: 'number_picker', required: false, scale: 5 },
             { name: 'content', label: '评价内容', component: 'textarea', required: true, placeholder: '写下你的上课体验' },
             { name: 'anonymous', label: '匿名发布', component: 'switch', required: false },
         ],

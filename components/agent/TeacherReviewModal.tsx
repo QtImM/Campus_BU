@@ -1,9 +1,8 @@
 /**
- * Review Modal
+ * Teacher Review Modal
  *
- * Renders the course review form when actionPayload.uiSchema.surface === 'review_modal'.
- * Supports rating selection, preset content templates, and field editing.
- * See docs/agent/action-agent-contract-and-flow.md §8.2, §12.
+ * Renders the teacher review form when actionPayload.uiSchema.surface === 'teacher_review_modal'.
+ * Supports rating, difficulty, workload selection, and content editing.
  */
 
 import { X, Star } from 'lucide-react-native';
@@ -16,89 +15,83 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    Switch,
     ScrollView,
 } from 'react-native';
-import type { ActionPayload, PostCourseReviewDraft } from '../../services/agent/action_runtime/types';
-import { REVIEW_PRESETS } from '../../services/agent/action_runtime/contract';
+import type { ActionPayload, PostTeacherReviewDraft } from '../../services/agent/action_runtime/types';
 
-interface ReviewModalProps {
+interface TeacherReviewModalProps {
     visible: boolean;
     payload: ActionPayload | null;
-    onSubmit: (draft: PostCourseReviewDraft) => void;
+    onSubmit: (draft: PostTeacherReviewDraft) => void;
     onCancel: () => void;
 }
 
-const PRESET_TEMPLATES = REVIEW_PRESETS.ratingToContentTemplates;
+const TEACHER_TAGS = [
+    '讲课清晰', '给分大方', '有耐心', '作业多', '考试难',
+    '互动好', '有趣', '严格', '宝藏老师', '照本宣科',
+];
 
-export const ReviewModal: React.FC<ReviewModalProps> = ({
+export const TeacherReviewModal: React.FC<TeacherReviewModalProps> = ({
     visible,
     payload,
     onSubmit,
     onCancel,
 }) => {
-    const draft = (payload?.action.draft as PostCourseReviewDraft) ?? {
-        courseCode: null,
+    const draft = (payload?.action.draft as PostTeacherReviewDraft) ?? {
+        teacherName: null,
+        teacherId: null,
         rating: null,
+        difficulty: null,
+        workload: null,
         content: '',
-        anonymous: false,
+        tags: [],
     };
 
-    const courseField = payload?.action.uiSchema.fields?.find(f => f.name === 'courseCode');
-    const isCourseLocked = courseField?.readonly ?? false;
-    const courseLabel = courseField?.label ?? '课程代码';
+    const teacherField = payload?.action.uiSchema.fields?.find(f => f.name === 'teacherName');
+    const isTeacherLocked = teacherField?.readonly ?? false;
+    const teacherLabel = teacherField?.label ?? '教师姓名';
 
-    const [courseCode, setCourseCode] = useState(draft.courseCode ?? '');
+    const [teacherName, setTeacherName] = useState(draft.teacherName ?? '');
     const [rating, setRating] = useState<number | null>(draft.rating);
-    const [difficulty, setDifficulty] = useState<number | null>(draft.difficulty ?? null);
+    const [difficulty, setDifficulty] = useState<number | null>(draft.difficulty);
+    const [workload, setWorkload] = useState<number | null>(draft.workload);
     const [content, setContent] = useState(draft.content);
-    const [anonymous, setAnonymous] = useState(draft.anonymous);
-    const [showPresets, setShowPresets] = useState(false);
+    const [selectedTags, setSelectedTags] = useState<string[]>(draft.tags || []);
 
     // Sync state when payload changes
     useEffect(() => {
         if (payload) {
-            const d = payload.action.draft as PostCourseReviewDraft;
-            setCourseCode(d.courseCode ?? '');
+            const d = payload.action.draft as PostTeacherReviewDraft;
+            setTeacherName(d.teacherName ?? '');
             setRating(d.rating);
-            setDifficulty(d.difficulty ?? null);
+            setDifficulty(d.difficulty);
+            setWorkload(d.workload);
             setContent(d.content);
-            setAnonymous(d.anonymous);
+            setSelectedTags(d.tags || []);
         }
     }, [payload]);
 
-    const handleRatingSelect = useCallback((selected: number) => {
-        setRating(selected);
-        const templates = PRESET_TEMPLATES[String(selected) as keyof typeof PRESET_TEMPLATES];
-        // Auto-fill preset content if content is empty OR content is a preset from a different rating
-        const isCurrentContentAPreset = Object.values(PRESET_TEMPLATES).flat().includes(content.trim());
-        if (!content.trim() || isCurrentContentAPreset) {
-            if (templates && templates.length > 0) {
-                setContent(templates[0]);
-                setShowPresets(true);
-            }
-        } else {
-            // Content is user-written, just show presets without overwriting
-            setShowPresets(true);
-        }
-    }, [content]);
-
-    const handlePresetSelect = useCallback((text: string) => {
-        setContent(text);
-        setShowPresets(false);
+    const handleTagToggle = useCallback((tag: string) => {
+        setSelectedTags(prev =>
+            prev.includes(tag)
+                ? prev.filter(t => t !== tag)
+                : prev.length < 3 ? [...prev, tag] : prev
+        );
     }, []);
 
     const handleSubmit = useCallback(() => {
         onSubmit({
-            courseCode: courseCode.trim().toUpperCase() || null,
+            teacherName: teacherName.trim() || null,
+            teacherId: draft.teacherId,
             rating,
             difficulty,
+            workload,
             content: content.trim(),
-            anonymous,
+            tags: selectedTags,
         });
-    }, [courseCode, rating, difficulty, content, anonymous, onSubmit]);
+    }, [teacherName, rating, difficulty, workload, content, selectedTags, draft.teacherId, onSubmit]);
 
-    const canSubmit = courseCode.trim().length > 0 && rating != null && content.trim().length > 0;
+    const canSubmit = teacherName.trim().length > 0 && rating != null && content.trim().length > 0;
 
     if (!payload) return null;
 
@@ -113,37 +106,36 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                 <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
                     {/* Header */}
                     <View style={styles.header}>
-                        <Text style={styles.title}>发布课程评价</Text>
+                        <Text style={styles.title}>发布教师评价</Text>
                         <TouchableOpacity onPress={onCancel} style={styles.closeButton}>
                             <X size={20} color="#6B7280" />
                         </TouchableOpacity>
                     </View>
 
                     <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-                        {/* Course Code */}
-                        <Text style={styles.label}>{courseLabel} *</Text>
-                        {isCourseLocked ? (
+                        {/* Teacher Name */}
+                        <Text style={styles.label}>{teacherLabel} *</Text>
+                        {isTeacherLocked ? (
                             <View style={styles.lockedField}>
-                                <Text style={styles.lockedText}>{courseCode || '—'}</Text>
+                                <Text style={styles.lockedText}>{teacherName || '—'}</Text>
                             </View>
                         ) : (
                             <TextInput
                                 style={styles.input}
-                                placeholder="例如 COMP3015"
+                                placeholder="例如 Dr. Chan"
                                 placeholderTextColor="#9CA3AF"
-                                value={courseCode}
-                                onChangeText={setCourseCode}
-                                autoCapitalize="characters"
+                                value={teacherName}
+                                onChangeText={setTeacherName}
                             />
                         )}
 
                         {/* Rating */}
-                        <Text style={styles.label}>评分 *</Text>
+                        <Text style={styles.label}>总体评分 *</Text>
                         <View style={styles.ratingRow}>
                             {[1, 2, 3, 4, 5].map((star) => (
                                 <TouchableOpacity
                                     key={star}
-                                    onPress={() => handleRatingSelect(star)}
+                                    onPress={() => setRating(star)}
                                     style={styles.starButton}
                                 >
                                     <Star
@@ -160,19 +152,19 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
                         {/* Difficulty */}
                         <Text style={styles.label}>难度 (1=简单, 5=困难)</Text>
-                        <View style={styles.difficultyRow}>
+                        <View style={styles.numberRow}>
                             {[1, 2, 3, 4, 5].map((level) => (
                                 <TouchableOpacity
                                     key={level}
                                     onPress={() => setDifficulty(level)}
                                     style={[
-                                        styles.difficultyButton,
-                                        difficulty === level && styles.difficultyButtonActive,
+                                        styles.numberButton,
+                                        difficulty === level && styles.numberButtonActive,
                                     ]}
                                 >
                                     <Text style={[
-                                        styles.difficultyButtonText,
-                                        difficulty === level && styles.difficultyButtonTextActive,
+                                        styles.numberButtonText,
+                                        difficulty === level && styles.numberButtonTextActive,
                                     ]}>
                                         {level}
                                     </Text>
@@ -180,39 +172,55 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                             ))}
                         </View>
 
-                        {/* Preset Templates */}
-                        {showPresets && rating != null && (
-                            <View style={styles.presetsContainer}>
-                                <Text style={styles.presetsLabel}>推荐文案：</Text>
-                                {(PRESET_TEMPLATES[String(rating) as keyof typeof PRESET_TEMPLATES] || []).map(
-                                    (template, idx) => (
-                                        <TouchableOpacity
-                                            key={idx}
-                                            style={[
-                                                styles.presetItem,
-                                                content === template && styles.presetItemSelected,
-                                            ]}
-                                            onPress={() => handlePresetSelect(template)}
-                                        >
-                                            <Text
-                                                style={[
-                                                    styles.presetText,
-                                                    content === template && styles.presetTextSelected,
-                                                ]}
-                                            >
-                                                {template}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    )
-                                )}
-                            </View>
-                        )}
+                        {/* Workload */}
+                        <Text style={styles.label}>工作量 (1=轻松, 5=很重)</Text>
+                        <View style={styles.numberRow}>
+                            {[1, 2, 3, 4, 5].map((level) => (
+                                <TouchableOpacity
+                                    key={level}
+                                    onPress={() => setWorkload(level)}
+                                    style={[
+                                        styles.numberButton,
+                                        workload === level && styles.numberButtonActive,
+                                    ]}
+                                >
+                                    <Text style={[
+                                        styles.numberButtonText,
+                                        workload === level && styles.numberButtonTextActive,
+                                    ]}>
+                                        {level}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* Tags */}
+                        <Text style={styles.label}>标签 (最多选3个)</Text>
+                        <View style={styles.tagsContainer}>
+                            {TEACHER_TAGS.map((tag) => (
+                                <TouchableOpacity
+                                    key={tag}
+                                    onPress={() => handleTagToggle(tag)}
+                                    style={[
+                                        styles.tagItem,
+                                        selectedTags.includes(tag) && styles.tagItemSelected,
+                                    ]}
+                                >
+                                    <Text style={[
+                                        styles.tagText,
+                                        selectedTags.includes(tag) && styles.tagTextSelected,
+                                    ]}>
+                                        {tag}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
 
                         {/* Content */}
                         <Text style={styles.label}>评价内容 *</Text>
                         <TextInput
                             style={[styles.input, styles.textarea]}
-                            placeholder="写下你的上课体验"
+                            placeholder="写下你对这位老师的评价"
                             placeholderTextColor="#9CA3AF"
                             value={content}
                             onChangeText={setContent}
@@ -220,17 +228,6 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                             numberOfLines={4}
                             textAlignVertical="top"
                         />
-
-                        {/* Anonymous Toggle */}
-                        <View style={styles.anonymousRow}>
-                            <Text style={styles.anonymousLabel}>匿名发布</Text>
-                            <Switch
-                                value={anonymous}
-                                onValueChange={setAnonymous}
-                                trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
-                                thumbColor={anonymous ? '#1E3A8A' : '#F3F4F6'}
-                            />
-                        </View>
                     </ScrollView>
 
                     {/* Actions */}
@@ -342,11 +339,11 @@ const styles = StyleSheet.create({
         color: '#F59E0B',
         marginLeft: 8,
     },
-    difficultyRow: {
+    numberRow: {
         flexDirection: 'row',
         gap: 8,
     },
-    difficultyButton: {
+    numberButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
@@ -356,61 +353,42 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
-    difficultyButtonActive: {
+    numberButtonActive: {
         backgroundColor: '#1E3A8A',
         borderColor: '#1E3A8A',
     },
-    difficultyButtonText: {
+    numberButtonText: {
         fontSize: 15,
         fontWeight: '600',
         color: '#6B7280',
     },
-    difficultyButtonTextActive: {
+    numberButtonTextActive: {
         color: '#fff',
     },
-    presetsContainer: {
-        marginTop: 12,
-        backgroundColor: '#F0F9FF',
-        borderRadius: 12,
-        padding: 12,
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
     },
-    presetsLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#1E3A8A',
-        marginBottom: 8,
-    },
-    presetItem: {
-        backgroundColor: '#fff',
+    tagItem: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
         borderWidth: 1,
-        borderColor: '#DBEAFE',
-        borderRadius: 10,
-        padding: 10,
-        marginBottom: 6,
+        borderColor: '#E5E7EB',
     },
-    presetItemSelected: {
-        borderColor: '#1E3A8A',
+    tagItemSelected: {
         backgroundColor: '#EFF6FF',
+        borderColor: '#1E3A8A',
     },
-    presetText: {
+    tagText: {
         fontSize: 13,
-        color: '#4B5563',
-        lineHeight: 18,
+        color: '#6B7280',
     },
-    presetTextSelected: {
+    tagTextSelected: {
         color: '#1E3A8A',
         fontWeight: '500',
-    },
-    anonymousRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 20,
-        paddingVertical: 8,
-    },
-    anonymousLabel: {
-        fontSize: 15,
-        color: '#374151',
     },
     actions: {
         flexDirection: 'row',

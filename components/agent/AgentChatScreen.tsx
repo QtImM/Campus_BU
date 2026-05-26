@@ -26,6 +26,7 @@ import { getCurrentUser } from '../../services/auth';
 import { GuestLoginModal } from '../common/GuestLoginModal';
 import { ReviewModal } from './ReviewModal';
 import { ReviewConfirmModal } from './ReviewConfirmModal';
+import { TeacherReviewModal } from './TeacherReviewModal';
 import { AddCourseModal } from './AddCourseModal';
 
 interface AgentChatScreenProps {
@@ -118,6 +119,7 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     const [loading, setLoading] = useState(false);
     const [activePayload, setActivePayload] = useState<ActionPayload | null>(null);
     const [showReviewModal, setShowReviewModal] = useState(false);
+    const [showTeacherReviewModal, setShowTeacherReviewModal] = useState(false);
     const [showReviewConfirmModal, setShowReviewConfirmModal] = useState(false);
     const [showAddCourseModal, setShowAddCourseModal] = useState(false);
     const [addCourseCode, setAddCourseCode] = useState('');
@@ -426,7 +428,10 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                 if (surface === 'review_modal') {
                     setActivePayload(response.actionPayload);
                     setShowReviewModal(true);
-                } else if (surface === 'review_confirm_modal') {
+                } else if (surface === 'teacher_review_modal') {
+                    setActivePayload(response.actionPayload);
+                    setShowTeacherReviewModal(true);
+                } else if (surface === 'review_confirm_modal' || surface === 'teacher_review_confirm_modal') {
                     setActivePayload(response.actionPayload);
                     setShowReviewConfirmModal(true);
                 }
@@ -454,15 +459,35 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
             setLoading(false);
         }
     };
-    const handleReviewSubmit = (draft: { courseCode: string | null; rating: number | null; content: string; anonymous: boolean }) => {
+    const handleReviewSubmit = (draft: { courseCode: string | null; rating: number | null; difficulty: number | null; content: string; anonymous: boolean }) => {
         setShowReviewModal(false);
         setActivePayload(null);
         const parts = [];
         if (draft.courseCode) parts.push(draft.courseCode);
         if (draft.rating) parts.push(`${draft.rating}星`);
+        if (draft.difficulty) parts.push(`难度${draft.difficulty}`);
         if (draft.content) parts.push(draft.content);
         if (draft.anonymous) parts.push('匿名');
         handleSend(parts.join(' '));
+    };
+
+    const handleTeacherReviewSubmit = (draft: { teacherName: string | null; teacherId: string | null; rating: number | null; difficulty: number | null; workload: number | null; content: string; tags: string[] }) => {
+        setShowTeacherReviewModal(false);
+        setActivePayload(null);
+        const parts = [];
+        if (draft.teacherName) parts.push(draft.teacherName);
+        if (draft.rating) parts.push(`${draft.rating}星`);
+        if (draft.difficulty) parts.push(`难度${draft.difficulty}`);
+        if (draft.workload) parts.push(`工作量${draft.workload}`);
+        if (draft.content) parts.push(draft.content);
+        if (draft.tags.length > 0) parts.push(`标签:${draft.tags.join(',')}`);
+        handleSend(parts.join(' '));
+    };
+
+    const handleTeacherReviewCancel = () => {
+        setShowTeacherReviewModal(false);
+        setActivePayload(null);
+        handleSend('取消');
     };
 
     const handleReviewConfirm = () => {
@@ -473,6 +498,7 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
     const handleReviewCancel = () => {
         setShowReviewModal(false);
+        setShowTeacherReviewModal(false);
         setShowReviewConfirmModal(false);
         setActivePayload(null);
         handleSend('取消');
@@ -655,6 +681,13 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
                 payload={activePayload}
                 onSubmit={handleReviewSubmit}
                 onCancel={handleReviewCancel}
+            />
+
+            <TeacherReviewModal
+                visible={showTeacherReviewModal}
+                payload={activePayload}
+                onSubmit={handleTeacherReviewSubmit}
+                onCancel={handleTeacherReviewCancel}
             />
 
             <ReviewConfirmModal
