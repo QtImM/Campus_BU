@@ -6,6 +6,8 @@ import { AgentContext, AgentGeoPoint, AgentResponse } from './types';
 import { runActionAgent, detectActionType, executeToolCall } from './action_runtime';
 import type { PendingDraft } from './action_runtime';
 import { runReactAgent } from './react_runtime';
+import { extractMemoryCandidatesFromConversation, filterMemoryCandidates } from './memory_extractor';
+import { saveMemoryFact, getAllUserFacts } from './memory';
 
 /**
  * Thin adapter that owns entrypoint wiring and conversation context assembly.
@@ -66,7 +68,39 @@ export class AgentExecutor {
         this.pushHistory('assistant', response.finalAnswer);
         if (onUpdate) onUpdate(response.finalAnswer);
 
+        // Fire-and-forget: extract and persist memory from this turn
+        this.extractAndPersistMemory().catch((err) => {
+            console.warn('[AgentExecutor] Memory extraction failed (non-blocking):', err);
+        });
+
         return response;
+    }
+
+    /**
+     * Extract durable memory facts from the recent conversation and persist to Supabase.
+     * Runs asynchronously after each turn without blocking the response.
+     */
+    private async extractAndPersistMemory(): Promise<void> {
+        if (!AGENT_CONFIG.DEEPSEEK_ENABLED) return;
+
+        const recentTurns = this.context.history.slice(-4);
+        if (recentTurns.length < 2) return;
+
+        const candidates = await extractMemoryCandidatesFromConversation({ recentTurns });
+        if (candidates.length === 0) return;
+
+        const existingFacts = await getAllUserFacts(this.context.userId);
+        const accepted = filterMemoryCandidates(candidates, existingFacts);
+
+        for (const item of accepted) {
+            await saveMemoryFact(this.context.userId, item.key, item.value);
+            // Also update local session state so subsequent turns see the new fact
+            this.context.sessionState.facts[item.key] = item.value;
+        }
+
+        if (accepted.length > 0) {
+            console.log(`[AgentExecutor] Persisted ${accepted.length} memory fact(s):`, accepted.map(a => a.key));
+        }
     }
 
     /**
