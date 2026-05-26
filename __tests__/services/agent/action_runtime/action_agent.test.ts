@@ -11,6 +11,25 @@ import { buildSuccessResult, buildFailureResult, buildCancelResult } from '../..
 import { computeMissingFields } from '../../../../services/agent/action_runtime/contract';
 import type { PendingDraft, PostCourseReviewDraft, ActionAgentInput } from '../../../../services/agent/action_runtime/types';
 
+jest.mock('../../../../app/i18n/i18n', () => ({
+    t: (_key: string, vars?: Record<string, any>) => vars?.code ? `课程 ${vars.code} 不存在` : 'mocked',
+}));
+
+jest.mock('../../../../services/supabase', () => ({
+    supabase: {
+        from: jest.fn(() => ({
+            select: jest.fn(() => ({
+                eq: jest.fn(() => ({
+                    maybeSingle: jest
+                        .fn()
+                        .mockResolvedValueOnce({ data: { id: 'course-1', code: 'ACCT1006', name: 'Accounting 1006' }, error: null })
+                        .mockResolvedValue({ data: null, error: null }),
+                })),
+            })),
+        })),
+    },
+}));
+
 // Mock the LLM module
 jest.mock('../../../../services/agent/llm', () => ({
     callDeepSeek: jest.fn().mockResolvedValue(JSON.stringify({
@@ -37,7 +56,8 @@ jest.mock('../../../../services/agent/graph/tools/schedule_tools', () => ({
 
 const makeInput = (
     text: string,
-    pendingDraft: PendingDraft | null = null
+    pendingDraft: PendingDraft | null = null,
+    sessionState: Record<string, any> = {}
 ): ActionAgentInput => ({
     input: text,
     userId: 'test_user',
@@ -45,6 +65,12 @@ const makeInput = (
     requestId: 'test_request',
     pendingDraft,
     history: [],
+    sessionState: {
+        facts: {},
+        recentDecisions: [],
+        openLoops: [],
+        ...sessionState,
+    },
 });
 
 const makeReviewDraft = (overrides: Partial<PostCourseReviewDraft> = {}): PendingDraft => ({
@@ -86,6 +112,17 @@ describe('IT-001: text triggers review draft', () => {
         expect(result.actionPayload!.action.actionType).toBe('post_course_review');
         expect(result.pendingDraft).not.toBeNull();
         expect(result.pendingDraft!.actionType).toBe('post_course_review');
+    });
+
+    it('uses referencedCourse when user follows up with just "评价"', async () => {
+        const result = await runActionAgent(makeInput('评价', null, {
+            referencedCourse: 'ACCT1006',
+        }));
+
+        expect(result.actionPayload).not.toBeNull();
+        expect(result.actionPayload!.action.actionType).toBe('post_course_review');
+        expect((result.actionPayload!.action.draft as PostCourseReviewDraft).courseCode).toBe('ACCT1006');
+        expect(result.actionPayload!.action.uiSchema.surface).toBe('review_modal');
     });
 });
 

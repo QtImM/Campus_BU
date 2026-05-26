@@ -85,7 +85,16 @@ export class AgentExecutor {
         }
 
         const actionType = detectActionType(prompt);
-        return actionType !== null;
+        return actionType !== null || this.isImplicitReviewFollowup(prompt);
+    }
+
+    private isImplicitReviewFollowup(prompt: string): boolean {
+        const trimmed = prompt.trim();
+        if (!this.context.sessionState.referencedCourse) {
+            return false;
+        }
+
+        return /^(评价|評價|review|写评价|寫評價|发评价|發評價)$|^(我要|我想|帮我|幫我).*(评价|評價|review)$/i.test(trimmed);
     }
 
     /**
@@ -101,6 +110,7 @@ export class AgentExecutor {
             requestId,
             pendingDraft: this.context.sessionState.pendingDraft ?? null,
             history: this.context.history,
+            sessionState: this.context.sessionState,
         }, executeToolCall);
 
         // Update session state with the new pending draft

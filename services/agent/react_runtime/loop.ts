@@ -65,6 +65,7 @@ async function runLoop(
         const assistantMessage: ChatMessage = {
             role: 'assistant',
             content: response.content,
+            reasoning_content: response.reasoning_content ?? null,
             tool_calls: response.tool_calls || null,
         };
         messages.push(assistantMessage);

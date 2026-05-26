@@ -79,6 +79,8 @@ const ACTION_PATTERNS: Array<{ pattern: RegExp; actionType: ActionType }> = [
     { pattern: /课表|schedule|记.*课表|写.*课表/i, actionType: 'write_user_schedule_entry' },
 ];
 
+const IMPLICIT_REVIEW_PATTERNS = /^(评价|評價|review|写评价|寫評價|发评价|發評價)$|^(我要|我想|帮我|幫我).*(评价|評價|review)$/i;
+
 export const detectActionType = (input: string): ActionType | null => {
     for (const { pattern, actionType } of ACTION_PATTERNS) {
         if (pattern.test(input)) return actionType;
@@ -302,7 +304,8 @@ export const runActionAgent = async (
     }
 
     // ─── New action request ─────────────────────────────────────────
-    const actionType = detectActionType(input.input);
+    const implicitReview = !!input.sessionState.referencedCourse && IMPLICIT_REVIEW_PATTERNS.test(input.input.trim());
+    const actionType = detectActionType(input.input) ?? (implicitReview ? 'post_course_review' : null);
     if (!actionType) {
         return {
             finalAnswer: '我暂时还不能处理这个写操作，请先改成课程评价、组队、课表或日历事件。',
@@ -318,6 +321,9 @@ export const runActionAgent = async (
 
     // Inject preset content for reviews
     if (actionType === 'post_course_review') {
+        if (!draft.courseCode && input.sessionState.referencedCourse) {
+            draft.courseCode = input.sessionState.referencedCourse;
+        }
         draft = injectPresetContent(draft);
     }
 

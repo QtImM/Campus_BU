@@ -23,7 +23,7 @@ export const updateSessionStateWithTurn = (
 
     if (item.role === 'user') {
         next.goal = next.goal || clip(item.content, 80);
-        if (/comp\s?\d{4}[a-z]?/i.test(item.content)) {
+        if (/\b[A-Z]{2,6}\s?\d{4}[A-Z]?\b/i.test(item.content)) {
             next.referencedCourse = item.content.match(/\b([A-Z]{2,6}\s?\d{4}[A-Z]?)\b/i)?.[1]?.replace(/\s+/g, '').toUpperCase();
         }
         if (/\b(?:AAB|ACC|ACH|AML|ASH|CEC|CVA|DLB|FC|FSC|JSC|LMC|NTT|OEE|OEM|OEW|RRS|SCC|SCM|SCT|SPH|SRH|STB|SWT|WHS|WLB|YSS)\b/i.test(item.content)) {

@@ -192,6 +192,7 @@ export type ActionAgentInput = {
     requestId: string;
     pendingDraft: PendingDraft | null;
     history: Array<{ role: string; content: string }>;
+    sessionState: AgentSessionState;
 };
 
 // ─── Action Agent Result ────────────────────────────────────────────
@@ -203,3 +204,4 @@ export type ActionAgentResult = {
     toolExecuted: boolean;
     toolSuccess?: boolean;
 };
+import type { AgentSessionState } from '../types';

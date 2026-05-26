@@ -33,6 +33,7 @@ export type ToolResult = {
 export type ChatMessage = {
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: string | null;
+    reasoning_content?: string | null;
     tool_calls?: ToolCall[] | null;
     tool_call_id?: string;
 };
@@ -50,6 +51,7 @@ export type DeepSeekChoice = {
     message: {
         role: 'assistant';
         content: string | null;
+        reasoning_content?: string | null;
         tool_calls?: ToolCall[] | null;
     };
     finish_reason: 'stop' | 'tool_calls' | 'length';

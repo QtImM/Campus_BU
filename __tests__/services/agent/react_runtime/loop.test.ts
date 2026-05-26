@@ -53,6 +53,7 @@ describe('reactLoop', () => {
         callDeepSeekWithTools
             .mockResolvedValueOnce({
                 content: null,
+                reasoning_content: '我先判断是否需要查课表。',
                 tool_calls: [{
                     id: 'call_1',
                     type: 'function',
@@ -80,6 +81,14 @@ describe('reactLoop', () => {
         );
 
         expect(executeReactTool).toHaveBeenCalledWith('read_user_schedule', { query: '今天有什么课' }, expect.any(Object));
+        expect(callDeepSeekWithTools.mock.calls[1][0]).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                role: 'assistant',
+                content: null,
+                reasoning_content: '我先判断是否需要查课表。',
+                tool_calls: expect.any(Array),
+            }),
+        ]));
         expect(result).toEqual({
             finalAnswer: '你今天有一节 COMP4015。',
             iterations: 1,

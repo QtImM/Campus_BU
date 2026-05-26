@@ -41,7 +41,7 @@ jest.mock('../../../services/agent/react_runtime', () => ({
 jest.mock('../../../services/agent/action_runtime', () => ({
     runActionAgent: (...args: any[]) => mockRunActionAgent(...args),
     detectActionType: jest.fn((input: string) => {
-        if (/评价/.test(input)) return 'post_course_review';
+        if (/发.*评价|写.*评价|发布.*评价|帮我.*评价|review/i.test(input)) return 'post_course_review';
         if (/组队|队友/.test(input)) return 'post_course_teaming';
         if (/聊天室|消息/.test(input)) return 'send_course_chat_message';
         if (/日历|calendar/.test(input)) return 'create_user_calendar_event';
@@ -171,6 +171,22 @@ describe('AgentExecutor ReAct delegation', () => {
 
         expect(mockRunActionAgent).toHaveBeenCalledTimes(prompts.length);
         expect(mockRunReactAgent).not.toHaveBeenCalled();
+    });
+
+    it('routes short review followups to action runtime when a referenced course already exists', async () => {
+        const executor = new AgentExecutor('user-1');
+        await executor.process('acct 1006');
+        mockRunReactAgent.mockClear();
+
+        await executor.process('评价');
+
+        expect(mockRunActionAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunActionAgent).toHaveBeenCalledWith(expect.objectContaining({
+            input: '评价',
+            sessionState: expect.objectContaining({
+                referencedCourse: 'ACCT1006',
+            }),
+        }), expect.any(Function));
     });
 
     it('falls back to fallback LLM when ReAct runtime is disabled', async () => {

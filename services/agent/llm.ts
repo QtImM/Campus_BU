@@ -128,6 +128,7 @@ async function callDeepSeekStreamViaFetch(
 export type DeepSeekMessageWithTools = {
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: string | null;
+    reasoning_content?: string | null;
     tool_calls?: Array<{
         id: string;
         type: 'function';
@@ -155,6 +156,7 @@ export type DeepSeekToolSchema = {
 
 export type DeepSeekToolCallResponse = {
     content: string | null;
+    reasoning_content?: string | null;
     tool_calls: Array<{
         id: string;
         type: 'function';
@@ -200,6 +202,7 @@ export async function callDeepSeekWithTools(
 
         return {
             content: message?.content ?? null,
+            reasoning_content: message?.reasoning_content ?? null,
             tool_calls: message?.tool_calls ?? null,
         };
     } catch (e) {
