@@ -85,7 +85,17 @@ const ACTION_PATTERNS: Array<{ pattern: RegExp; actionType: ActionType }> = [
 const IMPLICIT_REVIEW_PATTERNS = /^(评价|評價|review|写评价|寫評價|发评价|發評價)$|^(我要|我想|帮我|幫我).*(评价|評價|review)$/i;
 
 export const detectActionType = (input: string): ActionType | null => {
+    const explicitScheduleWrite = /(?:(?:帮我|替我|给我|添加|新增|记录|导入|写入|录入|保存|加到|放进|安排|记(?:一)?下|写(?:个|一下)?).*(?:课表|schedule)|(?:add|create|write|record|import|save)\s+(?:my\s+)?(?:class\s+)?schedule)/i;
+    if (explicitScheduleWrite.test(input)) {
+        return 'write_user_schedule_entry';
+    }
+
+    if (/(课表|schedule)/i.test(input)) {
+        return null;
+    }
+
     for (const { pattern, actionType } of ACTION_PATTERNS) {
+        if (actionType === 'write_user_schedule_entry') continue;
         if (pattern.test(input)) return actionType;
     }
     return null;
