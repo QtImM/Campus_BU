@@ -229,7 +229,22 @@ export async function broadcastPostPush(
         });
 
         if (error) {
-            console.error('[broadcastPostPush] invoke error:', error);
+            // FunctionsHttpError exposes the raw Response in error.context
+            const ctx = (error as any)?.context as Response | undefined;
+            if (ctx) {
+                const status = ctx.status;
+                const body = await ctx.text().catch(() => '');
+                console.error(`[broadcastPostPush] HTTP ${status}:`, body);
+                try {
+                    const parsed = JSON.parse(body);
+                    if (parsed?.error === 'already_sent') return { error: 'already_sent', sentAt: parsed.sentAt };
+                    if (parsed?.error === 'cooldown') return { error: 'cooldown', nextAvailable: parsed.nextAvailable };
+                    if (parsed?.error === 'forbidden') return { error: 'forbidden' };
+                    if (parsed?.error === 'unauthorized') return { error: 'unauthorized' };
+                } catch {}
+            } else {
+                console.error('[broadcastPostPush] invoke error:', error);
+            }
             return { error: 'internal_error' };
         }
 

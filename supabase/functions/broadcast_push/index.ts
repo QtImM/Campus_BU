@@ -21,39 +21,44 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const serviceSupabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    // Verify JWT and get caller identity
+    // Verify JWT by passing the token explicitly to getUser
     const jwtToken = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await serviceSupabase.auth.getUser(jwtToken);
+    const userSupabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: authError } = await userSupabase.auth.getUser(jwtToken);
     if (authError || !user) {
+      console.error('[broadcast_push] auth error:', authError);
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
     }
 
-    // Verify caller is an active admin
-    const { data: adminRow } = await serviceSupabase
-      .from('app_admins')
-      .select('is_active')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .maybeSingle();
+    // Service role client for DB operations
+    const serviceSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (!adminRow) {
+    // Verify caller is an active admin via the same RPC the app uses
+    const { data: isAdminResult, error: adminError } = await serviceSupabase
+      .rpc('is_user_admin', { check_user_id: user.id });
+    if (adminError) {
+      console.error('[broadcast_push] admin check error:', adminError);
+    }
+    if (!isAdminResult) {
       return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
     }
 
     const { postId, title, body } = await req.json();
-    if (!postId || !title?.trim() || !body?.trim()) {
+    if (!postId || !String(title).trim() || !String(body).trim()) {
       return new Response(JSON.stringify({ error: 'invalid_params' }), { status: 400, headers: corsHeaders });
     }
+
+    const postIdStr = String(postId);
 
     // Dedup: same post can only be broadcast once
     const { data: existingBroadcast } = await serviceSupabase
       .from('push_broadcasts')
       .select('id, created_at')
-      .eq('post_id', String(postId))
+      .eq('post_id', postIdStr)
       .maybeSingle();
 
     if (existingBroadcast) {
@@ -63,7 +68,7 @@ serve(async (req) => {
       );
     }
 
-    // Cooldown: max 1 broadcast per COOLDOWN_HOURS
+    // Cooldown: max 1 broadcast per COOLDOWN_HOURS globally
     const cooldownCutoff = new Date(Date.now() - COOLDOWN_HOURS * 60 * 60 * 1000).toISOString();
     const { data: recentBroadcast } = await serviceSupabase
       .from('push_broadcasts')
@@ -86,7 +91,6 @@ serve(async (req) => {
     // Fetch all valid Expo push tokens (paginated)
     const allTokens: string[] = [];
     let page = 0;
-
     while (true) {
       const { data: tokens, error: tokensError } = await serviceSupabase
         .from('user_push_tokens')
@@ -94,29 +98,27 @@ serve(async (req) => {
         .range(page * TOKEN_PAGE_SIZE, (page + 1) * TOKEN_PAGE_SIZE - 1);
 
       if (tokensError || !tokens || tokens.length === 0) break;
-
       for (const { token } of tokens) {
         if (token.includes('ExponentPushToken[')) {
           allTokens.push(token);
         }
       }
-
       if (tokens.length < TOKEN_PAGE_SIZE) break;
       page++;
     }
 
-    console.log(`[broadcast_push] Found ${allTokens.length} valid tokens`);
+    console.log(`[broadcast_push] ${allTokens.length} valid tokens found`);
 
-    // Send to Expo in chunks of EXPO_CHUNK_SIZE
+    // Send to Expo in chunks
     let sentCount = 0;
     for (let i = 0; i < allTokens.length; i += EXPO_CHUNK_SIZE) {
       const chunk = allTokens.slice(i, i + EXPO_CHUNK_SIZE);
       const messages = chunk.map(to => ({
         to,
         sound: 'default',
-        title: title.trim(),
-        body: body.trim(),
-        data: { type: 'broadcast', relatedId: String(postId) },
+        title: String(title).trim(),
+        body: String(body).trim(),
+        data: { type: 'broadcast', relatedId: postIdStr },
       }));
 
       try {
@@ -129,7 +131,6 @@ serve(async (req) => {
           },
           body: JSON.stringify(messages),
         });
-
         if (expoResponse.ok) {
           sentCount += chunk.length;
         } else {
@@ -140,25 +141,28 @@ serve(async (req) => {
       }
     }
 
-    // Record the broadcast (even if sentCount is 0 — counts as "used" for dedup/cooldown)
-    await serviceSupabase.from('push_broadcasts').insert({
-      post_id: String(postId),
+    // Record the broadcast
+    const { error: insertError } = await serviceSupabase.from('push_broadcasts').insert({
+      post_id: postIdStr,
       admin_id: user.id,
-      title: title.trim(),
-      body: body.trim(),
+      title: String(title).trim(),
+      body: String(body).trim(),
       sent_count: sentCount,
     });
+    if (insertError) {
+      console.error('[broadcast_push] insert error:', insertError);
+    }
 
-    console.log(`[broadcast_push] Done. Sent to ${sentCount}/${allTokens.length} devices`);
+    console.log(`[broadcast_push] Done. sent=${sentCount}/${allTokens.length}`);
     return new Response(
       JSON.stringify({ sentCount }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: any) {
-    console.error('[broadcast_push] Unhandled error:', error);
+    console.error('[broadcast_push] unhandled error:', error);
     return new Response(
-      JSON.stringify({ error: error?.message || 'internal_error' }),
+      JSON.stringify({ error: error?.message ?? 'internal_error' }),
       { status: 500, headers: corsHeaders }
     );
   }
