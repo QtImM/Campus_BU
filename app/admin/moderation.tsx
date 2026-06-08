@@ -15,6 +15,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getCurrentUser } from '../../services/auth';
 import {
+    fetchPendingOfficialPosts,
+    PendingOfficialPost,
+    reviewOfficialPost,
+} from '../../services/forum';
+import {
     applyModerationEnforcementAction,
     fetchModerationReports,
     fetchModerationSlaSummary,
@@ -38,6 +43,7 @@ export default function ModerationAdminScreen() {
     const [filter, setFilter] = useState<ReportFilter>('pending');
     const [reports, setReports] = useState<Report[]>([]);
     const [newAlertCount, setNewAlertCount] = useState(0);
+    const [pendingPosts, setPendingPosts] = useState<PendingOfficialPost[]>([]);
     const [summary, setSummary] = useState({
         pending: 0,
         overdue: 0,
@@ -66,18 +72,20 @@ export default function ModerationAdminScreen() {
                 return;
             }
 
-            const [reportRows, overview, unreadAlertCount] = await Promise.all([
+            const [reportRows, overview, unreadAlertCount, officialPending] = await Promise.all([
                 fetchModerationReports({
                     status: filter === 'all' ? 'all' : filter === 'resolved' ? 'resolved' : 'pending',
                     limit: 200,
                 }),
                 fetchModerationSlaSummary(),
                 fetchUnreadModerationAlertCount(user?.uid || ''),
+                fetchPendingOfficialPosts(),
             ]);
 
             setReports(reportRows);
             setSummary(overview);
             setNewAlertCount(unreadAlertCount);
+            setPendingPosts(officialPending);
 
             if (user?.uid && unreadAlertCount > 0) {
                 await markModerationAlertsAsRead(user.uid);
@@ -144,6 +152,15 @@ export default function ModerationAdminScreen() {
         }
     };
 
+    const handleReviewPost = async (postId: string, action: 'publish' | 'reject') => {
+        try {
+            await reviewOfficialPost(postId, action);
+            setPendingPosts(prev => prev.filter(p => p.id !== postId));
+        } catch (error) {
+            Alert.alert('操作失败', '请稍后重试');
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -182,6 +199,41 @@ export default function ModerationAdminScreen() {
                                     count: newAlertCount,
                                 })}
                             </Text>
+                        </View>
+                    )}
+
+                    {pendingPosts.length > 0 && (
+                        <View style={styles.officialSection}>
+                            <Text style={styles.officialSectionTitle}>
+                                🏫 HKBU 官方待审核 ({pendingPosts.length})
+                            </Text>
+                            {pendingPosts.map(post => (
+                                <View style={styles.officialCard} key={post.id}>
+                                    <Text style={styles.officialTitle} numberOfLines={2}>{post.title}</Text>
+                                    {!!post.summary && (
+                                        <Text style={styles.officialSummary} numberOfLines={2}>{post.summary}</Text>
+                                    )}
+                                    {!!post.url && (
+                                        <Text style={styles.officialUrl} numberOfLines={1}>{post.url}</Text>
+                                    )}
+                                    <View style={styles.actionRow}>
+                                        <TouchableOpacity
+                                            style={[styles.actionButton, styles.resolveButton]}
+                                            onPress={() => void handleReviewPost(post.id, 'publish')}
+                                        >
+                                            <CheckCircle2 size={14} color="#fff" />
+                                            <Text style={styles.actionText}>发布</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.actionButton, styles.dismissButton]}
+                                            onPress={() => void handleReviewPost(post.id, 'reject')}
+                                        >
+                                            <XCircle size={14} color="#fff" />
+                                            <Text style={styles.actionText}>不发</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
                         </View>
                     )}
 
@@ -497,5 +549,38 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 12,
         fontWeight: '700',
+    },
+    officialSection: {
+        marginBottom: 16,
+    },
+    officialSectionTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1E3A8A',
+        marginBottom: 8,
+    },
+    officialCard: {
+        backgroundColor: '#EFF6FF',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+        padding: 12,
+        marginBottom: 8,
+    },
+    officialTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#0F172A',
+        marginBottom: 4,
+    },
+    officialSummary: {
+        fontSize: 12,
+        color: '#475569',
+        marginBottom: 4,
+    },
+    officialUrl: {
+        fontSize: 11,
+        color: '#3B82F6',
+        marginBottom: 6,
     },
 });

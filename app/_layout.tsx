@@ -26,7 +26,7 @@ void SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 // Check if running in Expo Go (where some features are limited)
-const isExpoGo = Constants.appOwnership === 'expo';
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -158,12 +158,10 @@ export default function RootLayout() {
                   router.replace('/(tabs)/campus');
                 }
               }
-              // Silently request push permission after login (non-blocking)
-              if (!isExpoGo) {
-                registerForPushNotificationsAsync()
-                  .then(token => { if (token) savePushToken(user.uid, token).catch(() => {}); })
-                  .catch(() => {});
-              }
+              // Request push permission after login (non-blocking); token save skipped if undefined (e.g. Expo Go)
+              registerForPushNotificationsAsync()
+                .then(token => { if (token) savePushToken(user.uid, token).catch(() => {}); })
+                .catch(() => {});
             }
           }
         } catch (err) {

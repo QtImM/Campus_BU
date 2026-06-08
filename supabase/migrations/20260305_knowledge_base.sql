@@ -15,10 +15,12 @@ create index on public.agent_knowledge_base using hnsw (embedding vector_cosine_
 -- RLS Policies
 alter table public.agent_knowledge_base enable row level security;
 
+drop policy if exists "Allow everyone to read knowledge base" on public.agent_knowledge_base;
 create policy "Allow everyone to read knowledge base"
     on public.agent_knowledge_base for select
     using (true);
 
+drop policy if exists "Allow authenticated users to insert knowledge base" on public.agent_knowledge_base;
 create policy "Allow authenticated users to insert knowledge base"
     on public.agent_knowledge_base for insert
     to authenticated

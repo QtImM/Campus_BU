@@ -919,6 +919,16 @@ export default function ProfileScreen() {
                                 </View>
                             </TouchableOpacity>
                         )}
+                        {isAdminUser && (
+                            <TouchableOpacity
+                                style={styles.menuItem}
+                                onPress={() => router.push('/admin/admins' as any)}
+                            >
+                                <Shield size={20} color="#1E3A8A" />
+                                <Text style={styles.menuText}>管理员管理</Text>
+                                <ChevronRight size={20} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        )}
                         <TouchableOpacity
                             style={styles.menuItem}
                             onPress={() => {

@@ -419,4 +419,52 @@ export const uploadForumImage = async (uri: string): Promise<string> => {
 
     const { data: { publicUrl } } = supabase.storage.from('campus').getPublicUrl(filePath);
     return publicUrl;
+}
+
+// ── Official post review (admin only) ─────────────────────────────────────────
+
+export interface PendingOfficialPost {
+    id: string;
+    title: string;
+    summary: string | null;
+    url: string | null;
+    imageUrl: string | null;
+    createdAt: Date;
+}
+
+export const fetchPendingOfficialPosts = async (): Promise<PendingOfficialPost[]> => {
+    const { data, error } = await supabase
+        .from(FORUM_POSTS)
+        .select('id, title, summary, sources, images, created_at')
+        .eq('content_type', 'official')
+        .eq('status', 'pending_review')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+    if (error) throw error;
+
+    return (data ?? []).map((row: any) => {
+        const sources = Array.isArray(row.sources) ? row.sources : [];
+        const images = Array.isArray(row.images) ? row.images : [];
+        const sourceUrl = sources[0]?.url ?? null;
+        return {
+            id: row.id,
+            title: row.title ?? '',
+            summary: row.summary ?? null,
+            url: sourceUrl,
+            imageUrl: images[0] ?? null,
+            createdAt: new Date(row.created_at),
+        };
+    });
+};
+
+export const reviewOfficialPost = async (
+    postId: string,
+    action: 'publish' | 'reject',
+): Promise<void> => {
+    const { error } = await supabase
+        .from(FORUM_POSTS)
+        .update({ status: action === 'publish' ? 'published' : 'rejected' })
+        .eq('id', postId);
+    if (error) throw error;
 };
