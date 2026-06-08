@@ -16,6 +16,7 @@ import { prefetchBuildings } from '../services/buildings';
 import { prefetchLocalCourses } from '../services/courses';
 import { acceptCommunityEula, hasAcceptedCommunityEula } from '../services/moderation';
 import { syncScheduleToWidgetForUser } from '../services/widgetBridge';
+import { registerForPushNotificationsAsync, savePushToken } from '../services/push_notifications';
 import './i18n/i18n'; // Initialize i18n
 import { i18nPromise } from './i18n/i18n';
 
@@ -156,6 +157,12 @@ export default function RootLayout() {
                 if (currentSegment !== 'setup' && !isForgotPasswordPage) {
                   router.replace('/(tabs)/campus');
                 }
+              }
+              // Silently request push permission after login (non-blocking)
+              if (!isExpoGo) {
+                registerForPushNotificationsAsync()
+                  .then(token => { if (token) savePushToken(user.uid, token).catch(() => {}); })
+                  .catch(() => {});
               }
             }
           }
