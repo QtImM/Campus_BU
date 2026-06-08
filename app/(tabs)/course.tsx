@@ -104,6 +104,7 @@ export default function CoursesScreen() {
     const [coursePage, setCoursePage] = useState(0);
     const [hasMoreCourses, setHasMoreCourses] = useState(true);
     const [loadingMoreCourses, setLoadingMoreCourses] = useState(false);
+    const [deptLoading, setDeptLoading] = useState(false);
     const { checkLogin } = useLoginPrompt();
     const { unreadByCourse, refresh: refreshCourseActivity } = useCourseActivity();
 
@@ -266,8 +267,8 @@ export default function CoursesScreen() {
         setSearchResults([]);
         setCoursePage(0);
         setHasMoreCourses(dept === null);
-        setCourses([]);
-        void fetchCourses(false, 0, dept);
+        setDeptLoading(true);
+        fetchCourses(true, 0, dept).finally(() => setDeptLoading(false));
     };
 
     const loadMoreCourses = useCallback(() => {
@@ -437,10 +438,10 @@ export default function CoursesScreen() {
 
             {/* Department filter tabs */}
             {!isSearchMode && deptTabs.length > 0 && (
+                <View style={styles.deptTabsWrapper}>
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    style={styles.deptTabsScroll}
                     contentContainerStyle={styles.deptTabsContent}
                 >
                     <TouchableOpacity
@@ -473,6 +474,7 @@ export default function CoursesScreen() {
                         );
                     })}
                 </ScrollView>
+                </View>
             )}
 
             {/* Favorites strip — only when not searching and no dept selected */}
@@ -506,7 +508,10 @@ export default function CoursesScreen() {
             )}
 
             {/* Section title */}
-            <Text style={styles.allCoursesTitle}>{sectionTitle}</Text>
+            <View style={styles.sectionTitleRow}>
+                <Text style={styles.allCoursesTitle}>{sectionTitle}</Text>
+                {deptLoading && <ActivityIndicator size="small" color="#1E3A8A" style={{ marginLeft: 8 }} />}
+            </View>
 
             {/* Course List */}
             <FlatList
@@ -652,13 +657,17 @@ const styles = StyleSheet.create({
         paddingVertical: 0,
     },
     // Department tabs
-    deptTabsScroll: {
-        marginTop: 12,
+    deptTabsWrapper: {
+        marginTop: 16,
+        backgroundColor: '#F9FAFB',
+        paddingVertical: 4,
     },
     deptTabsContent: {
         paddingHorizontal: 16,
         gap: 8,
         paddingVertical: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     deptTab: {
         paddingHorizontal: 14,
@@ -685,6 +694,7 @@ const styles = StyleSheet.create({
     listContent: {
         padding: 20,
         paddingTop: 12,
+        paddingBottom: 180,
     },
     loadingMore: {
         paddingVertical: 20,
@@ -721,13 +731,17 @@ const styles = StyleSheet.create({
         borderRadius: 999,
         backgroundColor: '#EF4444',
     },
+    sectionTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        marginTop: 10,
+        marginBottom: 8,
+    },
     allCoursesTitle: {
         fontSize: 14,
         fontWeight: '600',
         color: '#374151',
-        paddingHorizontal: 20,
-        marginTop: 10,
-        marginBottom: 8,
     },
     // Course card
     courseCard: {
