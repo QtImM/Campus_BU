@@ -94,7 +94,7 @@ export const fetchForumPosts = async (
     page?: number,
     pageSize: number = FORUM_PAGE_SIZE,
 ): Promise<ForumPost[]> => {
-    let query = supabase.from(FORUM_POSTS).select('*');
+    let query = supabase.from(FORUM_POSTS).select('*').eq('status', 'published');
 
     if (category !== 'all') {
         query = query.eq('category', category);
