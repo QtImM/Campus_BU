@@ -264,14 +264,26 @@ export const searchUserProfiles = async (query: string, limit: number = 20): Pro
 // Auth state listener
 export const onAuthChange = (callback: (user: any | null) => void) => {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        // Invalidate cached user on any auth state change
+        invalidateCurrentUserCache();
         const user = session?.user ? { ...session.user, uid: session.user.id } : null;
         callback(user);
     });
     return () => data.subscription.unsubscribe();
 };
 
-// Get current user from the active Supabase session
-export const getCurrentUser = async () => {
+// --- getCurrentUser in-memory cache + in-flight deduplication ---
+// Multiple callers during startup/navigation all share one network round-trip.
+let _currentUserPromise: Promise<any> | null = null;
+let _currentUserCache: { user: any; ts: number } | null = null;
+const CURRENT_USER_CACHE_TTL = 30_000; // 30 s
+
+export const invalidateCurrentUserCache = () => {
+    _currentUserPromise = null;
+    _currentUserCache = null;
+};
+
+const _fetchCurrentUser = async () => {
     let session = null;
 
     try {
@@ -314,6 +326,25 @@ export const getCurrentUser = async () => {
         };
     }
     return null;
+};
+
+// Get current user from the active Supabase session
+export const getCurrentUser = async () => {
+    if (_currentUserCache && Date.now() - _currentUserCache.ts < CURRENT_USER_CACHE_TTL) {
+        return _currentUserCache.user;
+    }
+    if (_currentUserPromise) return _currentUserPromise;
+
+    _currentUserPromise = _fetchCurrentUser().then(user => {
+        _currentUserCache = { user, ts: Date.now() };
+        _currentUserPromise = null;
+        return user;
+    }).catch(err => {
+        _currentUserPromise = null;
+        throw err;
+    });
+
+    return _currentUserPromise;
 };
 
 // Re-export auth as compatibility object if needed, but preferably avoid usage.

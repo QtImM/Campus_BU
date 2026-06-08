@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { ActionModal } from '../../components/campus/ActionModal';
 import MasonryGrid from '../../components/campus/MasonryGrid';
+import WeeklyPromptCard from '../../components/campus/WeeklyPromptCard';
 import { MasonryPostCard } from '../../components/campus/MasonryPostCard';
 import { Toast, ToastType } from '../../components/campus/Toast';
 import { Skeleton } from '../../components/common/Skeleton';
@@ -30,8 +31,9 @@ import { ForumPostRow } from '../../components/forum/ForumPostRow';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import { getCurrentUser } from '../../services/auth';
-import { deletePost, fetchPosts, POSTS_PAGE_SIZE, subscribeToPosts, togglePostLike } from '../../services/campus';
+import { cachePost, deletePost, fetchPosts, POSTS_PAGE_SIZE, subscribeToPosts, togglePostLike } from '../../services/campus';
 import { addHiddenPostId, filterHiddenPosts, getHiddenPostIds } from '../../services/feedPreferences';
+import { getCurrentPrompt, WeeklyPrompt } from '../../services/weeklyPrompts';
 import { fetchForumPosts, FORUM_PAGE_SIZE } from '../../services/forum';
 import { ForumCategory, ForumPost, ForumSort, Post, PostCategory } from '../../types';
 import { isRemoteImageUrl, normalizeRemoteImageUrl } from '../../utils/remoteImage';
@@ -103,6 +105,7 @@ export default function CampusScreen() {
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: ToastType }>({ visible: false, message: '', type: 'success' });
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [sortOrder, setSortOrder] = useState<'latest' | 'top'>('latest');
+  const [weeklyPrompt, setWeeklyPrompt] = useState<WeeklyPrompt | null>(null);
 
   const resolveCurrentUserSafely = useCallback(async () => {
     try {
@@ -154,7 +157,11 @@ export default function CampusScreen() {
     } catch (e) { console.error(e); } finally { setForumRefreshing(false); }
   };
 
-  useEffect(() => { loadPosts(); loadForumPosts(); }, []);
+  useEffect(() => {
+    loadPosts();
+    loadForumPosts();
+    getCurrentPrompt().then(setWeeklyPrompt).catch(() => {});
+  }, []);
 
   const filteredPosts = useMemo(() => {
     const res = activeCategory === 'All' ? posts : posts.filter(p => p.category === activeCategory);
@@ -166,6 +173,8 @@ export default function CampusScreen() {
     const imgs = post?.images?.length ? post.images : post?.imageUrl ? [post.imageUrl] : [];
     const cover = imgs.find(img => isRemoteImageUrl(img)) ?? '';
     const textOnly = !cover ? '1' : '0';
+    // Pre-warm the post cache so detail page renders instantly from local data
+    if (post) cachePost(post);
     router.push({ pathname: '/campus/[id]' as any, params: { id: postId, coverImage: cover, isTextOnly: textOnly } });
   }, [router, posts]);
 
@@ -246,6 +255,21 @@ export default function CampusScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            <WeeklyPromptCard
+              prompt={weeklyPrompt}
+              onJoin={() => {
+                if (!weeklyPrompt) return;
+                router.push({
+                  pathname: '/campus/topic/[id]' as any,
+                  params: {
+                    id: String(weeklyPrompt.id),
+                    topicZh: weeklyPrompt.content_zh || weeklyPrompt.content,
+                    topicEn: weeklyPrompt.content_en || '',
+                    emoji: weeklyPrompt.emoji,
+                  },
+                });
+              }}
+            />
             {loading ? <View style={{ padding: 12 }}><ActivityIndicator color="#1E3A8A" /></View> : (
               <MasonryGrid
                 data={currentUser ? filteredPosts : filteredPosts.slice(0, 4)}

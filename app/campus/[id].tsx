@@ -1,7 +1,9 @@
 import { formatDistanceToNow } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
+    Bell,
     ChevronLeft,
+    ChevronRight,
     Heart,
     MessageCircle,
     MoreHorizontal,
@@ -30,6 +32,7 @@ import {
 import { ActionModal } from '../../components/campus/ActionModal';
 import { AdminDeletionModal, DeletionReason } from '../../components/campus/AdminDeletionModal';
 import { BottomSheet } from '../../components/campus/BottomSheet';
+import { BroadcastModal } from '../../components/campus/BroadcastModal';
 import { SharePostModal } from '../../components/campus/SharePostModal';
 import { Toast, ToastType } from '../../components/campus/Toast';
 import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
@@ -46,10 +49,13 @@ import {
     deletePost,
     fetchPostById,
     fetchPostComments,
+    getCachedPost,
+    toggleCommentLike,
     togglePostLike,
 } from '../../services/campus';
 import { addHiddenPostId } from '../../services/feedPreferences';
 import { sendDirectMessage } from '../../services/messages';
+import { broadcastPostPush } from '../../services/push_notifications';
 import { Post, PostComment } from '../../types';
 import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isAdmin, isHKBUEmail } from '../../utils/userUtils';
@@ -99,10 +105,12 @@ export default function PostDetailScreen() {
     const animScale = useRef(new Animated.Value(0.93)).current;
     const animOpacity = useRef(new Animated.Value(0)).current;
 
-    const [post, setPost] = useState<Post | null>(null);
+    const [post, setPost] = useState<Post | null>(() => getCachedPost(id as string));
     const [comments, setComments] = useState<PostComment[]>([]);
     const [commentText, setCommentText] = useState('');
-    const [loading, setLoading] = useState(true);
+    // postLoading: false when we have cached data so content renders immediately
+    const [loading, setLoading] = useState<boolean>(() => !getCachedPost(id as string));
+    const [commentsLoading, setCommentsLoading] = useState(true);
     const [imageZoomed, setImageZoomed] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -116,6 +124,8 @@ export default function PostDetailScreen() {
     const [isAdminUser, setIsAdminUser] = useState(false);
     const [isOwnPost, setIsOwnPost] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
+    const [broadcastModalVisible, setBroadcastModalVisible] = useState(false);
+    const [broadcastSending, setBroadcastSending] = useState(false);
 
     // Check if current user is admin
     React.useEffect(() => {
@@ -218,19 +228,21 @@ export default function PostDetailScreen() {
     const loadData = async () => {
         if (!id) return;
         try {
-            setLoading(true);
+            // getCurrentUser is now cached — fast after first call
             const user = await getCurrentUser();
             setCurrentUser(user);
-            const postData = await fetchPostById(id as string, user?.uid);
-            if (postData) {
-                setPost(postData);
-                const commentsData = await fetchPostComments(id as string, user?.uid);
-                setComments(commentsData);
-            }
+            // Fetch post and comments in parallel
+            const [postData, commentsData] = await Promise.all([
+                fetchPostById(id as string, user?.uid),
+                fetchPostComments(id as string, user?.uid),
+            ]);
+            if (postData) setPost(postData);
+            setComments(commentsData || []);
         } catch (error) {
             console.error('Error loading post details:', error);
         } finally {
             setLoading(false);
+            setCommentsLoading(false);
         }
     };
 
@@ -294,7 +306,35 @@ export default function PostDetailScreen() {
 
     const handleSendComment = async () => {
         if (!checkLogin(currentUser)) return;
-        if (!commentText.trim() || !post) return;
+        const trimmed = commentText.trim();
+        if (!trimmed || !post) return;
+
+        // --- Optimistic update: show comment immediately, clear input, dismiss keyboard ---
+        const tempId = `temp-${Date.now()}`;
+        const optimisticComment: PostComment = {
+            id: tempId,
+            postId: post.id,
+            authorId: currentUser.uid,
+            authorName: currentUser.displayName || 'Anonymous',
+            authorAvatar: currentUser.avatarUrl || undefined,
+            authorEmail: (currentUser as any).email,
+            content: trimmed,
+            createdAt: new Date(),
+            isAnonymous: false,
+            parentCommentId: replyTarget?.parentCommentId || replyTarget?.id || undefined,
+            replyToName: replyTarget?.authorName || undefined,
+        };
+
+        const prevCommentText = commentText;
+        const prevReplyTarget = replyTarget;
+        const nextCommentsCount = post.comments + 1;
+
+        setComments(prev => [...prev, optimisticComment]);
+        setPost(prev => (prev ? { ...prev, comments: nextCommentsCount } : null));
+        setCommentText('');
+        setReplyTarget(null);
+        Keyboard.dismiss();
+
         try {
             setSubmitting(true);
             const newComment = await addPostComment({
@@ -303,27 +343,50 @@ export default function PostDetailScreen() {
                 authorName: currentUser.displayName || 'Anonymous',
                 authorEmail: (currentUser as any).email,
                 authorAvatar: currentUser.avatarUrl || undefined,
-                content: commentText.trim(),
-                parentCommentId: replyTarget?.parentCommentId || replyTarget?.id || undefined,
-                replyToName: replyTarget?.authorName || undefined,
+                content: trimmed,
+                parentCommentId: prevReplyTarget?.parentCommentId || prevReplyTarget?.id || undefined,
+                replyToName: prevReplyTarget?.authorName || undefined,
             });
             if (newComment) {
-                setComments(prev => [...prev, newComment]);
-                const nextCommentsCount = post.comments + 1;
-                setPost(prev => (prev ? { ...prev, comments: nextCommentsCount } : null));
+                // Replace optimistic placeholder with real data from server
+                setComments(prev => prev.map(c => c.id === tempId ? newComment : c));
                 DeviceEventEmitter.emit('campus_post_updated', {
                     id: post.id,
                     updates: { comments: nextCommentsCount }
                 });
-                setCommentText('');
-                setReplyTarget(null);
-                Keyboard.dismiss();
                 setToast({ visible: true, message: t('campus_detail.comment_success', '评论成功！'), type: 'success' });
             }
         } catch (error) {
+            // Rollback on failure
+            setComments(prev => prev.filter(c => c.id !== tempId));
+            setPost(prev => (prev ? { ...prev, comments: prev.comments - 1 } : null));
+            setCommentText(prevCommentText);
+            setReplyTarget(prevReplyTarget);
             setToast({ visible: true, message: t('campus_detail.comment_error', '评论失败'), type: 'error' });
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleCommentLike = async (commentId: string) => {
+        if (!checkLogin(currentUser)) return;
+        const comment = comments.find(c => c.id === commentId);
+        if (!comment) return;
+        const wasLiked = !!comment.isLiked;
+        const prevLikes = comment.likes ?? 0;
+        // Optimistic update
+        setComments(prev => prev.map(c =>
+            c.id === commentId
+                ? { ...c, isLiked: !wasLiked, likes: wasLiked ? Math.max(0, prevLikes - 1) : prevLikes + 1 }
+                : c
+        ));
+        try {
+            await toggleCommentLike(commentId, currentUser.uid);
+        } catch {
+            // Rollback
+            setComments(prev => prev.map(c =>
+                c.id === commentId ? { ...c, isLiked: wasLiked, likes: prevLikes } : c
+            ));
         }
     };
 
@@ -371,6 +434,36 @@ export default function PostDetailScreen() {
                 setDeleteModalVisible(false);
                 setSelectedCommentId(null);
             }
+        }
+    };
+
+    // Broadcast push handler
+    const handleBroadcastPress = () => {
+        setSettingsSheetVisible(false);
+        setTimeout(() => setBroadcastModalVisible(true), 300);
+    };
+
+    const handleBroadcastSend = async (title: string, body: string) => {
+        if (!post) return;
+        setBroadcastSending(true);
+        try {
+            const result = await broadcastPostPush(post.id, title, body);
+            setBroadcastModalVisible(false);
+            if (result.error === 'already_sent') {
+                setToast({ visible: true, message: t('campus_detail.broadcast_already_sent'), type: 'error' });
+            } else if (result.error === 'cooldown') {
+                setToast({ visible: true, message: t('campus_detail.broadcast_cooldown'), type: 'error' });
+            } else if (result.error) {
+                setToast({ visible: true, message: t('campus_detail.broadcast_error'), type: 'error' });
+            } else {
+                setToast({
+                    visible: true,
+                    message: t('campus_detail.broadcast_success', { count: result.sentCount ?? 0 }),
+                    type: 'success',
+                });
+            }
+        } finally {
+            setBroadcastSending(false);
         }
     };
 
@@ -667,6 +760,31 @@ export default function PostDetailScreen() {
                         )}
                     </TouchableOpacity>
 
+                    {/* ══ TOPIC ORIGIN BANNER ═════════════════════════════════════ */}
+                    {!!post?.promptId && !loading && (
+                        <TouchableOpacity
+                            style={styles.topicOriginBanner}
+                            activeOpacity={0.75}
+                            onPress={() => router.push({
+                                pathname: '/campus/topic/[id]' as any,
+                                params: {
+                                    id: String(post.promptId),
+                                    topicZh: post.topicTitleZh || '',
+                                    topicEn: post.topicTitleEn || '',
+                                    emoji: '📣',
+                                },
+                            })}
+                        >
+                            <View style={styles.topicOriginLeft}>
+                                <Text style={styles.topicOriginLabel}>{t('campus.weekly_prompt.origin_tag')}</Text>
+                                <Text style={styles.topicOriginTitle} numberOfLines={1}>
+                                    {post.topicTitleZh || post.topicTitleEn || t('campus.weekly_prompt.tag')}
+                                </Text>
+                            </View>
+                            <ChevronRight size={14} color="#1E40AF" />
+                        </TouchableOpacity>
+                    )}
+
                     {/* ══ CONTENT ═════════════════════════════════════════════════ */}
                     <View style={styles.contentSection}>
                         {loading ? (
@@ -692,15 +810,22 @@ export default function PostDetailScreen() {
                     <View style={styles.divider} />
                     <View style={styles.commentsSection}>
                         <Text style={styles.commentsLabel}>
-                            {loading
+                            {commentsLoading
                                 ? ''
                                 : organizedComments.length > 0
                                     ? t('campus_detail.comments_count', '{{count}} 条评论', { count: comments.length })
                                     : t('campus_detail.empty_comments', '暂无评论，来说点什么吧 👇')}
                         </Text>
 
-                        {!loading && organizedComments.map(comment => (
+                        {commentsLoading && (
+                            <ActivityIndicator size="small" color="#1E3A8A" style={{ marginVertical: 16 }} />
+                        )}
+
+                        {!commentsLoading && organizedComments.map((comment, idx) => (
                             <View key={comment.id} style={styles.commentContainer}>
+                                {/* hairline divider — inset from avatar left edge */}
+                                {idx > 0 && <View style={styles.commentDivider} />}
+
                                 <Animated.View
                                     style={[
                                         styles.commentItem,
@@ -714,6 +839,7 @@ export default function PostDetailScreen() {
                                             : null,
                                     ]}
                                 >
+                                    {/* Avatar */}
                                     <TouchableOpacity
                                         style={styles.commentAvatar}
                                         onPress={() => openUserProfile(comment.authorId, comment.isAnonymous)}
@@ -728,6 +854,8 @@ export default function PostDetailScreen() {
                                             </Text>
                                         )}
                                     </TouchableOpacity>
+
+                                    {/* Body */}
                                     <TouchableOpacity
                                         style={styles.commentBody}
                                         activeOpacity={0.75}
@@ -747,11 +875,8 @@ export default function PostDetailScreen() {
                                             <EduBadge shouldShow={!comment.isAnonymous && isHKBUEmail(comment.authorEmail)} size="small" />
                                             <View style={{ flex: 1 }} />
                                             {currentUser?.uid === comment.authorId && (
-                                                <TouchableOpacity
-                                                    onPress={() => triggerDeleteComment(comment.id)}
-                                                    style={styles.commentActionBtn}
-                                                >
-                                                    <Trash2 size={14} color="#EF4444" />
+                                                <TouchableOpacity onPress={() => triggerDeleteComment(comment.id)} style={styles.commentActionBtn}>
+                                                    <Trash2 size={13} color="#EF4444" />
                                                 </TouchableOpacity>
                                             )}
                                         </View>
@@ -760,17 +885,28 @@ export default function PostDetailScreen() {
                                             <Text style={styles.commentTime}>
                                                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                                             </Text>
-                                            <TouchableOpacity
-                                                style={styles.replyBtn}
-                                                onPress={() => triggerReply(comment)}
-                                            >
+                                            <TouchableOpacity style={styles.replyBtn} onPress={() => triggerReply(comment)}>
                                                 <Text style={styles.replyBtnText}>回复</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </TouchableOpacity>
+
+                                    {/* Like button */}
+                                    <TouchableOpacity style={styles.commentLikeBtn} onPress={() => handleCommentLike(comment.id)}>
+                                        <Heart
+                                            size={15}
+                                            color={comment.isLiked ? '#EF4444' : '#D1D5DB'}
+                                            fill={comment.isLiked ? '#EF4444' : 'transparent'}
+                                        />
+                                        {(comment.likes ?? 0) > 0 && (
+                                            <Text style={[styles.commentLikeCount, comment.isLiked && styles.commentLikeCountActive]}>
+                                                {comment.likes}
+                                            </Text>
+                                        )}
+                                    </TouchableOpacity>
                                 </Animated.View>
 
-                                {/* Nested Replies */}
+                                {/* Nested Replies — inset with left guide line */}
                                 {comment.replies && comment.replies.length > 0 && (
                                     <View style={styles.repliesList}>
                                         {comment.replies.map((reply: PostComment) => (
@@ -820,16 +956,13 @@ export default function PostDetailScreen() {
                                                         <Text style={styles.commentAuthorSmall}>{reply.authorName}</Text>
                                                         {reply.replyToName && (
                                                             <Text style={styles.replyToText}>
-                                                                {' '}▶ {reply.replyToName}
+                                                                {' 回复 @'}{reply.replyToName}
                                                             </Text>
                                                         )}
                                                         <EduBadge shouldShow={!reply.isAnonymous && isHKBUEmail(reply.authorEmail)} size="small" />
                                                         <View style={{ flex: 1 }} />
                                                         {currentUser?.uid === reply.authorId && (
-                                                            <TouchableOpacity
-                                                                onPress={() => triggerDeleteComment(reply.id)}
-                                                                style={styles.commentActionBtn}
-                                                            >
+                                                            <TouchableOpacity onPress={() => triggerDeleteComment(reply.id)} style={styles.commentActionBtn}>
                                                                 <Trash2 size={12} color="#EF4444" />
                                                             </TouchableOpacity>
                                                         )}
@@ -839,13 +972,24 @@ export default function PostDetailScreen() {
                                                         <Text style={styles.commentTimeSmall}>
                                                             {formatDistanceToNow(new Date(reply.createdAt), { addSuffix: true })}
                                                         </Text>
-                                                        <TouchableOpacity
-                                                            style={styles.replyBtn}
-                                                            onPress={() => triggerReply(reply)}
-                                                        >
+                                                        <TouchableOpacity style={styles.replyBtn} onPress={() => triggerReply(reply)}>
                                                             <Text style={styles.replyBtnTextSmall}>回复</Text>
                                                         </TouchableOpacity>
                                                     </View>
+                                                </TouchableOpacity>
+
+                                                {/* Reply like button */}
+                                                <TouchableOpacity style={styles.commentLikeBtn} onPress={() => handleCommentLike(reply.id)}>
+                                                    <Heart
+                                                        size={13}
+                                                        color={reply.isLiked ? '#EF4444' : '#D1D5DB'}
+                                                        fill={reply.isLiked ? '#EF4444' : 'transparent'}
+                                                    />
+                                                    {(reply.likes ?? 0) > 0 && (
+                                                        <Text style={[styles.commentLikeCount, reply.isLiked && styles.commentLikeCountActive]}>
+                                                            {reply.likes}
+                                                        </Text>
+                                                    )}
                                                 </TouchableOpacity>
                                             </Animated.View>
                                         ))}
@@ -968,6 +1112,20 @@ export default function PostDetailScreen() {
                         </TouchableOpacity>
                     )}
 
+                    {/* Admin broadcast push */}
+                    {isAdminUser && !!post && (
+                        <TouchableOpacity
+                            style={styles.shareOption}
+                            onPress={handleBroadcastPress}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.broadcastIconContainer}>
+                                <Bell size={20} color="#1E3A8A" />
+                            </View>
+                            <Text style={styles.shareText}>{t('campus_detail.broadcast_push')}</Text>
+                        </TouchableOpacity>
+                    )}
+
                     {/* Admin-only delete option (for admin viewing others' posts) */}
                     {isAdminUser && !isOwnPost && (
                         <TouchableOpacity
@@ -1017,6 +1175,14 @@ export default function PostDetailScreen() {
                     visible={adminDeletionModalVisible}
                     onConfirm={handleAdminDeleteConfirm}
                     onCancel={handleAdminDeleteCancel}
+                />
+                <BroadcastModal
+                    visible={broadcastModalVisible}
+                    defaultTitle={t('campus_detail.broadcast_default_title')}
+                    defaultBody={post?.content?.slice(0, 100) ?? ''}
+                    sending={broadcastSending}
+                    onSend={handleBroadcastSend}
+                    onCancel={() => setBroadcastModalVisible(false)}
                 />
                 <ActionModal
                     visible={userDeletionConfirmVisible}
@@ -1248,6 +1414,35 @@ const styles = StyleSheet.create({
         color: '#1E3A8A',
         fontWeight: '600',
     },
+    topicOriginBanner: {
+        marginHorizontal: 16,
+        marginBottom: 4,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EFF6FF',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: '#1E40AF',
+        gap: 8,
+    },
+    topicOriginLeft: {
+        flex: 1,
+        gap: 2,
+    },
+    topicOriginLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#1E40AF',
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+    },
+    topicOriginTitle: {
+        fontSize: 13,
+        color: '#1E3A8A',
+        fontWeight: '600',
+    },
 
     // ── Comments ──────────────────────────────────────────────────────────────
     divider: {
@@ -1265,11 +1460,10 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     commentContainer: {
-        marginBottom: 20,
+        marginBottom: 4,
     },
     commentItem: {
         flexDirection: 'row',
-        marginBottom: 20,
         gap: 10,
         borderRadius: 12,
         paddingHorizontal: 8,
@@ -1383,6 +1577,28 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         fontWeight: '600',
     },
+    commentDivider: {
+        marginLeft: 44,
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: '#F0F0F2',
+        marginBottom: 12,
+    },
+    commentLikeBtn: {
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingTop: 6,
+        paddingLeft: 6,
+        minWidth: 28,
+    },
+    commentLikeCount: {
+        fontSize: 10,
+        color: '#9CA3AF',
+        marginTop: 2,
+        fontWeight: '500',
+    },
+    commentLikeCountActive: {
+        color: '#EF4444',
+    },
 
     // ── Bottom bar ────────────────────────────────────────────────────────────
     bottomBarContainer: {
@@ -1463,6 +1679,14 @@ const styles = StyleSheet.create({
         height: 36,
         borderRadius: 18,
         backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    broadcastIconContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#DBEAFE',
         alignItems: 'center',
         justifyContent: 'center',
     },

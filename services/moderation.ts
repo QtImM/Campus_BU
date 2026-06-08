@@ -345,7 +345,17 @@ export const blockUser = async (
     return { success: true };
 };
 
+const _blockedCache = new Map<string, { ids: string[]; ts: number }>();
+const BLOCKED_CACHE_TTL = 60_000; // 1 min
+
+export const invalidateBlockedUserCache = (userId: string) => {
+    _blockedCache.delete(userId);
+};
+
 export const getBlockedUserIds = async (userId: string): Promise<string[]> => {
+    const cached = _blockedCache.get(userId);
+    if (cached && Date.now() - cached.ts < BLOCKED_CACHE_TTL) return cached.ids;
+
     const { data, error } = await supabase
         .from('user_blocks')
         .select('blocked_id')
@@ -360,7 +370,9 @@ export const getBlockedUserIds = async (userId: string): Promise<string[]> => {
         return [];
     }
 
-    return (data || []).map((row: any) => row.blocked_id);
+    const ids = (data || []).map((row: any) => row.blocked_id);
+    _blockedCache.set(userId, { ids, ts: Date.now() });
+    return ids;
 };
 
 export const fetchBlockedUsers = async (userId: string): Promise<BlockedUserProfile[]> => {

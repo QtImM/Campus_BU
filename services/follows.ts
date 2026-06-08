@@ -53,6 +53,9 @@ export const followUser = async (followerId: string, followingId: string): Promi
         console.error('Error following user:', error);
         throw error;
     }
+
+    // Reward: mark the "first follow" task complete (idempotent, non-blocking).
+    void import('./rewards').then(({ completeTask }) => completeTask(followerId, 'first_follow')).catch(() => { });
 };
 
 export const unfollowUser = async (followerId: string, followingId: string): Promise<void> => {
@@ -182,8 +185,18 @@ export const getFollowingList = async (userId: string): Promise<FollowUserInfo[]
     return fetchFollowUserProfiles(followingIds);
 };
 
+const _followingCache = new Map<string, { ids: string[]; ts: number }>();
+const FOLLOWING_CACHE_TTL = 60_000; // 1 min
+
+export const invalidateFollowingCache = (followerId: string) => {
+    _followingCache.delete(followerId);
+};
+
 export const getFollowingUserIds = async (followerId?: string): Promise<string[]> => {
     if (!followerId) return [];
+
+    const cached = _followingCache.get(followerId);
+    if (cached && Date.now() - cached.ts < FOLLOWING_CACHE_TTL) return cached.ids;
 
     const { data, error } = await supabase
         .from(USER_FOLLOWS_TABLE)
@@ -198,5 +211,7 @@ export const getFollowingUserIds = async (followerId?: string): Promise<string[]
         throw error;
     }
 
-    return (data || []).map((item: any) => item.following_id).filter(Boolean);
+    const ids = (data || []).map((item: any) => item.following_id).filter(Boolean);
+    _followingCache.set(followerId, { ids, ts: Date.now() });
+    return ids;
 };

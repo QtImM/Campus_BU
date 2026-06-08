@@ -22,6 +22,7 @@ import { SafetyNotice } from '../../components/common/SafetyNotice';
 import { ZoomableImageCarousel } from '../../components/common/ZoomableImageCarousel';
 import { getCurrentUser } from '../../services/auth';
 import { createPost, uploadPostImage } from '../../services/campus';
+import { completeTask } from '../../services/rewards';
 import { PostCategory } from '../../types';
 import { getNearestBuilding } from '../../utils/location';
 
@@ -36,7 +37,7 @@ export default function ComposeScreen() {
     ];
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { lat, lng, fromMap } = params;
+    const { lat, lng, fromMap, promptId, topicZh, topicEn } = params;
 
     const buildingName = (fromMap === 'true' && lat && lng)
         ? getNearestBuilding(parseFloat(lat as string), parseFloat(lng as string))
@@ -124,8 +125,14 @@ export default function ComposeScreen() {
                     lat: parseFloat(lat as string),
                     lng: parseFloat(lng as string),
                     name: buildingName || 'Pin Location'
-                } : undefined
+                } : undefined,
+                promptId: promptId ? Number(promptId) : undefined,
+                topicTitleZh: topicZh as string || undefined,
+                topicTitleEn: topicEn as string || undefined,
             });
+
+            // Reward: mark the "first post" task complete (idempotent — no-op after the first time).
+            void completeTask(user.uid, 'first_post');
 
             showToast(t('campus.modals.post_success')); // Corrected key
             setTimeout(() => {
@@ -203,6 +210,17 @@ export default function ComposeScreen() {
                     </ScrollView>
                 </View>
 
+
+                {/* Topic banner — shown when launched from a weekly prompt */}
+                {!!topicZh && (
+                    <View style={styles.topicBanner}>
+                        <Text style={styles.topicBannerLabel}>{t('campus.compose.topic_banner')}</Text>
+                        <Text style={styles.topicBannerContent} numberOfLines={2}>{topicZh as string}</Text>
+                        {!!topicEn && (
+                            <Text style={styles.topicBannerContentEn} numberOfLines={1}>{topicEn as string}</Text>
+                        )}
+                    </View>
+                )}
 
                 {/* Input Area */}
                 <TextInput
@@ -484,5 +502,35 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         backgroundColor: '#000',
         zIndex: 1000,
+    },
+    topicBanner: {
+        marginHorizontal: 16,
+        marginBottom: 12,
+        padding: 12,
+        backgroundColor: '#EFF6FF',
+        borderRadius: 10,
+        borderLeftWidth: 3,
+        borderLeftColor: '#1E3A8A',
+    },
+    topicBannerLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#1E3A8A',
+        marginBottom: 4,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+    },
+    topicBannerContent: {
+        fontSize: 13,
+        color: '#1E40AF',
+        fontWeight: '500',
+        lineHeight: 18,
+    },
+    topicBannerContentEn: {
+        fontSize: 12,
+        color: '#3B82F6',
+        fontWeight: '400',
+        lineHeight: 16,
+        marginTop: 2,
     },
 });

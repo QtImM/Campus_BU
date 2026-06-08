@@ -207,6 +207,47 @@ export async function setPushNotificationsEnabled(userId: string, enabled: boole
 /**
  * Removes a specific push token from the database (e.g., on logout)
  */
+export interface BroadcastResult {
+    sentCount?: number;
+    error?: 'already_sent' | 'cooldown' | 'forbidden' | 'invalid_params' | 'unauthorized' | 'internal_error';
+    nextAvailable?: string;
+    sentAt?: string;
+}
+
+/**
+ * Admin-only: broadcast a push notification about a post to all users with push tokens.
+ * The edge function enforces: admin-only, same-post dedup, 6-hour global cooldown.
+ */
+export async function broadcastPostPush(
+    postId: string,
+    title: string,
+    body: string,
+): Promise<BroadcastResult> {
+    try {
+        const { data, error } = await supabase.functions.invoke('broadcast_push', {
+            body: { postId, title, body },
+        });
+
+        if (error) {
+            console.error('[broadcastPostPush] invoke error:', error);
+            return { error: 'internal_error' };
+        }
+
+        if (data?.error) {
+            return {
+                error: data.error,
+                nextAvailable: data.nextAvailable,
+                sentAt: data.sentAt,
+            };
+        }
+
+        return { sentCount: data?.sentCount ?? 0 };
+    } catch (e) {
+        console.error('[broadcastPostPush] exception:', e);
+        return { error: 'internal_error' };
+    }
+}
+
 export async function removePushToken(userId: string, token?: string): Promise<boolean> {
     if (!userId) return false;
 

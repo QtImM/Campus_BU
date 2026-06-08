@@ -441,6 +441,17 @@
             "delete_error": "Failed to delete post",
             "post_success": "Post created successfully",
             "post_error": "Failed to create post"
+        },
+        "weekly_prompt": {
+            "tag": "Weekly Topic",
+            "join": "Join the discussion",
+            "response_label": "Weekly Topic Response",
+            "response_count": "{{count}} responses",
+            "be_first": "No responses yet — be the first to share!",
+            "origin_tag": "📣 Weekly Topic"
+        },
+        "compose": {
+            "topic_banner": "Current Topic"
         }
     },
     "forum": {
@@ -826,6 +837,41 @@
         "delete_reason_placeholder": "e.g. Violates community guidelines...",
         "confirm_delete": "Confirm Delete",
         "comments_count": "{{count}} comments",
-        "empty_comments": "No comments yet, say something! 👇"
+        "empty_comments": "No comments yet, say something! 👇",
+        "broadcast_push": "📣 Broadcast to All",
+        "broadcast_modal_title": "Broadcast Push",
+        "broadcast_warning": "This will send a push notification to all users who have notifications enabled. Use carefully.",
+        "broadcast_notif_title_label": "Notification Title",
+        "broadcast_notif_body_label": "Notification Body",
+        "broadcast_confirm": "Send Broadcast",
+        "broadcast_default_title": "New post on HKCampus",
+        "broadcast_success": "Sent to {{count}} users 🎉",
+        "broadcast_error": "Failed to send. Please try again.",
+        "broadcast_already_sent": "This post has already been broadcast.",
+        "broadcast_cooldown": "Too soon — please wait 6 hours between broadcasts."
+    },
+    "rewards": {
+        "points": "{{count}} pts",
+        "levels": {
+            "novice": "Newcomer",
+            "active": "Active",
+            "contributor": "Contributor",
+            "master": "Campus Star"
+        },
+        "tasks": {
+            "set_avatar": "Set your avatar",
+            "first_post": "Make your first post",
+            "first_like": "Like a post",
+            "first_follow": "Follow a classmate",
+            "first_comment": "Comment on a post",
+            "first_review": "Write your first course review"
+        },
+        "progress_done": "🎉 All starter tasks done — stay active to unlock more badges!",
+        "progress_next": "{{count}} more pts to level up — complete a task to earn them",
+        "progress_start": "Complete the tasks below to earn your first points",
+        "all_done": "Awesome, all starter tasks complete!",
+        "expand": "View all {{count}} tasks",
+        "collapse": "Collapse",
+        "pioneer_badge": "Pioneer"
     }
 }

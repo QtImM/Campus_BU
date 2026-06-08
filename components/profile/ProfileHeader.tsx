@@ -8,6 +8,7 @@ import { isAdminSync, isHKBUEmail } from '../../utils/userUtils';
 import { AdminBadge } from '../common/AdminBadge';
 import { CachedRemoteImage } from '../common/CachedRemoteImage';
 import { EduBadge } from '../common/EduBadge';
+import { PioneerBadge } from '../common/PioneerBadge';
 
 interface ProfileHeaderProps {
     user: User | null;
@@ -94,6 +95,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                 <View style={styles.badgeRow}>
                                     <EduBadge shouldShow={isHKBUEmail(user.email)} size="small" />
                                     <AdminBadge shouldShow={isAdminSync(user.uid)} size="small" />
+                                    <PioneerBadge shouldShow={!!user.pioneer_badge} size="small" />
                                 </View>
                             )}
                             <Text style={styles.bio} numberOfLines={1}>{subtitle}</Text>

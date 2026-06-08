@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import { FollowListModal } from '../../components/profile/FollowListModal';
 import MyScheduleCard from '../../components/profile/MyScheduleCard';
 import { ProfileHeader } from '../../components/profile/ProfileHeader';
+import RewardsCard from '../../components/profile/RewardsCard';
 import { ProfileMessages } from '../../components/profile/ProfileMessages';
 import { ProfilePostFeed } from '../../components/profile/ProfilePostFeed';
 import { ProfileTabs, ProfileTabType } from '../../components/profile/ProfileTabs';
@@ -756,6 +757,8 @@ export default function ProfileScreen() {
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.scrollContentPager}
                 >
+                    <RewardsCard userId={userId} />
+
                     <MyScheduleCard userId={userId} />
 
                     {/* Notifications Section */}

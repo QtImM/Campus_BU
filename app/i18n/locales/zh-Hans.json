@@ -442,6 +442,17 @@
             "delete_error": "删除失败",
             "post_success": "帖子发布成功",
             "post_error": "发布失败"
+        },
+        "weekly_prompt": {
+            "tag": "本周话题",
+            "join": "参与话题",
+            "response_label": "回应本周话题",
+            "response_count": "{{count}} 条回应",
+            "be_first": "还没有人回应，来第一个说说？",
+            "origin_tag": "📣 本周话题"
+        },
+        "compose": {
+            "topic_banner": "当前话题"
         }
     },
     "forum": {
@@ -827,6 +838,41 @@
         "delete_reason_placeholder": "例如：违反社区准则...",
         "confirm_delete": "确认删除",
         "comments_count": "共 {{count}} 条评论",
-        "empty_comments": "暂无评论，来说点什么吧 👇"
+        "empty_comments": "暂无评论，来说点什么吧 👇",
+        "broadcast_push": "📣 推送给所有人",
+        "broadcast_modal_title": "广播推送",
+        "broadcast_warning": "将推送给所有开启通知的用户，请谨慎操作",
+        "broadcast_notif_title_label": "通知标题",
+        "broadcast_notif_body_label": "通知正文",
+        "broadcast_confirm": "确认推送",
+        "broadcast_default_title": "校园圈新帖",
+        "broadcast_success": "已推送给 {{count}} 位用户 🎉",
+        "broadcast_error": "推送失败，请重试",
+        "broadcast_already_sent": "该帖子已推送过，不可重复推送",
+        "broadcast_cooldown": "推送太频繁，请 6 小时后再试"
+    },
+    "rewards": {
+        "points": "{{count}} 积分",
+        "levels": {
+            "novice": "新生",
+            "active": "活跃者",
+            "contributor": "贡献者",
+            "master": "校园达人"
+        },
+        "tasks": {
+            "set_avatar": "设置头像",
+            "first_post": "发第一篇帖子",
+            "first_like": "给帖子点个赞",
+            "first_follow": "关注一位同学",
+            "first_comment": "评论一条帖子",
+            "first_review": "写第一条课程评价"
+        },
+        "progress_done": "🎉 新手任务全部完成，继续保持活跃解锁更多徽章！",
+        "progress_next": "再得 {{count}} 积分升级，完成任务即可获得",
+        "progress_start": "完成下面的任务，赚取你的第一批积分",
+        "all_done": "太棒了，新手任务已全部完成！",
+        "expand": "查看全部 {{count}} 个任务",
+        "collapse": "收起",
+        "pioneer_badge": "先锋"
     }
 }

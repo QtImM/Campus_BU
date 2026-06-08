@@ -198,6 +198,14 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                     </TouchableOpacity>
 
                     <View style={styles.bodyFooter}>
+                        {/* Weekly topic attribution */}
+                        {!!(post.topicTitleZh || post.topicTitleEn) && (
+                            <View style={styles.topicTag}>
+                                <Text style={styles.topicTagText} numberOfLines={1}>
+                                    📣 {post.topicTitleZh || post.topicTitleEn}
+                                </Text>
+                            </View>
+                        )}
                         {/* Author row */}
                         <TouchableOpacity
                             style={styles.authorRow}
@@ -380,6 +388,21 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         marginBottom: 6,
         lineHeight: 16,
+    },
+    topicTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EFF6FF',
+        borderRadius: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        marginBottom: 6,
+    },
+    topicTagText: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#1E40AF',
+        flexShrink: 1,
     },
     authorRow: {
         flexDirection: 'row',

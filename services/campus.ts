@@ -10,6 +10,20 @@ const POSTS_TABLE = 'posts';
 const COMMENTS_TABLE = 'post_comments';
 const LIKES_TABLE = 'post_likes';
 
+// --------------- Post client-side cache (for instant detail-page render) ---------------
+const _postCache = new Map<string, { post: Post; ts: number }>();
+const POST_CACHE_TTL = 60_000; // 1 min
+
+export const cachePost = (post: Post) => {
+    _postCache.set(post.id, { post, ts: Date.now() });
+};
+
+export const getCachedPost = (postId: string): Post | null => {
+    const entry = _postCache.get(postId);
+    if (!entry || Date.now() - entry.ts > POST_CACHE_TTL) return null;
+    return entry.post;
+};
+
 const CATEGORY_TO_TYPE: Record<PostCategory, PostType | 'all'> = {
     'All': 'all',
     'Events': 'event',
@@ -26,6 +40,8 @@ const TYPE_TO_CATEGORY: Record<string, PostCategory> = {
 };
 
 const ANONYMOUS_POST_AUTHOR_NAME = '匿名用户';
+
+const COMMENT_LIKES_TABLE = 'post_comment_likes';
 
 const mapCommentRow = (
     row: any,
@@ -48,6 +64,8 @@ const mapCommentRow = (
         parentCommentId: row.parent_comment_id,
         replyToName: row.reply_to_name,
         createdAt: new Date(row.created_at),
+        likes: 0,
+        isLiked: false,
     };
 };
 
@@ -89,7 +107,10 @@ const mapSupabaseToPost = (row: any): Post => {
             lat: row.lat,
             lng: row.lng,
             name: row.location_tag || 'Pin Location'
-        } : undefined
+        } : undefined,
+        promptId: row.prompt_id ?? undefined,
+        topicTitleZh: row.topic_title_zh ?? undefined,
+        topicTitleEn: row.topic_title_en ?? undefined,
     };
 };
 
@@ -143,33 +164,35 @@ export const fetchPosts = async (
 
     let posts = (data || []).map(mapSupabaseToPost);
 
-    // Filter out posts from blocked users
-    if (currentUserId) {
-        const blockedIds = await getBlockedUserIds(currentUserId);
+    if (currentUserId && posts.length > 0) {
+        const postIds = posts.map(p => p.id);
+
+        // Run all three user-specific lookups in parallel (all benefit from caching)
+        const [blockedIds, likesResult, followingIds] = await Promise.all([
+            getBlockedUserIds(currentUserId),
+            supabase.from(LIKES_TABLE).select('post_id').eq('user_id', currentUserId).in('post_id', postIds),
+            getFollowingUserIds(currentUserId),
+        ]);
+
         if (blockedIds.length > 0) {
             const blockedSet = new Set(blockedIds);
             posts = posts.filter(p => !blockedSet.has(p.authorId));
         }
-    }
 
-    // If userId is provided, check which posts the user has liked
-    if (currentUserId && posts.length > 0) {
-        const postIds = posts.map(p => p.id);
-        const { data: likes } = await supabase
-            .from(LIKES_TABLE)
-            .select('post_id')
-            .eq('user_id', currentUserId)
-            .in('post_id', postIds);
+        if (likesResult.data) {
+            const likedSet = new Set(likesResult.data.map((l: any) => l.post_id));
+            posts.forEach(p => { p.isLiked = likedSet.has(p.id); });
+        }
 
-        if (likes) {
-            const likedPostIds = new Set(likes.map(l => l.post_id));
-            posts.forEach(p => {
-                p.isLiked = likedPostIds.has(p.id);
-            });
+        if (followingIds.length > 0) {
+            const followingSet = new Set(followingIds);
+            posts.forEach(p => { p.isFollowingAuthor = followingSet.has(p.authorId); });
         }
     }
 
-    await markFollowingAuthors(posts, currentUserId);
+    // Cache each post for instant detail-page render
+    posts.forEach(cachePost);
+
     return posts;
 };
 
@@ -407,17 +430,19 @@ export const fetchPostById = async (postId: string, currentUserId?: string): Pro
     const post = mapSupabaseToPost(data);
 
     if (currentUserId) {
-        const blockedIds = await getBlockedUserIds(currentUserId);
-        if (blockedIds.includes(post.authorId)) {
-            return null;
-        }
-    }
+        // blocked + following in parallel (both are now cached after first call)
+        const [blockedIds, followingIds] = await Promise.all([
+            getBlockedUserIds(currentUserId),
+            getFollowingUserIds(currentUserId),
+        ]);
 
-    // Mark following status
-    if (currentUserId) {
-        const followingIds = await getFollowingUserIds(currentUserId);
+        if (blockedIds.includes(post.authorId)) return null;
+
         post.isFollowingAuthor = followingIds.includes(post.authorId);
     }
+
+    // Keep post cache warm
+    cachePost(post);
 
     return post;
 };
@@ -425,6 +450,23 @@ export const fetchPostById = async (postId: string, currentUserId?: string): Pro
 /**
  * Create a new post
  */
+export const fetchPostsByPromptId = async (
+    promptId: number,
+    currentUserId?: string,
+): Promise<Post[]> => {
+    const { data, error } = await supabase
+        .from(POSTS_TABLE)
+        .select('*, author:users!author_id(*)')
+        .eq('prompt_id', promptId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+    if (error) throw error;
+    const posts = (data || []).map(mapSupabaseToPost);
+    if (currentUserId) await markFollowingAuthors(posts, currentUserId);
+    return posts;
+};
+
 export const createPost = async (postData: {
     authorId: string;
     authorName: string;
@@ -436,6 +478,9 @@ export const createPost = async (postData: {
     images?: string[];
     isAnonymous: boolean;
     location?: { lat: number; lng: number; name?: string };
+    promptId?: number;
+    topicTitleZh?: string;
+    topicTitleEn?: string;
 }) => {
     ensureContentSafety(postData.content, '帖子包含不符合社区规范的内容，请修改后再发布。');
 
@@ -453,7 +498,10 @@ export const createPost = async (postData: {
         comments_count: 0,
         lat: postData.location?.lat,
         lng: postData.location?.lng,
-        location_tag: postData.location?.name || null
+        location_tag: postData.location?.name || null,
+        prompt_id: postData.promptId ?? null,
+        topic_title_zh: postData.topicTitleZh ?? null,
+        topic_title_en: postData.topicTitleEn ?? null,
     };
 
     console.log('Inserting post data:', insertData);
@@ -573,11 +621,34 @@ export const togglePostLike = async (postId: string, userId: string) => {
                 });
             }
 
+            // Reward: mark the "first like" task complete (idempotent, non-blocking).
+            void import('./rewards').then(({ completeTask }) => completeTask(userId, 'first_like')).catch(() => { });
+
             return { liked: true };
         }
     } catch (e) {
         console.error('Error toggling like:', e);
         throw e;
+    }
+};
+
+/**
+ * Toggle like on a comment (optimistic-update friendly — returns new liked state)
+ */
+export const toggleCommentLike = async (commentId: string, userId: string): Promise<{ liked: boolean }> => {
+    const { data: existing } = await supabase
+        .from(COMMENT_LIKES_TABLE)
+        .select('comment_id')
+        .eq('comment_id', commentId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (existing) {
+        await supabase.from(COMMENT_LIKES_TABLE).delete().eq('comment_id', commentId).eq('user_id', userId);
+        return { liked: false };
+    } else {
+        await supabase.from(COMMENT_LIKES_TABLE).insert([{ comment_id: commentId, user_id: userId }]);
+        return { liked: true };
     }
 };
 
@@ -612,7 +683,32 @@ export const fetchPostComments = async (postId: string, currentUserId?: string):
         }
     }
 
-    return rows.map(row => mapCommentRow(row, anonymousPostAuthorId));
+    const comments = rows.map(row => mapCommentRow(row, anonymousPostAuthorId));
+
+    if (comments.length > 0) {
+        const commentIds = comments.map(c => c.id);
+        // Fetch like counts + current user's likes in parallel
+        const [likesCountResult, userLikesResult] = await Promise.all([
+            supabase.from(COMMENT_LIKES_TABLE).select('comment_id').in('comment_id', commentIds),
+            currentUserId
+                ? supabase.from(COMMENT_LIKES_TABLE).select('comment_id').eq('user_id', currentUserId).in('comment_id', commentIds)
+                : Promise.resolve({ data: [] }),
+        ]);
+
+        if (likesCountResult.data) {
+            const likeCountMap = new Map<string, number>();
+            for (const row of likesCountResult.data) {
+                likeCountMap.set(row.comment_id, (likeCountMap.get(row.comment_id) ?? 0) + 1);
+            }
+            const likedSet = new Set((userLikesResult.data || []).map((r: any) => r.comment_id));
+            comments.forEach(c => {
+                c.likes = likeCountMap.get(c.id) ?? 0;
+                c.isLiked = likedSet.has(c.id);
+            });
+        }
+    }
+
+    return comments;
 };
 
 /**
@@ -657,24 +753,25 @@ export const addPostComment = async (commentData: {
 
     if (error) throw error;
 
-    // Trigger notification
+    // Fire-and-forget notification — don't block comment return on it
     if (post && post.author_id !== commentData.authorId) {
-        const { createNotification } = await import('./notifications');
-
-        // If it's a reply, use a different notification key
         const isReply = !!commentData.parentCommentId;
-
-        await createNotification({
-            user_id: post.author_id,
-            type: 'comment',
-            title: isReply ? 'notifications.title_reply' : 'notifications.title_comment',
-            content: JSON.stringify({
-                key: isReply ? 'notifications.post_reply' : 'notifications.post_comment',
-                params: { name: commentData.authorName }
-            }),
-            related_id: commentData.postId,
-        });
+        void import('./notifications').then(({ createNotification }) =>
+            createNotification({
+                user_id: post.author_id,
+                type: 'comment',
+                title: isReply ? 'notifications.title_reply' : 'notifications.title_comment',
+                content: JSON.stringify({
+                    key: isReply ? 'notifications.post_reply' : 'notifications.post_comment',
+                    params: { name: commentData.authorName }
+                }),
+                related_id: commentData.postId,
+            })
+        ).catch(() => {});
     }
+
+    // Reward: mark the "first comment" task complete (idempotent, non-blocking).
+    void import('./rewards').then(({ completeTask }) => completeTask(commentData.authorId, 'first_comment')).catch(() => { });
 
     return {
         ...mapCommentRow(data, isAnonymous ? commentData.authorId : undefined),

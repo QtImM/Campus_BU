@@ -744,6 +744,11 @@ export const addReview = async (reviewData: Partial<Review>): Promise<{ error: a
         await updateCourseStatsForAllCandidates(requestedCourseId, courseId);
     }
 
+    // Reward: mark the "first review" task complete (idempotent, non-blocking).
+    if (reviewData.authorId) {
+        void import('./rewards').then(({ completeTask }) => completeTask(reviewData.authorId!, 'first_review')).catch(() => { });
+    }
+
     return { error: null };
 };
 

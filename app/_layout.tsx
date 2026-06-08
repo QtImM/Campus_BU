@@ -76,7 +76,9 @@ export default function RootLayout() {
         || /ai news digest/i.test(title)
         || title.includes('今日AI资讯摘要');
 
-      if (data?.type === 'system' && isDailyDigestNotification) {
+      if (data?.type === 'broadcast' && relatedId) {
+        router.push({ pathname: '/campus/[id]' as any, params: { id: relatedId } });
+      } else if (data?.type === 'system' && isDailyDigestNotification) {
         router.push({
           pathname: '/agent/chat',
           params: digestDate ? { digestDate } : undefined,
@@ -200,8 +202,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!currentUser?.uid) return;
-
-    void syncScheduleToWidgetForUser(currentUser.uid);
+    // Defer to avoid competing with startup-critical queries (auth, feed)
+    const t = setTimeout(() => void syncScheduleToWidgetForUser(currentUser.uid), 3000);
+    return () => clearTimeout(t);
   }, [currentUser?.uid]);
 
   const handleAcceptEula = async () => {

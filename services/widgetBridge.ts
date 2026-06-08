@@ -31,6 +31,7 @@ const toWidgetEntry = (entry: UserScheduleEntry): WidgetScheduleEntry => ({
 
 export const writeScheduleToWidget = async (entries: UserScheduleEntry[]): Promise<void> => {
     if (Platform.OS !== 'ios') return;
+    if (!SharedGroupPreferences?.setItem) return;
 
     const payload = entries.map(toWidgetEntry);
     try {

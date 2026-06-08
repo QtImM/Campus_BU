@@ -8,6 +8,7 @@ import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, T
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { auth, createUserProfile, getUserProfile, signOut, uploadAndUpdateAvatar } from '../../services/auth';
+import { completeTask } from '../../services/rewards';
 import { isRemoteImageUrl } from '../../utils/remoteImage';
 
 export default function SetupScreen() {
@@ -99,6 +100,8 @@ export default function SetupScreen() {
                 try {
                     finalAvatarUrl = await uploadAndUpdateAvatar(user.id, avatar);
                     console.log('[Setup] Avatar uploaded:', finalAvatarUrl);
+                    // Reward: mark the "set avatar" task complete (idempotent).
+                    void completeTask(user.id, 'set_avatar');
                 } catch (uploadError: any) {
                     console.error('[Setup] Avatar upload failed:', uploadError);
                     // Continue without avatar upload error, but log it

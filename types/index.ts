@@ -26,6 +26,7 @@ export interface User {
     isFollowing?: boolean; // For viewing others
     followsYou?: boolean; // For viewing others
     bio?: string;
+    pioneer_badge?: boolean;
 }
 
 // Post Types
@@ -44,6 +45,8 @@ export interface PostComment {
     parentCommentId?: string;
     replyToName?: string;
     createdAt: Date;
+    likes?: number;
+    isLiked?: boolean;
 }
 
 export interface Post {
@@ -73,6 +76,9 @@ export interface Post {
     comments: number;
     isAnonymous: boolean;
     isFollowingAuthor?: boolean; // Xiaohongshu badge requirement
+    promptId?: number;
+    topicTitleZh?: string;
+    topicTitleEn?: string;
 }
 
 // Forum Types (独立于发现板块)

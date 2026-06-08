@@ -441,6 +441,17 @@
             "delete_error": "刪除失敗",
             "post_success": "貼文發佈成功",
             "post_error": "發佈失敗"
+        },
+        "weekly_prompt": {
+            "tag": "本週話題",
+            "join": "參與話題",
+            "response_label": "回應本週話題",
+            "response_count": "{{count}} 則回應",
+            "be_first": "還沒有人回應，來第一個說說？",
+            "origin_tag": "📣 本週話題"
+        },
+        "compose": {
+            "topic_banner": "當前話題"
         }
     },
     "forum": {
@@ -823,6 +834,41 @@
         "delete_reason_placeholder": "例如：違反社區準則...",
         "confirm_delete": "確認刪除",
         "comments_count": "共 {{count}} 則評論",
-        "empty_comments": "暫無評論，來說點什麼吧 👇"
+        "empty_comments": "暫無評論，來說點什麼吧 👇",
+        "broadcast_push": "📣 推送給所有人",
+        "broadcast_modal_title": "廣播推送",
+        "broadcast_warning": "將推送給所有開啟通知的用戶，請謹慎操作",
+        "broadcast_notif_title_label": "通知標題",
+        "broadcast_notif_body_label": "通知正文",
+        "broadcast_confirm": "確認推送",
+        "broadcast_default_title": "校園圈新帖",
+        "broadcast_success": "已推送給 {{count}} 位用戶 🎉",
+        "broadcast_error": "推送失敗，請重試",
+        "broadcast_already_sent": "該貼文已推送過，不可重複推送",
+        "broadcast_cooldown": "推送太頻繁，請 6 小時後再試"
+    },
+    "rewards": {
+        "points": "{{count}} 積分",
+        "levels": {
+            "novice": "新生",
+            "active": "活躍者",
+            "contributor": "貢獻者",
+            "master": "校園達人"
+        },
+        "tasks": {
+            "set_avatar": "設定頭像",
+            "first_post": "發第一篇貼文",
+            "first_like": "給貼文點個讚",
+            "first_follow": "追蹤一位同學",
+            "first_comment": "評論一則貼文",
+            "first_review": "寫第一條課程評價"
+        },
+        "progress_done": "🎉 新手任務全部完成，繼續保持活躍解鎖更多徽章！",
+        "progress_next": "再得 {{count}} 積分升級，完成任務即可獲得",
+        "progress_start": "完成下面的任務，賺取你的第一批積分",
+        "all_done": "太棒了，新手任務已全部完成！",
+        "expand": "查看全部 {{count}} 個任務",
+        "collapse": "收起",
+        "pioneer_badge": "先鋒"
     }
 }
