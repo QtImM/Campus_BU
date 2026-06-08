@@ -1,7 +1,8 @@
-import { Camera, Edit3, MessageCircle, User as UserIcon } from 'lucide-react-native';
+import { Camera, ChevronRight, Edit3, MessageCircle, Sparkles, Trophy, User as UserIcon } from 'lucide-react-native';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LevelInfo } from '../../services/rewards';
 import { User } from '../../types';
 import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isAdminSync, isHKBUEmail } from '../../utils/userUtils';
@@ -22,6 +23,9 @@ interface ProfileHeaderProps {
     onFollowingPress?: () => void;
     followLoading?: boolean;
     onFollowStatsPress?: (tab: 'followers' | 'following') => void;
+    points?: number;
+    levelInfo?: LevelInfo;
+    onTasksPress?: () => void;
 }
 
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -36,6 +40,9 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
     onFollowingPress,
     followLoading = false,
     onFollowStatsPress,
+    points,
+    levelInfo,
+    onTasksPress,
 }) => {
     const { t } = useTranslation();
 
@@ -169,6 +176,28 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     )}
                 </View>
             </View>
+
+            {isCurrentUser && levelInfo !== undefined && points !== undefined && (
+                <TouchableOpacity style={styles.pointsStrip} onPress={onTasksPress} activeOpacity={0.7}>
+                    <View style={styles.pointsStripLeft}>
+                        <View style={[styles.levelPill, { backgroundColor: levelInfo.bg }]}>
+                            <Trophy size={11} color={levelInfo.color} />
+                            <Text style={[styles.levelPillText, { color: levelInfo.color }]}>{t(levelInfo.label)}</Text>
+                        </View>
+                        <View style={styles.pointsInline}>
+                            <Sparkles size={11} color="#D97706" />
+                            <Text style={styles.pointsInlineText}>{points} 积分</Text>
+                        </View>
+                        {levelInfo.pointsToNext > 0 && (
+                            <Text style={styles.pointsHint}>· 升级差 {levelInfo.pointsToNext} 分</Text>
+                        )}
+                    </View>
+                    <View style={styles.tasksBtn}>
+                        <Text style={styles.tasksBtnText}>查看任务</Text>
+                        <ChevronRight size={12} color="#1E3A8A" />
+                    </View>
+                </TouchableOpacity>
+            )}
         </View>
     );
 };
@@ -375,4 +404,21 @@ const styles = StyleSheet.create({
         color: '#9CA3AF',
         marginHorizontal: 8,
     },
+    pointsStrip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+    },
+    pointsStripLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+    levelPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+    levelPillText: { fontSize: 11, fontWeight: '700' },
+    pointsInline: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    pointsInlineText: { fontSize: 12, fontWeight: '700', color: '#92400E' },
+    pointsHint: { fontSize: 11, color: '#9CA3AF' },
+    tasksBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 8 },
+    tasksBtnText: { fontSize: 12, fontWeight: '700', color: '#1E3A8A' },
 });

@@ -159,7 +159,7 @@ export const searchForumPosts = async (
     queryText: string,
     currentUserId?: string,
 ): Promise<ForumPost[]> => {
-    let query = supabase.from(FORUM_POSTS).select('*');
+    let query = supabase.from(FORUM_POSTS).select('*').eq('status', 'published');
 
     if (queryText && queryText.trim().length > 0) {
         query = query.or(`title.ilike.%${queryText}%,content.ilike.%${queryText}%,author_name.ilike.%${queryText}%`);

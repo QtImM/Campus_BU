@@ -8,7 +8,7 @@ import * as Notifications from 'expo-notifications';
 import { FollowListModal } from '../../components/profile/FollowListModal';
 import MyScheduleCard from '../../components/profile/MyScheduleCard';
 import { ProfileHeader } from '../../components/profile/ProfileHeader';
-import RewardsCard from '../../components/profile/RewardsCard';
+import { getLevelInfo, getUserRewards, LevelInfo } from '../../services/rewards';
 import { ProfileMessages } from '../../components/profile/ProfileMessages';
 import { ProfilePostFeed } from '../../components/profile/ProfilePostFeed';
 import { ProfileTabs, ProfileTabType } from '../../components/profile/ProfileTabs';
@@ -70,6 +70,8 @@ export default function ProfileScreen() {
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [isAdminUser, setIsAdminUser] = useState(() => profileScreenCache?.isAdminUser || false);
     const [adminModerationUnreadCount, setAdminModerationUnreadCount] = useState(() => profileScreenCache?.adminModerationUnreadCount || 0);
+    const [rewardPoints, setRewardPoints] = useState(0);
+    const [rewardLevel, setRewardLevel] = useState<LevelInfo>(() => getLevelInfo(0));
     const loadTokenRef = useRef(0);
     const { checkLogin } = useLoginPrompt();
 
@@ -131,6 +133,11 @@ export default function ProfileScreen() {
                 setDailyDigestEnabledState(digestEnabled);
                 setIsAdminUser(adminStatus);
                 setNotifications(notifData);
+
+                getUserRewards(user.uid).then(r => {
+                    setRewardPoints(r.points);
+                    setRewardLevel(getLevelInfo(r.points));
+                }).catch(() => {});
 
                 let adminUnreadCount = 0;
                 if (adminStatus) {
@@ -696,6 +703,9 @@ export default function ProfileScreen() {
                 onEditPress={() => router.push('/(auth)/setup')}
                 onSettingsPress={() => { }}
                 onFollowStatsPress={userId ? handleFollowStatsPress : undefined}
+                points={userId ? rewardPoints : undefined}
+                levelInfo={userId ? rewardLevel : undefined}
+                onTasksPress={() => router.push('/profile/tasks' as any)}
             />
 
             {/* Premium Tab Switcher */}
@@ -757,8 +767,6 @@ export default function ProfileScreen() {
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.scrollContentPager}
                 >
-                    <RewardsCard userId={userId} />
-
                     <MyScheduleCard userId={userId} />
 
                     {/* Notifications Section */}

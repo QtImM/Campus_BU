@@ -1,12 +1,13 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ArrowLeftRight, BookOpen, GraduationCap, Plus, Search, Star } from 'lucide-react-native';
-import React, { useCallback, useEffect, useState } from 'react';
+import { ArrowLeftRight, BookOpen, GraduationCap, Plus, Search, Star, X } from 'lucide-react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     FlatList,
     InteractionManager,
     RefreshControl,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -30,7 +31,6 @@ import { Course } from '../../types';
 
 const COURSES_PAGE_SIZE = 20;
 
-// Mock Data as fallback/initial
 const MOCK_COURSES: Course[] = [
     {
         id: '1',
@@ -44,11 +44,56 @@ const MOCK_COURSES: Course[] = [
     }
 ];
 
+const DEPT_COLORS: Record<string, { bg: string; text: string }> = {
+    COMP: { bg: '#DBEAFE', text: '#1D4ED8' },
+    ACCT: { bg: '#D1FAE5', text: '#065F46' },
+    MATH: { bg: '#FEF3C7', text: '#B45309' },
+    FIN:  { bg: '#FCE7F3', text: '#9D174D' },
+    ECON: { bg: '#E0E7FF', text: '#3730A3' },
+    MGMT: { bg: '#FEE2E2', text: '#991B1B' },
+    MARK: { bg: '#FFF7ED', text: '#C2410C' },
+    PHYS: { bg: '#ECFDF5', text: '#065F46' },
+    CHEM: { bg: '#FDF4FF', text: '#7E22CE' },
+    BIOL: { bg: '#F0FDF4', text: '#166534' },
+    HIST: { bg: '#FFF1F2', text: '#BE123C' },
+    ENGL: { bg: '#F0F9FF', text: '#0369A1' },
+    CHIN: { bg: '#FFF8F0', text: '#C2410C' },
+    BUSA: { bg: '#F5F3FF', text: '#6D28D9' },
+    COMM: { bg: '#EEF2FF', text: '#3B4DB8' },
+    SOCL: { bg: '#FFFBEB', text: '#92400E' },
+    GEOG: { bg: '#F0FFF4', text: '#276749' },
+    RELS: { bg: '#FFF9F0', text: '#B45309' },
+    STAT: { bg: '#F0F4FF', text: '#1D4ED8' },
+    POLS: { bg: '#FEF2F2', text: '#991B1B' },
+    MUSI: { bg: '#FDF4FF', text: '#7E22CE' },
+    VISU: { bg: '#F5F3FF', text: '#6D28D9' },
+};
+
+const getDeptPrefix = (code: string) => (code || '').toUpperCase().match(/^[A-Z]+/)?.[0] ?? '';
+const getDeptColor = (code: string) => DEPT_COLORS[getDeptPrefix(code)] ?? { bg: '#F3E8FF', text: '#6D28D9' };
+
+const mapDbCourse = (d: any): Course => ({
+    id: d.id,
+    code: d.code,
+    name: d.name || '',
+    instructor: d.instructor || '',
+    department: d.department || '',
+    credits: d.credits || 3,
+    rating: d.rating || 0,
+    reviewCount: d.review_count || 0,
+});
+
 export default function CoursesScreen() {
     const router = useRouter();
     const { t } = useTranslation();
     const [searchQuery, setSearchQuery] = useState('');
     const [courses, setCourses] = useState<Course[]>([]);
+    const [deptTabs, setDeptTabs] = useState<string[]>([]);
+    const [selectedDept, setSelectedDept] = useState<string | null>(null);
+    const selectedDeptRef = useRef<string | null>(null);
+    const [searchResults, setSearchResults] = useState<Course[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [favoriteCourseIds, setFavoriteCourseIds] = useState<string[]>([]);
     const [favoriteCourses, setFavoriteCourses] = useState<Course[]>([]);
     const [favoriteCoursesLoading, setFavoriteCoursesLoading] = useState(false);
@@ -106,65 +151,63 @@ export default function CoursesScreen() {
         return base;
     };
 
-    const fetchCourses = async (isSilent = false, pageToLoad = 0) => {
-        if (!isSilent && courses.length === 0) {
-            setLoading(true);
-        }
+    const loadDeptTabs = useCallback(async () => {
         try {
-            // 1. Fetch from Supabase with pagination
-            let query = supabase
-                .from('courses')
-                .select('*')
-                .order('created_at', { ascending: false });
+            const { data } = await supabase.from('courses').select('code').order('code');
+            if (data) {
+                const prefixes = Array.from(new Set(
+                    (data as any[]).map(d => getDeptPrefix(d.code || '')).filter(Boolean)
+                )).sort() as string[];
+                setDeptTabs(prefixes);
+            }
+        } catch { /* silent */ }
+    }, []);
 
-            const from = pageToLoad * COURSES_PAGE_SIZE;
-            const to = from + COURSES_PAGE_SIZE - 1;
-            query = query.range(from, to);
-
-            const { data: dbData, error: dbError } = await query;
-
-            let dbCourses: Course[] = [];
-            if (dbData && !dbError) {
-                dbCourses = dbData.map(d => ({
-                    id: d.id,
-                    code: d.code,
-                    name: d.name || '',
-                    instructor: d.instructor || '',
-                    department: d.department || '',
-                    credits: d.credits || 3,
-                    rating: d.rating || 0,
-                    reviewCount: d.review_count || 0
-                }));
+    const fetchCourses = async (isSilent = false, pageToLoad = 0, dept: string | null = null) => {
+        if (!isSilent && courses.length === 0) setLoading(true);
+        try {
+            let query = supabase.from('courses').select('*');
+            if (dept) {
+                query = query.ilike('code', `${dept}%`).order('code');
+            } else {
+                const from = pageToLoad * COURSES_PAGE_SIZE;
+                query = query.order('created_at', { ascending: false }).range(from, from + COURSES_PAGE_SIZE - 1);
             }
 
-            setHasMoreCourses((dbData?.length || 0) >= COURSES_PAGE_SIZE);
-            setCoursePage(pageToLoad);
+            const { data: dbData, error: dbError } = await query;
+            let dbCourses: Course[] = [];
+            if (dbData && !dbError) dbCourses = dbData.map(mapDbCourse);
 
-            if (pageToLoad === 0) {
-                // First page: merge local + static + DB
-                const localCourses = await getLocalCourses();
+            if (!dept) {
+                setHasMoreCourses((dbData?.length || 0) >= COURSES_PAGE_SIZE);
+                setCoursePage(pageToLoad);
+            } else {
+                setHasMoreCourses(false);
+            }
+
+            if (dept || pageToLoad === 0) {
+                const localCourses = dept ? [] : await getLocalCourses();
                 const courseMap = new Map<string, Course>();
                 localCourses.forEach(c => courseMap.set(keyOf(c), c));
                 mergeCourses(courseMap, dbCourses);
-                MOCK_COURSES.forEach(mock => {
-                    const key = keyOf(mock);
-                    if (!courseMap.has(key)) courseMap.set(key, mock);
-                });
-                const mergedCourses = Array.from(courseMap.values());
-                const coursesWithStats = await enrichCoursesWithReviewStats(mergedCourses);
-                setCourses(coursesWithStats);
+                if (!dept) {
+                    MOCK_COURSES.forEach(mock => {
+                        const key = keyOf(mock);
+                        if (!courseMap.has(key)) courseMap.set(key, mock);
+                    });
+                }
+                const merged = Array.from(courseMap.values());
+                setCourses(await enrichCoursesWithReviewStats(merged));
             } else {
-                // Subsequent pages: append new DB courses
-                const coursesWithStats = await enrichCoursesWithReviewStats(dbCourses);
+                const withStats = await enrichCoursesWithReviewStats(dbCourses);
                 setCourses(prev => {
-                    const existingIds = new Set(prev.map(c => keyOf(c)));
-                    const newCourses = coursesWithStats.filter(c => !existingIds.has(keyOf(c)));
-                    return [...prev, ...newCourses];
+                    const existing = new Set(prev.map(c => keyOf(c)));
+                    return [...prev, ...withStats.filter(c => !existing.has(keyOf(c)))];
                 });
             }
         } catch (err) {
-            console.log('Fetch courses silent error (expected if table missing):', err);
-            if (pageToLoad === 0) {
+            console.log('Fetch courses error:', err);
+            if (pageToLoad === 0 && !dept) {
                 const localOnly = await getLocalCourses();
                 const fallbackMap = new Map<string, Course>();
                 localOnly.forEach(c => fallbackMap.set(normalizeCode(c.code) || c.id, c));
@@ -172,9 +215,7 @@ export default function CoursesScreen() {
                     const key = normalizeCode(mock.code) || mock.id;
                     if (!fallbackMap.has(key)) fallbackMap.set(key, mock);
                 });
-                const mergedFallback = Array.from(fallbackMap.values());
-                const fallbackWithStats = await enrichCoursesWithReviewStats(mergedFallback);
-                setCourses(fallbackWithStats);
+                setCourses(await enrichCoursesWithReviewStats(Array.from(fallbackMap.values())));
             }
         } finally {
             setLoading(false);
@@ -182,21 +223,69 @@ export default function CoursesScreen() {
         }
     };
 
+    // Debounced DB search
+    useEffect(() => {
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        const q = searchQuery.trim();
+        if (q.length < 2) {
+            setSearchResults([]);
+            setIsSearching(false);
+            return;
+        }
+        setIsSearching(true);
+        searchTimerRef.current = setTimeout(async () => {
+            try {
+                const { data } = await supabase
+                    .from('courses')
+                    .select('*')
+                    .or(`code.ilike.%${q}%,name.ilike.%${q}%,instructor.ilike.%${q}%`)
+                    .order('code')
+                    .limit(30);
+                const dbResults = (data ?? []).map(mapDbCourse);
+                const localFiltered = courses.filter(c =>
+                    normalizeCode(c.code).includes(normalizeCode(q)) ||
+                    (c.name || '').toLowerCase().includes(q.toLowerCase()) ||
+                    (c.instructor || '').toLowerCase().includes(q.toLowerCase())
+                );
+                const map = new Map<string, Course>();
+                [...localFiltered, ...dbResults].forEach(c => map.set(keyOf(c), c));
+                setSearchResults(await enrichCoursesWithReviewStats(Array.from(map.values())));
+            } catch {
+                setSearchResults([]);
+            } finally {
+                setIsSearching(false);
+            }
+        }, 300);
+        return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+    }, [searchQuery]);
+
+    const handleDeptSelect = (dept: string | null) => {
+        setSelectedDept(dept);
+        selectedDeptRef.current = dept;
+        setSearchQuery('');
+        setSearchResults([]);
+        setCoursePage(0);
+        setHasMoreCourses(dept === null);
+        setCourses([]);
+        void fetchCourses(false, 0, dept);
+    };
+
     const loadMoreCourses = useCallback(() => {
-        if (loadingMoreCourses || !hasMoreCourses) return;
+        if (loadingMoreCourses || !hasMoreCourses || selectedDept) return;
         setLoadingMoreCourses(true);
-        fetchCourses(true, coursePage + 1).finally(() => setLoadingMoreCourses(false));
-    }, [coursePage, hasMoreCourses, loadingMoreCourses]);
+        fetchCourses(true, coursePage + 1, null).finally(() => setLoadingMoreCourses(false));
+    }, [coursePage, hasMoreCourses, loadingMoreCourses, selectedDept]);
 
     useFocusEffect(
         useCallback(() => {
             const task = InteractionManager.runAfterInteractions(() => {
-                fetchCourses(true, 0);
+                fetchCourses(true, 0, selectedDeptRef.current);
                 loadFavorites();
                 void refreshCourseActivity();
+                void loadDeptTabs();
             });
             return () => task.cancel();
-        }, [refreshCourseActivity])
+        }, [refreshCourseActivity, loadDeptTabs])
     );
 
     const loadFavorites = async () => {
@@ -205,7 +294,6 @@ export default function CoursesScreen() {
             const canRemote = !!user?.uid;
             setCurrentUserId(canRemote ? user.uid : null);
             setAllowRemoteFavorites(canRemote);
-
             const ids = await loadCourseFavorites(canRemote ? user.uid : null, canRemote);
             setFavoriteCourseIds(ids);
         } catch (e) {
@@ -215,38 +303,20 @@ export default function CoursesScreen() {
 
     useEffect(() => {
         let cancelled = false;
-
         const syncFavoriteCourses = async () => {
             if (favoriteCourseIds.length === 0) {
-                if (!cancelled) {
-                    setFavoriteCourses([]);
-                    setFavoriteCoursesLoading(false);
-                }
+                if (!cancelled) { setFavoriteCourses([]); setFavoriteCoursesLoading(false); }
                 return;
             }
-
-            if (!cancelled) {
-                setFavoriteCoursesLoading(true);
-            }
-
+            if (!cancelled) setFavoriteCoursesLoading(true);
             const resolvedFavorites = await loadFavoriteCoursesDetails(favoriteCourseIds, courses);
-            if (!cancelled) {
-                setFavoriteCourses(resolvedFavorites);
-                setFavoriteCoursesLoading(false);
-            }
+            if (!cancelled) { setFavoriteCourses(resolvedFavorites); setFavoriteCoursesLoading(false); }
         };
-
-        syncFavoriteCourses().catch((error) => {
-            console.error('Error loading favorite course details:', error);
-            if (!cancelled) {
-                setFavoriteCourses([]);
-                setFavoriteCoursesLoading(false);
-            }
+        syncFavoriteCourses().catch(err => {
+            console.error('Error loading favorite course details:', err);
+            if (!cancelled) { setFavoriteCourses([]); setFavoriteCoursesLoading(false); }
         });
-
-        return () => {
-            cancelled = true;
-        };
+        return () => { cancelled = true; };
     }, [favoriteCourseIds, courses]);
 
     const toggleFavorite = async (courseId: string) => {
@@ -256,7 +326,6 @@ export default function CoursesScreen() {
             ? favoriteCourseIds.filter(id => id !== courseId)
             : [...favoriteCourseIds, courseId];
         setFavoriteCourseIds(nextFavorites);
-
         try {
             await saveCourseFavoritesLocal(nextFavorites);
             if (allowRemoteFavorites && currentUserId) {
@@ -268,14 +337,6 @@ export default function CoursesScreen() {
         }
     };
 
-    const filteredCourses = courses.filter(course => {
-        const query = (searchQuery || '').toLowerCase();
-        return (
-            (course.code || '').toLowerCase().includes(query) ||
-            (course.name || '').toLowerCase().includes(query) ||
-            (course.instructor || '').toLowerCase().includes(query)
-        );
-    });
     const handleCoursePress = (courseId: string) => {
         if (!checkLogin(currentUserId)) return;
         router.push(`/courses/${courseId}` as any);
@@ -287,48 +348,56 @@ export default function CoursesScreen() {
         }
     };
 
+    const isSearchMode = searchQuery.trim().length >= 2;
+    const displayedCourses = isSearchMode ? searchResults : courses;
+
+    const sectionTitle = isSearchMode
+        ? `搜索结果${searchResults.length > 0 ? ` (${searchResults.length})` : ''}`
+        : selectedDept
+            ? `${selectedDept} · ${courses.length} 门课程`
+            : t('courses.all_courses');
+
     const renderCourseItem = ({ item }: { item: Course }) => {
         const hasUnread = !!unreadByCourse[item.id]?.hasAnyUnread;
-
+        const deptColor = getDeptColor(item.code);
         return (
-        <TouchableOpacity
-            style={styles.courseCard}
-            onPress={() => handleCoursePress(item.id)}
-        >
-            {hasUnread && <View style={styles.courseUnreadDot} />}
-            <View style={styles.courseRow}>
-                <View style={styles.courseMain}>
-                    <View style={styles.courseHeader}>
-                        <View style={styles.codeContainer}>
-                            <Text style={styles.courseCode}>{item.code}</Text>
+            <TouchableOpacity
+                style={styles.courseCard}
+                onPress={() => handleCoursePress(item.id)}
+            >
+                {hasUnread && <View style={styles.courseUnreadDot} />}
+                <View style={styles.courseRow}>
+                    <View style={styles.courseMain}>
+                        <View style={styles.courseHeader}>
+                            <View style={[styles.codeContainer, { backgroundColor: deptColor.bg }]}>
+                                <Text style={[styles.courseCode, { color: deptColor.text }]}>{item.code}</Text>
+                            </View>
                         </View>
+                        <Text style={styles.courseName}>{item.name}</Text>
+                        <Text style={styles.deptText}>{item.department}</Text>
                     </View>
-                    <Text style={styles.courseName}>{item.name}</Text>
-                    <Text style={styles.deptText}>{item.department}</Text>
-                </View>
-
-                <View style={styles.courseStatsColumn}>
-                    <View style={styles.ratingContainer}>
-                        <Star size={14} color="#FFD700" fill="#FFD700" />
-                        <Text style={styles.ratingText}>{(item.rating || 0).toFixed(1)}</Text>
+                    <View style={styles.courseStatsColumn}>
+                        <View style={styles.ratingContainer}>
+                            <Star size={14} color="#FFD700" fill="#FFD700" />
+                            <Text style={styles.ratingText}>{(item.rating || 0).toFixed(1)}</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.favoriteButton}
+                            onPress={(e: any) => {
+                                e?.stopPropagation?.();
+                                toggleFavorite(item.id);
+                            }}
+                        >
+                            <Star
+                                size={18}
+                                color={favoriteCourseIds.includes(item.id) ? '#FFD700' : '#D1D5DB'}
+                                fill={favoriteCourseIds.includes(item.id) ? '#FFD700' : 'transparent'}
+                            />
+                        </TouchableOpacity>
+                        <Text style={styles.reviewCount}>{t('teachers.reviews_count', { count: item.reviewCount })}</Text>
                     </View>
-                    <TouchableOpacity
-                        style={styles.favoriteButton}
-                        onPress={(e: any) => {
-                            e?.stopPropagation?.();
-                            toggleFavorite(item.id);
-                        }}
-                    >
-                        <Star
-                            size={18}
-                            color={favoriteCourseIds.includes(item.id) ? '#FFD700' : '#D1D5DB'}
-                            fill={favoriteCourseIds.includes(item.id) ? '#FFD700' : 'transparent'}
-                        />
-                    </TouchableOpacity>
-                    <Text style={styles.reviewCount}>{t('teachers.reviews_count', { count: item.reviewCount })}</Text>
                 </View>
-            </View>
-        </TouchableOpacity>
+            </TouchableOpacity>
         );
     };
 
@@ -357,10 +426,57 @@ export default function CoursesScreen() {
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                     />
+                    {isSearching && <ActivityIndicator size="small" color="#9CA3AF" style={{ marginRight: 4 }} />}
+                    {searchQuery.length > 0 && !isSearching && (
+                        <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                            <X size={18} color="#9CA3AF" />
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
 
-            {(favoriteCoursesLoading || favoriteCourses.length > 0) && !searchQuery && (
+            {/* Department filter tabs */}
+            {!isSearchMode && deptTabs.length > 0 && (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.deptTabsScroll}
+                    contentContainerStyle={styles.deptTabsContent}
+                >
+                    <TouchableOpacity
+                        style={[styles.deptTab, selectedDept === null && styles.deptTabAllActive]}
+                        onPress={() => handleDeptSelect(null)}
+                    >
+                        <Text style={[styles.deptTabText, selectedDept === null && styles.deptTabAllActiveText]}>
+                            全部
+                        </Text>
+                    </TouchableOpacity>
+                    {deptTabs.map(dept => {
+                        const isActive = selectedDept === dept;
+                        const color = DEPT_COLORS[dept] ?? { bg: '#F3E8FF', text: '#6D28D9' };
+                        return (
+                            <TouchableOpacity
+                                key={dept}
+                                style={[
+                                    styles.deptTab,
+                                    isActive && { backgroundColor: color.bg, borderColor: color.text + '50' },
+                                ]}
+                                onPress={() => handleDeptSelect(dept)}
+                            >
+                                <Text style={[
+                                    styles.deptTabText,
+                                    isActive && { color: color.text, fontWeight: '700' },
+                                ]}>
+                                    {dept}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
+            )}
+
+            {/* Favorites strip — only when not searching and no dept selected */}
+            {(favoriteCoursesLoading || favoriteCourses.length > 0) && !isSearchMode && !selectedDept && (
                 <View style={styles.favoritesSection}>
                     <Text style={styles.favoritesTitle}>⭐ {t('courses.favorites')}</Text>
                     {favoriteCoursesLoading ? (
@@ -372,25 +488,29 @@ export default function CoursesScreen() {
                             data={favoriteCourses}
                             keyExtractor={(item) => `fav-${item.id}`}
                             contentContainerStyle={styles.favoritesList}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={styles.favoriteCard}
-                                    onPress={() => handleCoursePress(item.id)}
-                                >
-                                    {!!unreadByCourse[item.id]?.hasAnyUnread && <View style={styles.favoriteUnreadDot} />}
-                                    <Text style={styles.favoriteCode}>{(item.code || '').toUpperCase()}</Text>
-                                </TouchableOpacity>
-                            )}
+                            renderItem={({ item }) => {
+                                const dc = getDeptColor(item.code);
+                                return (
+                                    <TouchableOpacity
+                                        style={[styles.favoriteCard, { backgroundColor: dc.bg, borderColor: dc.text + '30' }]}
+                                        onPress={() => handleCoursePress(item.id)}
+                                    >
+                                        {!!unreadByCourse[item.id]?.hasAnyUnread && <View style={styles.favoriteUnreadDot} />}
+                                        <Text style={[styles.favoriteCode, { color: dc.text }]}>{(item.code || '').toUpperCase()}</Text>
+                                    </TouchableOpacity>
+                                );
+                            }}
                         />
                     )}
                 </View>
             )}
 
-            <Text style={styles.allCoursesTitle}>{t('courses.all_courses')}</Text>
+            {/* Section title */}
+            <Text style={styles.allCoursesTitle}>{sectionTitle}</Text>
 
             {/* Course List */}
             <FlatList
-                data={filteredCourses}
+                data={displayedCourses}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 renderItem={renderCourseItem}
@@ -402,7 +522,8 @@ export default function CoursesScreen() {
                         onRefresh={() => {
                             setCoursePage(0);
                             setHasMoreCourses(true);
-                            fetchCourses(true, 0);
+                            setRefreshing(true);
+                            fetchCourses(true, 0, selectedDeptRef.current);
                         }}
                         tintColor="#1E3A8A"
                     />
@@ -417,7 +538,7 @@ export default function CoursesScreen() {
                 windowSize={5}
                 removeClippedSubviews={true}
                 ListEmptyComponent={
-                    loading ? (
+                    loading || isSearching ? (
                         <View style={{ paddingTop: 10 }}>
                             <CourseSkeleton />
                             <CourseSkeleton />
@@ -429,9 +550,11 @@ export default function CoursesScreen() {
                         <View style={styles.emptyState}>
                             <BookOpen size={48} color="#D1D5DB" />
                             <Text style={styles.emptyText}>{t('courses.no_courses_found')}</Text>
-                            <TouchableOpacity style={styles.addCourseButton} onPress={handleAddCourse}>
-                                <Text style={styles.addCourseText}>{t('courses.add_new_course')}</Text>
-                            </TouchableOpacity>
+                            {!isSearchMode && (
+                                <TouchableOpacity style={styles.addCourseButton} onPress={handleAddCourse}>
+                                    <Text style={styles.addCourseText}>{t('courses.add_new_course')}</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     )
                 }
@@ -519,15 +642,46 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 5,
+        gap: 8,
     },
     searchInput: {
         flex: 1,
         fontSize: 15,
         color: '#111827',
-        marginLeft: 12,
         lineHeight: 20,
         paddingVertical: 0,
     },
+    // Department tabs
+    deptTabsScroll: {
+        marginTop: 12,
+    },
+    deptTabsContent: {
+        paddingHorizontal: 16,
+        gap: 8,
+        paddingVertical: 2,
+    },
+    deptTab: {
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: 20,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    deptTabAllActive: {
+        backgroundColor: '#EFF6FF',
+        borderColor: '#BFDBFE',
+    },
+    deptTabText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#64748B',
+    },
+    deptTabAllActiveText: {
+        color: '#1D4ED8',
+        fontWeight: '700',
+    },
+    // Favorites
     listContent: {
         padding: 20,
         paddingTop: 12,
@@ -546,20 +700,17 @@ const styles = StyleSheet.create({
     },
     favoritesList: { paddingHorizontal: 20 },
     favoriteCard: {
-        backgroundColor: '#FEF3C7',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 10,
         marginRight: 10,
         maxWidth: 180,
         borderWidth: 1,
-        borderColor: '#FDE68A',
         position: 'relative',
     },
     favoriteCode: {
         fontSize: 13,
         fontWeight: '700',
-        color: '#92400E',
     },
     favoriteUnreadDot: {
         position: 'absolute',
@@ -575,9 +726,10 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#374151',
         paddingHorizontal: 20,
-        marginTop: 4,
+        marginTop: 10,
         marginBottom: 8,
     },
+    // Course card
     courseCard: {
         backgroundColor: '#fff',
         borderRadius: 16,
@@ -615,15 +767,13 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     codeContainer: {
-        backgroundColor: '#F3E8FF',
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 8,
     },
     courseCode: {
         fontSize: 13,
-        fontWeight: '600',
-        color: '#1E3A8A',
+        fontWeight: '700',
     },
     ratingContainer: {
         flexDirection: 'row',
@@ -652,19 +802,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#111827',
         marginBottom: 8,
-    },
-    instructorText: {
-        fontSize: 14,
-        color: '#4B5563',
-        marginBottom: 12,
-    },
-    cardFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
-        paddingTop: 12,
     },
     deptText: {
         fontSize: 12,
@@ -698,7 +835,7 @@ const styles = StyleSheet.create({
     },
     exchangeFab: {
         position: 'absolute',
-        bottom: 110, // Adjust bottom to leave space
+        bottom: 110,
         right: 20,
         width: 56,
         height: 56,
@@ -715,7 +852,7 @@ const styles = StyleSheet.create({
     },
     teacherFab: {
         position: 'absolute',
-        bottom: 180, // Higher than exchangeFab
+        bottom: 180,
         right: 20,
         width: 56,
         height: 56,
