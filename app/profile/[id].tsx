@@ -6,7 +6,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 import { FollowListModal } from '../../components/profile/FollowListModal';
 import { ProfileHeader } from '../../components/profile/ProfileHeader';
 import { ProfilePostFeed } from '../../components/profile/ProfilePostFeed';
-import { getCurrentUser, getUserProfile } from '../../services/auth';
+import { getCachedUserProfile, getCurrentUser, getUserProfile } from '../../services/auth';
 import { fetchPostsByAuthor, togglePostLike } from '../../services/campus';
 import { followUser, getFollowCounts, isFollowingUser, unfollowUser } from '../../services/follows';
 import { Post, User } from '../../types';
@@ -15,8 +15,8 @@ export default function UserProfileScreen() {
     const { t } = useTranslation();
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<User | null>(() => getCachedUserProfile(id as string));
+    const [loading, setLoading] = useState<boolean>(() => !getCachedUserProfile(id as string));
     const [posts, setPosts] = useState<Post[]>([]);
     const [currentUserId, setCurrentUserId] = useState<string | undefined>();
     const [followLoading, setFollowLoading] = useState(false);
@@ -27,15 +27,13 @@ export default function UserProfileScreen() {
         const loadData = async () => {
             if (!id) return;
             try {
-                const [currentUser, userProfile] = await Promise.all([
+                const [currentUser, userProfile, userPosts] = await Promise.all([
                     getCurrentUser(),
-                    getUserProfile(id)
+                    getUserProfile(id),
+                    fetchPostsByAuthor(id),
                 ]);
 
                 setCurrentUserId(currentUser?.uid);
-
-                // Load posts for this user
-                const userPosts = await fetchPostsByAuthor(id, currentUser?.uid);
                 setPosts(userPosts);
 
                 if (userProfile) {

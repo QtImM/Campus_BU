@@ -112,6 +112,10 @@ const buildExtractionPrompt = (actionType: ActionType, input: string): Array<{ r
 post_course_review 字段：
 - courseCode: string | null (课程代码，如 COMP3015)
 - rating: number | null (1-5 星)
+- difficulty: number | null (1-5，难度，1=简单 5=困难)
+- workload: number | null (1-5，工作量，1=轻松 5=很重)
+- grading: number | null (1-5，给分，1=严格 5=慷慨)
+- tags: string[] (标签数组，如 ["Chill课", "给分高", "点名严"])
 - content: string (评价内容)
 - anonymous: boolean (是否匿名，默认 false)
 

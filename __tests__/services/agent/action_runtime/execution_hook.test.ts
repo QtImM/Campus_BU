@@ -41,6 +41,10 @@ describe('action runtime execution hook', () => {
             draft: {
                 courseCode: 'COMP3015',
                 rating: 5,
+                difficulty: null,
+                workload: null,
+                grading: null,
+                tags: [],
                 content: 'Great course',
                 anonymous: false,
             },

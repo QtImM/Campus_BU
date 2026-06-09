@@ -80,12 +80,20 @@ const makeReviewDraft = (overrides: Partial<PostCourseReviewDraft> = {}): Pendin
     draft: {
         courseCode: overrides.courseCode ?? null,
         rating: overrides.rating ?? null,
+        difficulty: overrides.difficulty ?? null,
+        workload: overrides.workload ?? null,
+        grading: overrides.grading ?? null,
+        tags: overrides.tags ?? [],
         content: overrides.content ?? '',
         anonymous: overrides.anonymous ?? false,
     },
     missingFields: computeMissingFields('post_course_review', {
         courseCode: overrides.courseCode ?? null,
         rating: overrides.rating ?? null,
+        difficulty: overrides.difficulty ?? null,
+        workload: overrides.workload ?? null,
+        grading: overrides.grading ?? null,
+        tags: overrides.tags ?? [],
         content: overrides.content ?? '',
         anonymous: overrides.anonymous ?? false,
     }),
@@ -189,6 +197,10 @@ describe('IT-005: enters confirmation when all fields filled', () => {
         const draft: PostCourseReviewDraft = {
             courseCode: 'COMP3015',
             rating: 5,
+            difficulty: null,
+            workload: null,
+            grading: null,
+            tags: [],
             content: '很好',
             anonymous: false,
         };

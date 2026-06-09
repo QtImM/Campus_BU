@@ -1,7 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, Tag, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
+import { Check, ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -9,6 +8,7 @@ import {
     Animated,
     Alert,
     FlatList,
+    Keyboard,
     KeyboardAvoidingView,
     Modal,
     Platform,
@@ -18,6 +18,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View
 } from 'react-native';
 import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
@@ -30,7 +31,7 @@ import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import storage from '../../lib/storage';
 import { getCurrentUser } from '../../services/auth';
 import { ensureContentSafety } from '../../services/contentFilter';
-import { addReview, deleteReview, getCourseById, getReviewsAndHasReviewed, likeReview } from '../../services/courses';
+import { addReview, deleteReview, getCachedCourseDetail, getCourseById, getReviewsAndHasReviewed, likeReview, summarizeCourseReviews } from '../../services/courses';
 import { blockUser, getBlockedUserIds, reportContent, ReportReason } from '../../services/moderation';
 import { supabase } from '../../services/supabase';
 import { deleteTeamingRequest, fetchTeamingComments, fetchTeamingRequests, postTeamingComment, postTeamingRequest, toggleTeamingLike } from '../../services/teaming';
@@ -69,10 +70,12 @@ export default function CourseDetailScreen() {
     const { id } = useLocalSearchParams();
     const courseUnread = typeof id === 'string' ? unreadByCourse[id] : undefined;
     const [activeTab, setActiveTab] = useState<'reviews' | 'chat' | 'teaming'>('reviews');
-    const [course, setCourse] = useState<Course | null>(null);
+    const [course, setCourse] = useState<Course | null>(() => getCachedCourseDetail(id as string));
     const [reviews, setReviews] = useState<Review[]>([]);
+    const [reviewsLoading, setReviewsLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
     const [sortBy, setSortBy] = useState<'newest' | 'likes'>('newest');
+    const [filterTag, setFilterTag] = useState<string | null>(null);
     const [likedReviewIds, setLikedReviewIds] = useState<string[]>([]);
     const [teamingRequests, setTeamingRequests] = useState<CourseTeaming[]>([]);
     const [isTeamingModalVisible, setIsTeamingModalVisible] = useState(false);
@@ -87,10 +90,14 @@ export default function CourseDetailScreen() {
     const blockedUserIdsRef = useRef<string[]>([]);
 
     const [hasReviewed, setHasReviewed] = useState(false);
+    const [aiSummary, setAiSummary] = useState<string>('');
 
     // Form State
     const [rating, setRating] = useState(0);
     const [difficulty, setDifficulty] = useState(0);
+    const [workload, setWorkload] = useState(0);
+    const [grading, setGrading] = useState(0);
+    const [reviewTags, setReviewTags] = useState<string[]>([]);
     const [reviewContent, setReviewContent] = useState('');
     const [isAnonymous, setIsAnonymous] = useState(false);
 
@@ -200,6 +207,7 @@ export default function CourseDetailScreen() {
         // ── Phase 3: reviews + hasReviewed in one round-trip ──
         if (isMockId) {
             setReviews(MOCK_REVIEWS);
+            setReviewsLoading(false);
         } else {
             const { reviews, hasReviewed } = await getReviewsAndHasReviewed(
                 id as string,
@@ -208,6 +216,8 @@ export default function CourseDetailScreen() {
             );
             setReviews(reviews);
             setHasReviewed(hasReviewed);
+            setAiSummary(summarizeCourseReviews(reviews, courseData?.name));
+            setReviewsLoading(false);
         }
 
         // Teaming can load in background (not blocking the main view)
@@ -488,6 +498,9 @@ export default function CourseDetailScreen() {
             authorAvatar: isAnonymous ? '👤' : (user.avatarUrl || '👤'),
             rating: rating > 0 ? rating : undefined,
             difficulty: difficulty > 0 ? difficulty : 3,
+            workload: workload > 0 ? workload : undefined,
+            grading: grading > 0 ? grading : undefined,
+            tags: reviewTags,
             content: reviewContent.trim(),
             semester: '2025 Spring',
             isAnonymous: isAnonymous
@@ -508,8 +521,10 @@ export default function CourseDetailScreen() {
                 authorAvatar: user.avatarUrl || '👤',
                 rating: rating > 0 ? rating : undefined,
                 difficulty: difficulty > 0 ? difficulty : 3,
+                workload: workload > 0 ? workload : undefined,
+                grading: grading > 0 ? grading : undefined,
                 content: reviewContent.trim(),
-                tags: [],
+                tags: reviewTags,
                 likes: 0,
                 createdAt: new Date(),
                 semester: '2025 Spring'
@@ -517,17 +532,25 @@ export default function CourseDetailScreen() {
             setReviews(prev => [newReviewObj, ...prev]);
             if (rating > 0) setHasReviewed(true);
 
+            const wasFirstReview = !hasReviewed;
             setModalVisible(false);
             setRating(0);
             setDifficulty(0);
+            setWorkload(0);
+            setGrading(0);
+            setReviewTags([]);
             setReviewContent('');
             setIsAnonymous(false);
-            Alert.alert('Success', 'Evaluation posted successfully!');
+            Alert.alert(
+                '评价发布成功',
+                wasFirstReview ? '感谢你的点评！首次评价奖励 +15 积分已到账 🎉' : '感谢你的点评！'
+            );
 
             // Silent background refresh to replace temp entry with real DB row
             getReviewsAndHasReviewed(id as string, user.uid, course?.code).then(({ reviews, hasReviewed }) => {
                 setReviews(reviews);
                 setHasReviewed(hasReviewed);
+                setAiSummary(summarizeCourseReviews(reviews, course?.name));
                 void refreshCourseActivity();
             }).catch(() => { });
         }
@@ -741,18 +764,26 @@ export default function CourseDetailScreen() {
         }
     };
 
-    const sortedReviews = [...reviews].sort((a, b) => {
-        if (sortBy === 'likes') {
-            return (b.likes || 0) - (a.likes || 0);
-        }
-        return b.createdAt.getTime() - a.createdAt.getTime();
-    });
+    const sortedReviews = [...reviews]
+        .filter(r => filterTag == null || r.tags.includes(filterTag))
+        .sort((a, b) => {
+            if (sortBy === 'likes') {
+                return (b.likes || 0) - (a.likes || 0);
+            }
+            return b.createdAt.getTime() - a.createdAt.getTime();
+        });
+
+    const topLikedId = reviews.length > 0
+        ? [...reviews].sort((a, b) => (b.likes || 0) - (a.likes || 0))[0]?.id
+        : null;
+
+    const allReviewTags = Array.from(new Set(reviews.flatMap(r => r.tags))).filter(Boolean);
 
     // Helper: rating → left-bar color
     const ratingBarColor = (rating?: number) => {
         if (!rating) return '#D1D5DB';
-        if (rating >= 4) return '#10B981';
-        if (rating === 3) return '#3B82F6';
+        if (rating >= 4) return '#2563EB';
+        if (rating === 3) return '#2563EB';
         return '#F59E0B';
     };
 
@@ -760,7 +791,6 @@ export default function CourseDetailScreen() {
         <Animated.View
             style={[
                 styles.reviewCard,
-                { borderLeftColor: ratingBarColor(item.rating) },
                 ugcActions.getHighlightStyle(item.id),
             ]}
         >
@@ -776,6 +806,11 @@ export default function CourseDetailScreen() {
                     isAnonymous: item.isAnonymous,
                 })}
             >
+            {item.id === topLikedId && item.likes > 0 && (
+                <View style={styles.topBadge}>
+                    <Text style={styles.topBadgeText}>🏆 最有用</Text>
+                </View>
+            )}
             <View style={styles.reviewHeader}>
                 <View style={styles.authorInfo}>
                     <View style={styles.avatarContainer}>
@@ -793,37 +828,34 @@ export default function CourseDetailScreen() {
                         <Text style={styles.semester}>{item.semester}</Text>
                     </View>
                 </View>
-                {/* ⑦ 5-star visual */}
-                <View style={styles.reviewRating}>
-                    {item.rating ? (
-                        <View style={{ flexDirection: 'row', gap: 2 }}>
-                            {[1, 2, 3, 4, 5].map(s => (
-                                <Star
-                                    key={s}
-                                    size={13}
-                                    color="#F59E0B"
-                                    fill={s <= item.rating! ? '#F59E0B' : 'transparent'}
-                                />
-                            ))}
-                        </View>
-                    ) : (
-                        <Text style={[styles.ratingValue, { color: '#6B7280' }]}>Update</Text>
-                    )}
-                </View>
+                {item.rating ? (
+                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
+                        {[1, 2, 3, 4, 5].map(s => (
+                            <Star
+                                key={s}
+                                size={12}
+                                color="#F59E0B"
+                                fill={s <= item.rating! ? '#F59E0B' : 'transparent'}
+                            />
+                        ))}
+                    </View>
+                ) : null}
             </View>
 
+            <TranslatableText style={styles.reviewContent} text={item.content} />
+
             <View style={styles.tagsContainer}>
+                {item.difficulty > 0 && (
+                    <View style={[styles.tag, styles.difficultyTag]}>
+                        <Text style={styles.tagText}>难度 {item.difficulty}/5</Text>
+                    </View>
+                )}
                 {item.tags.map((tag, index) => (
                     <View key={index} style={styles.tag}>
                         <Text style={styles.tagText}>{tag}</Text>
                     </View>
                 ))}
-                <View style={[styles.tag, styles.difficultyTag]}>
-                    <Text style={styles.tagText}>难度: {item.difficulty}/5</Text>
-                </View>
             </View>
-
-            <TranslatableText style={styles.reviewContent} text={item.content} />
 
             <View style={styles.reviewFooter}>
                 <Text style={styles.date}>{item.createdAt.toLocaleDateString()}</Text>
@@ -834,12 +866,12 @@ export default function CourseDetailScreen() {
                     >
                         <ThumbsUp
                             size={14}
-                            color={likedReviewIds.includes(item.id) ? "#4B0082" : "#6B7280"}
-                            fill={likedReviewIds.includes(item.id) ? "#4B0082" : "transparent"}
+                            color={likedReviewIds.includes(item.id) ? "#2563EB" : "#6B7280"}
+                            fill={likedReviewIds.includes(item.id) ? "#2563EB" : "transparent"}
                         />
                         <Text style={[
                             styles.likeCount,
-                            likedReviewIds.includes(item.id) && { color: '#4B0082', fontWeight: 'bold' }
+                            likedReviewIds.includes(item.id) && { color: '#2563EB', fontWeight: 'bold' }
                         ]}>
                             {item.likes}
                         </Text>
@@ -885,8 +917,8 @@ export default function CourseDetailScreen() {
                         <Text style={styles.userMajor}>{item.userMajor || 'Student'}</Text>
                     </View>
                 </View>
-                <View style={[styles.sectionBadge, { backgroundColor: '#EEF2FF' }]}>
-                    <Users size={12} color="#4F46E5" />
+                <View style={[styles.sectionBadge, { backgroundColor: '#EFF6FF' }]}>
+                    <Users size={12} color="#2563EB" />
                     <Text style={styles.sectionBadgeText}>{item.section}</Text>
                 </View>
             </View>
@@ -900,8 +932,8 @@ export default function CourseDetailScreen() {
 
             {item.targetTeammate && (
                 <View style={[styles.teamingDetailBox, { backgroundColor: '#F0FDF4' }]}>
-                    <Text style={[styles.detailTitle, { color: '#166534' }]}>Looking for:</Text>
-                    <TranslatableText style={[styles.detailBody, { color: '#166534' }]} text={item.targetTeammate} />
+                    <Text style={[styles.detailTitle, { color: '#374151' }]}>Looking for:</Text>
+                    <TranslatableText style={[styles.detailBody, { color: '#374151' }]} text={item.targetTeammate} />
                 </View>
             )}
 
@@ -913,12 +945,12 @@ export default function CourseDetailScreen() {
                     >
                         <ThumbsUp
                             size={14}
-                            color={likedTeamingIds.includes(item.id) ? "#4B0082" : "#6B7280"}
-                            fill={likedTeamingIds.includes(item.id) ? "#4B0082" : "transparent"}
+                            color={likedTeamingIds.includes(item.id) ? "#2563EB" : "#6B7280"}
+                            fill={likedTeamingIds.includes(item.id) ? "#2563EB" : "transparent"}
                         />
                         <Text style={[
                             styles.teamingStatText,
-                            likedTeamingIds.includes(item.id) && { color: '#4B0082', fontWeight: '600' }
+                            likedTeamingIds.includes(item.id) && { color: '#2563EB', fontWeight: '600' }
                         ]}>{item.likes}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -953,9 +985,46 @@ export default function CourseDetailScreen() {
         </Animated.View>
     );
 
-    if (!course) return null;
+    if (!course) return (
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.container}>
+            <View style={styles.header}>
+                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                    <ChevronLeft size={24} color="#fff" />
+                </TouchableOpacity>
+                <View style={[styles.skeletonLine, { width: 100, height: 14, backgroundColor: 'rgba(255,255,255,0.3)' }]} />
+                <View style={{ width: 32 }} />
+            </View>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                <View style={[styles.courseInfoFlat, { gap: 10 }]}>
+                    <View style={[styles.skeletonLine, { width: '30%', height: 12 }]} />
+                    <View style={[styles.skeletonLine, { width: '85%', height: 22 }]} />
+                    <View style={[styles.skeletonLine, { width: '50%', height: 12 }]} />
+                </View>
+                <View style={[styles.tabBar, { paddingHorizontal: 20, gap: 24 }]}>
+                    {[80, 80, 80].map((w, i) => (
+                        <View key={i} style={[styles.skeletonLine, { width: w, height: 12, marginVertical: 16 }]} />
+                    ))}
+                </View>
+                <View style={styles.reviewsSkeletonWrap}>
+                    {[0, 1, 2, 3].map(i => (
+                        <View key={i} style={styles.reviewSkeleton}>
+                            <View style={styles.skeletonAvatar} />
+                            <View style={styles.skeletonLines}>
+                                <View style={[styles.skeletonLine, { width: '40%' }]} />
+                                <View style={[styles.skeletonLine, { width: '80%', marginTop: 8 }]} />
+                                <View style={[styles.skeletonLine, { width: '60%', marginTop: 6 }]} />
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            </ScrollView>
+        </View>
+        </TouchableWithoutFeedback>
+    );
 
     return (
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
@@ -974,37 +1043,37 @@ export default function CourseDetailScreen() {
 
             <View style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.scrollContent}>
-                    {/* ⑨ Course Info Card with gradient header */}
-                    <View style={styles.courseInfoCard}>
-                        <LinearGradient
-                            colors={['#1E3A8A', '#3B82F6']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.courseInfoGradient}
-                        >
-                            <View style={styles.codeBadgeWhite}>
-                                <Text style={styles.codeTextWhite}>{course.code}</Text>
-                            </View>
-                            <Text style={styles.courseNameWhite}>{course.name}</Text>
-                        </LinearGradient>
-                        <View style={styles.statsRowPadded}>
-                            <View style={styles.statItem}>
-                                <Star size={20} color="#F59E0B" fill="#F59E0B" />
-                                <Text style={styles.statValue}>{course.rating}</Text>
-                                <Text style={styles.statLabel}>Rating</Text>
-                            </View>
-                            <View style={styles.divider} />
-                            <View style={styles.statItem}>
-                                <MessageSquare size={20} color="#4B0082" />
-                                <Text style={styles.statValue}>{reviews.length}</Text>
-                                <Text style={styles.statLabel}>Reviews</Text>
-                            </View>
-                            <View style={styles.divider} />
-                            <View style={styles.statItem}>
-                                <Tag size={20} color="#10B981" />
-                                <Text style={styles.statValue}>{course.credits}</Text>
-                                <Text style={styles.statLabel}>Credits</Text>
-                            </View>
+                    {/* Course Info Flat */}
+                    <View style={styles.courseInfoFlat}>
+                        {!!course.department && (
+                            <Text style={styles.courseDeptText} numberOfLines={1}>{course.department}</Text>
+                        )}
+                        <Text style={styles.courseNameLarge}>{course.name}</Text>
+                        <View style={styles.courseMetaRow}>
+                            {(() => {
+                                const ratedReviews = reviews.filter(r => r.rating);
+                                const avg = ratedReviews.length > 0
+                                    ? ratedReviews.reduce((s, r) => s + r.rating!, 0) / ratedReviews.length
+                                    : 0;
+                                if (avg === 0) return null;
+                                return (
+                                    <>
+                                        {[1, 2, 3, 4, 5].map(s => (
+                                            <Star
+                                                key={s}
+                                                size={13}
+                                                color="#F59E0B"
+                                                fill={s <= Math.round(avg) ? '#F59E0B' : 'transparent'}
+                                            />
+                                        ))}
+                                        <Text style={styles.courseMetaText}>{avg.toFixed(1)}</Text>
+                                        <Text style={styles.courseMetaDot}>·</Text>
+                                    </>
+                                );
+                            })()}
+                            <Text style={styles.courseMetaText}>{reviews.length} 条评价</Text>
+                            <Text style={styles.courseMetaDot}>·</Text>
+                            <Text style={styles.courseMetaText}>{course.credits} 学分</Text>
                         </View>
                     </View>
 
@@ -1015,7 +1084,7 @@ export default function CourseDetailScreen() {
                             onPress={() => setActiveTab('reviews')}
                         >
                             {!!courseUnread?.reviews && <View style={styles.tabUnreadDot} />}
-                            <MessageSquare size={18} color={activeTab === 'reviews' ? '#4B0082' : '#6B7280'} />
+                            <MessageSquare size={18} color={activeTab === 'reviews' ? '#0F172A' : '#6B7280'} />
                             <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>Reviews</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -1023,7 +1092,7 @@ export default function CourseDetailScreen() {
                             onPress={() => setActiveTab('chat')}
                         >
                             {!!courseUnread?.chat && <View style={styles.tabUnreadDot} />}
-                            <MessageCircle size={18} color={activeTab === 'chat' ? '#4B0082' : '#6B7280'} />
+                            <MessageCircle size={18} color={activeTab === 'chat' ? '#0F172A' : '#6B7280'} />
                             <Text style={[styles.tabText, activeTab === 'chat' && styles.activeTabText]}>Chatroom</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -1031,44 +1100,114 @@ export default function CourseDetailScreen() {
                             onPress={() => setActiveTab('teaming')}
                         >
                             {!!courseUnread?.teaming && <View style={styles.tabUnreadDot} />}
-                            <UserPlus size={18} color={activeTab === 'teaming' ? '#4B0082' : '#6B7280'} />
+                            <UserPlus size={18} color={activeTab === 'teaming' ? '#0F172A' : '#6B7280'} />
                             <Text style={[styles.tabText, activeTab === 'teaming' && styles.activeTabText]}>Teaming</Text>
                         </TouchableOpacity>
                     </View>
 
                     {activeTab === 'reviews' ? (
                         <>
-                            <View style={styles.sectionHeader}>
-                                <Text style={styles.sectionTitle}>Reviews</Text>
-                                <TouchableOpacity style={styles.writeButton} onPress={() => setModalVisible(true)}>
-                                    <Plus size={16} color="#fff" />
-                                    <Text style={styles.writeButtonText}>Write Review</Text>
-                                </TouchableOpacity>
-                            </View>
+                            {/* Reviews top bar: stat text + write button */}
+                            {(() => {
+                                const ratedReviews = reviews.filter(r => r.rating);
+                                const avgRating = ratedReviews.length > 0
+                                    ? ratedReviews.reduce((s, r) => s + r.rating!, 0) / ratedReviews.length
+                                    : 0;
+                                const diffReviews = reviews.filter(r => r.difficulty > 0);
+                                const avgDiff = diffReviews.length > 0
+                                    ? diffReviews.reduce((s, r) => s + r.difficulty, 0) / diffReviews.length
+                                    : 0;
+                                const statParts: string[] = [];
+                                statParts.push(`${reviews.length} 条评价`);
+                                if (avgRating > 0) statParts.push(`★ ${avgRating.toFixed(1)}`);
+                                if (avgDiff > 0) statParts.push(`难度 ${avgDiff.toFixed(1)}`);
+                                return (
+                                    <View style={styles.reviewsTopBar}>
+                                        <Text style={styles.reviewsStatLine}>{statParts.join(' · ')}</Text>
+                                        <TouchableOpacity style={styles.writeButton} onPress={() => setModalVisible(true)}>
+                                            <Plus size={14} color="#fff" />
+                                            <Text style={styles.writeButtonText}>写评价</Text>
+                                            {!hasReviewed && (
+                                                <View style={styles.pointsBadge}>
+                                                    <Text style={styles.pointsBadgeText}>+15</Text>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+                                );
+                            })()}
 
-                            <View style={styles.sortContainer}>
+                            {/* AI Summary as blockquote */}
+                            {!!aiSummary && (
+                                <View style={styles.aiSummaryBlock}>
+                                    <Text style={styles.aiSummaryQuote}>{aiSummary}</Text>
+                                </View>
+                            )}
+
+                            {/* Combined filter row: sort chips + separator + tag chips */}
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={styles.filterRow}
+                                contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' }}
+                            >
                                 <TouchableOpacity
-                                    style={[styles.sortButton, sortBy === 'newest' && styles.sortButtonActive]}
                                     onPress={() => setSortBy('newest')}
+                                    style={styles.sortChip}
                                 >
-                                    <Text style={[styles.sortText, sortBy === 'newest' && styles.sortTextActive]}>Latest</Text>
+                                    <Text style={[styles.sortChipText, sortBy === 'newest' && styles.sortChipTextActive]}>最新</Text>
+                                    {sortBy === 'newest' && <View style={styles.sortChipUnderline} />}
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                    style={[styles.sortButton, sortBy === 'likes' && styles.sortButtonActive]}
                                     onPress={() => setSortBy('likes')}
+                                    style={styles.sortChip}
                                 >
-                                    <Text style={[styles.sortText, sortBy === 'likes' && styles.sortTextActive]}>Top Rated</Text>
+                                    <Text style={[styles.sortChipText, sortBy === 'likes' && styles.sortChipTextActive]}>最热</Text>
+                                    {sortBy === 'likes' && <View style={styles.sortChipUnderline} />}
                                 </TouchableOpacity>
-                            </View>
+                                <View style={styles.filterSep} />
+                                <TouchableOpacity
+                                    onPress={() => setFilterTag(null)}
+                                    style={[styles.filterChip, filterTag == null && styles.filterChipActive]}
+                                >
+                                    <Text style={[styles.filterChipText, filterTag == null && styles.filterChipTextActive]}>全部</Text>
+                                </TouchableOpacity>
+                                {allReviewTags.map(tag => (
+                                    <TouchableOpacity
+                                        key={tag}
+                                        onPress={() => setFilterTag(filterTag === tag ? null : tag)}
+                                        style={[styles.filterChip, filterTag === tag && styles.filterChipActive]}
+                                    >
+                                        <Text style={[styles.filterChipText, filterTag === tag && styles.filterChipTextActive]}>{tag}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
 
-                            {sortedReviews.length === 0 ? (
-                                <View style={styles.emptyContainer}>
-                                    <MessageSquare size={48} color="#D1D5DB" />
-                                    <Text style={styles.emptyText}>No reviews yet. Be the first!</Text>
+                            {reviewsLoading ? (
+                                <View style={styles.reviewsSkeletonWrap}>
+                                    {[0, 1, 2].map(i => (
+                                        <View key={i} style={styles.reviewSkeleton}>
+                                            <View style={styles.skeletonAvatar} />
+                                            <View style={styles.skeletonLines}>
+                                                <View style={[styles.skeletonLine, { width: '40%' }]} />
+                                                <View style={[styles.skeletonLine, { width: '80%', marginTop: 8 }]} />
+                                                <View style={[styles.skeletonLine, { width: '60%', marginTop: 6 }]} />
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            ) : sortedReviews.length === 0 ? (
+                                <View style={styles.emptyCtaCard}>
+                                    <Text style={styles.emptyCtaEmoji}>📝</Text>
+                                    <Text style={styles.emptyCtaTitle}>成为第一个点评的人</Text>
+                                    <Text style={styles.emptyCtaDesc}>分享你的上课体验，帮助学弟学妹做决定</Text>
+                                    <TouchableOpacity style={styles.emptyCtaButton} onPress={() => setModalVisible(true)}>
+                                        <Text style={styles.emptyCtaButtonText}>写评价 · 领 +15 积分</Text>
+                                    </TouchableOpacity>
                                 </View>
                             ) : (
                                 sortedReviews.map(review => (
-                                    <View key={review.id} style={{ marginBottom: 12 }}>
+                                    <View key={review.id}>
                                         {renderReviewItem({ item: review })}
                                     </View>
                                 ))
@@ -1136,7 +1275,7 @@ export default function CourseDetailScreen() {
                             </View>
 
                             {teamingLoading ? (
-                                <ActivityIndicator style={{ marginTop: 20 }} color="#4B0082" />
+                                <ActivityIndicator style={{ marginTop: 20 }} color="#2563EB" />
                             ) : teamingRequests.length === 0 ? (
                                 <View style={styles.emptyContainer}>
                                     <Users size={48} color="#D1D5DB" />
@@ -1189,8 +1328,7 @@ export default function CourseDetailScreen() {
                         onPress={() => setModalVisible(false)}
                     />
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                         style={{ flex: 1, justifyContent: 'flex-end' }}
                         pointerEvents="box-none"
                     >
@@ -1199,28 +1337,34 @@ export default function CourseDetailScreen() {
                                 bounces={false}
                                 showsVerticalScrollIndicator={false}
                                 contentContainerStyle={{ paddingBottom: 100 }}
-                                keyboardDismissMode="interactive"
+                                keyboardDismissMode="on-drag"
                                 keyboardShouldPersistTaps="handled"
                             >
-                                <TouchableOpacity activeOpacity={1}>
+                                <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                                <View>
                                     <View style={styles.modalHeader}>
-                                        <Text style={styles.modalTitle}>{hasReviewed ? 'Course Update' : 'Rate Course'}</Text>
+                                        <View>
+                                            <Text style={styles.modalTitle}>{hasReviewed ? '更新评价' : '写课程评价'}</Text>
+                                            {!hasReviewed && (
+                                                <Text style={{ fontSize: 12, color: '#2563EB', fontWeight: '600', marginTop: 2 }}>填完即得 +15 积分</Text>
+                                            )}
+                                        </View>
                                         <TouchableOpacity onPress={() => setModalVisible(false)}>
-                                            <X size={24} color="#000" />
+                                            <X size={24} color="#6B7280" />
                                         </TouchableOpacity>
                                     </View>
 
                                     {hasReviewed && (
                                         <View style={styles.hintBox}>
-                                            <MessageCircle size={16} color="#4B0082" />
+                                            <MessageCircle size={16} color="#2563EB" />
                                             <Text style={styles.hintText}>
-                                                Posting an update? Stars are optional. For chat, use the <Text style={{ fontWeight: 'bold' }}>Chatroom</Text> tab!
+                                                更新评价？星级可不填。闲聊请去 <Text style={{ fontWeight: 'bold' }}>Chatroom</Text> 频道！
                                             </Text>
                                         </View>
                                     )}
 
                                     {/* Rating Stars */}
-                                    <Text style={styles.label}>Overall Rating {hasReviewed && '(Optional)'}</Text>
+                                    <Text style={styles.label}>综合评分{hasReviewed ? ' (可选)' : ''}</Text>
                                     <View style={styles.starsContainer}>
                                         {[1, 2, 3, 4, 5].map((star) => (
                                             <TouchableOpacity key={star} onPress={() => setRating(star)}>
@@ -1234,7 +1378,7 @@ export default function CourseDetailScreen() {
                                     </View>
 
                                     {/* Difficulty */}
-                                    <Text style={styles.label}>Difficulty (1=Easy, 5=Hard)</Text>
+                                    <Text style={styles.label}>难度 <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '400' }}>(1=轻松  5=困难)</Text></Text>
                                     <View style={styles.starsContainer}>
                                         {[1, 2, 3, 4, 5].map((level) => (
                                             <TouchableOpacity
@@ -1253,13 +1397,37 @@ export default function CourseDetailScreen() {
                                         ))}
                                     </View>
 
+                                    {/* Tags */}
+                                    <Text style={styles.label}>标签 <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '400' }}>(最多选 3 个)</Text></Text>
+                                    <View style={styles.reviewTagsContainer}>
+                                        {(['Chill课', '给分高', '点名严', '作业多', '要小组', '干货多', '水课', '考试难', '实用', '讲解清晰'] as const).map((tag) => (
+                                            <TouchableOpacity
+                                                key={tag}
+                                                onPress={() => setReviewTags(prev =>
+                                                    prev.includes(tag)
+                                                        ? prev.filter(t => t !== tag)
+                                                        : prev.length < 3 ? [...prev, tag] : prev
+                                                )}
+                                                style={[
+                                                    styles.reviewTagItem,
+                                                    reviewTags.includes(tag) && styles.reviewTagItemActive,
+                                                ]}
+                                            >
+                                                <Text style={[
+                                                    styles.reviewTagText,
+                                                    reviewTags.includes(tag) && styles.reviewTagTextActive,
+                                                ]}>{tag}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+
                                     {/* Comment */}
-                                    <Text style={styles.label}>{hasReviewed ? 'Update Details' : 'Comments'}</Text>
+                                    <Text style={styles.label}>{hasReviewed ? '补充内容' : '评价内容'}</Text>
                                     <TextInput
                                         style={styles.input}
                                         multiline
                                         numberOfLines={4}
-                                        placeholder={hasReviewed ? "How's the course going now?" : "Share your experience..."}
+                                        placeholder={hasReviewed ? "继续分享你的上课体验..." : "分享你的上课体验，帮帮学弟学妹..."}
                                         value={reviewContent}
                                         onChangeText={setReviewContent}
                                         textAlignVertical="top"
@@ -1279,15 +1447,16 @@ export default function CourseDetailScreen() {
                                                 <Check size={16} color="#fff" />
                                             )}
                                         </View>
-                                        <Text style={styles.anonymousText}>Post anonymously</Text>
+                                        <Text style={styles.anonymousText}>匿名发布</Text>
                                     </TouchableOpacity>
 
                                     <SafetyNotice variant="compact" showAnonymousWarning={isAnonymous} />
 
                                     <TouchableOpacity style={styles.submitButton} onPress={handleAddReview}>
-                                        <Text style={styles.submitText}>{hasReviewed ? 'Post Update' : 'Submit Review'}</Text>
+                                        <Text style={styles.submitText}>{hasReviewed ? '发布更新' : '发布评价'}</Text>
                                     </TouchableOpacity>
-                                </TouchableOpacity>
+                                </View>
+                                </TouchableWithoutFeedback>
                             </ScrollView>
                         </View>
                     </KeyboardAvoidingView>
@@ -1332,7 +1501,7 @@ export default function CourseDetailScreen() {
                                     </View>
 
                                     <View style={styles.hintBox}>
-                                        <Info size={16} color="#4B0082" />
+                                        <Info size={16} color="#2563EB" />
                                         <Text style={styles.hintText}>
                                             Finding group mates for projects? Share your info here!
                                         </Text>
@@ -1499,8 +1668,8 @@ export default function CourseDetailScreen() {
                                         </Text>
                                         <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>{contact.value}</Text>
                                     </View>
-                                    <View style={{ backgroundColor: '#EEF2FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                                        <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: '600' }}>Copy</Text>
+                                    <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                                        <Text style={{ color: '#2563EB', fontSize: 12, fontWeight: '600' }}>Copy</Text>
                                     </View>
                                 </TouchableOpacity>
                             ))}
@@ -1538,7 +1707,7 @@ export default function CourseDetailScreen() {
                             </View>
 
                             {teamingCommentLoading ? (
-                                <ActivityIndicator style={{ padding: 40 }} color="#4B0082" />
+                                <ActivityIndicator style={{ padding: 40 }} color="#2563EB" />
                             ) : (
                                 <FlatList
                                     data={organizedTeamingComments}
@@ -1645,7 +1814,7 @@ export default function CourseDetailScreen() {
                                         {t('forum.detail.replying_to', { name: teamingReplyTarget.authorName })}: {teamingReplyTarget.content}
                                     </Text>
                                     <TouchableOpacity onPress={() => setTeamingReplyTarget(null)}>
-                                        <X size={16} color="#4B0082" />
+                                        <X size={16} color="#2563EB" />
                                     </TouchableOpacity>
                                 </View>
                             )}
@@ -1680,7 +1849,7 @@ export default function CourseDetailScreen() {
                                         width: 40,
                                         height: 40,
                                         borderRadius: 20,
-                                        backgroundColor: newTeamingComment.trim() ? '#4B0082' : '#E5E7EB',
+                                        backgroundColor: newTeamingComment.trim() ? '#2563EB' : '#E5E7EB',
                                         alignItems: 'center',
                                         justifyContent: 'center'
                                     }}
@@ -1695,7 +1864,8 @@ export default function CourseDetailScreen() {
                 </View>
             </Modal>
             {ugcActions.ActionSheet}
-        </View >
+        </View>
+        </TouchableWithoutFeedback>
     );
 }
 
@@ -1710,27 +1880,29 @@ const CONTACT_PLATFORMS = [
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: '#F9F9F7',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingTop: 56,
-        paddingBottom: 24,
+        paddingBottom: 20,
         paddingHorizontal: 20,
-        backgroundColor: '#1E3A8A',
+        backgroundColor: '#2563EB',
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
     },
     backButton: { padding: 4 },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
-    scrollContent: { paddingTop: 10, paddingBottom: 40 },
+    scrollContent: { paddingTop: 0, paddingBottom: 40 },
     courseInfoCard: {
         backgroundColor: '#fff',
         margin: 20,
         marginTop: 10,
         borderRadius: 20,
         overflow: 'hidden',
-        shadowColor: '#1E3A8A',
+        shadowColor: '#0F172A',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.15,
         shadowRadius: 14,
@@ -1762,13 +1934,13 @@ const styles = StyleSheet.create({
     },
     // Keep old codeBadge for backward-compat (unused but safe)
     codeBadge: {
-        backgroundColor: '#F3E8FF',
+        backgroundColor: '#EFF6FF',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 8,
         marginBottom: 12,
     },
-    codeText: { color: '#4B0082', fontWeight: 'bold', fontSize: 14 },
+    codeText: { color: '#2563EB', fontWeight: 'bold', fontSize: 14 },
     courseName: {
         fontSize: 20,
         fontWeight: 'bold',
@@ -1799,34 +1971,33 @@ const styles = StyleSheet.create({
     // Tabs
     tabBar: {
         flexDirection: 'row',
-        paddingHorizontal: 20,
-        marginBottom: 20,
-        gap: 8,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        paddingHorizontal: 0,
+        marginBottom: 0,
     },
     tab: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 4,
-        borderRadius: 12,
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
+        paddingVertical: 13,
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+        marginBottom: -1,
         position: 'relative',
     },
     activeTab: {
-        backgroundColor: '#F3E8FF',
-        borderColor: '#4B0082',
+        borderBottomColor: '#2563EB',
     },
     tabText: {
-        marginLeft: 4,
+        marginLeft: 6,
         fontSize: 13,
         fontWeight: '600',
         color: '#6B7280',
     },
-    activeTabText: { color: '#4B0082' },
+    activeTabText: { color: '#0F172A' },
     tabUnreadDot: {
         position: 'absolute',
         top: 8,
@@ -1849,25 +2020,22 @@ const styles = StyleSheet.create({
     writeButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1E3A8A',
+        backgroundColor: '#2563EB',
         paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
+        paddingVertical: 7,
+        borderRadius: 20,
+        gap: 4,
     },
-    writeButtonText: { color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 4 },
+    writeButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },
     reviewCard: {
-        backgroundColor: '#FAFBFF',
-        marginHorizontal: 20,
-        marginBottom: 16,
-        borderRadius: 16,
-        padding: 16,
-        // ⑧ Left rating color bar
-        borderLeftWidth: 4,
-        shadowColor: '#1E3A8A',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
-        elevation: 3,
+        backgroundColor: '#fff',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+        marginHorizontal: 0,
+        marginBottom: 0,
+        borderRadius: 0,
     },
     reviewHeader: {
         flexDirection: 'row',
@@ -1905,18 +2073,228 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     ratingValue: { color: '#D97706', fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
-    tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, gap: 8 },
+    tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10, gap: 6 },
     tag: { backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     difficultyTag: { backgroundColor: '#FEF2F2' },
+    workloadTag: { backgroundColor: '#EFF6FF' },
+    gradingTag: { backgroundColor: '#F0FDF4' },
     tagText: { fontSize: 11, color: '#4B5563' },
-    reviewContent: { fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 12 },
+    overviewCard: {
+        marginHorizontal: 16,
+        marginBottom: 8,
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#F0F2F8',
+    },
+    overviewTopRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+    },
+    overviewRatingBlock: {
+        alignItems: 'center',
+        width: 64,
+        paddingTop: 4,
+    },
+    overviewBigRating: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: '#111827',
+        lineHeight: 36,
+    },
+    overviewReviewCount: {
+        fontSize: 10,
+        color: '#9CA3AF',
+        marginTop: 4,
+    },
+    overviewDiffRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6',
+    },
+    overviewDiffLabel: {
+        fontSize: 12,
+        color: '#6B7280',
+    },
+    overviewDiffValue: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#374151',
+    },
+    overviewTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#374151',
+        marginBottom: 10,
+    },
+    distRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 5,
+        gap: 6,
+    },
+    distStar: {
+        fontSize: 11,
+        color: '#6B7280',
+        width: 22,
+    },
+    distBarBg: {
+        flex: 1,
+        height: 6,
+        backgroundColor: '#F3F4F6',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    distBarFill: {
+        height: 6,
+        backgroundColor: '#F59E0B',
+        borderRadius: 3,
+    },
+    distCount: {
+        fontSize: 11,
+        color: '#9CA3AF',
+        width: 16,
+        textAlign: 'right',
+    },
+    dimensionRow: {
+        flexDirection: 'row',
+        marginTop: 12,
+        gap: 12,
+    },
+    dimensionItem: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    dimensionValue: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#0F172A',
+    },
+    dimensionLabel: {
+        fontSize: 11,
+        color: '#9CA3AF',
+        marginTop: 2,
+    },
+    topBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#FEF3C7',
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        marginBottom: 6,
+        borderWidth: 1,
+        borderColor: '#F59E0B',
+    },
+    topBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#D97706',
+    },
+    tagFilterRow: {
+        marginBottom: 10,
+        paddingVertical: 4,
+    },
+    tagFilterChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    tagFilterChipActive: {
+        backgroundColor: '#EFF6FF',
+        borderColor: '#2563EB',
+    },
+    tagFilterText: {
+        fontSize: 12,
+        color: '#6B7280',
+    },
+    tagFilterTextActive: {
+        color: '#2563EB',
+        fontWeight: '600',
+    },
+    emptyCtaCard: {
+        margin: 16,
+        backgroundColor: '#EFF6FF',
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    emptyCtaEmoji: {
+        fontSize: 40,
+        marginBottom: 12,
+    },
+    emptyCtaTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#0F172A',
+        marginBottom: 6,
+    },
+    emptyCtaDesc: {
+        fontSize: 13,
+        color: '#6B7280',
+        textAlign: 'center',
+        marginBottom: 16,
+        lineHeight: 18,
+    },
+    emptyCtaButton: {
+        backgroundColor: '#0F172A',
+        borderRadius: 12,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+    },
+    emptyCtaButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#fff',
+    },
+    pointsBadge: {
+        backgroundColor: '#2563EB',
+        borderRadius: 8,
+        paddingHorizontal: 5,
+        paddingVertical: 2,
+        marginLeft: 6,
+    },
+    pointsBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#fff',
+    },
+    aiSummaryCard: {
+        marginHorizontal: 16,
+        marginBottom: 12,
+        backgroundColor: '#EFF6FF',
+        borderRadius: 12,
+        padding: 14,
+        borderLeftWidth: 3,
+        borderLeftColor: '#2563EB',
+    },
+    aiSummaryLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#0F172A',
+        marginBottom: 6,
+    },
+    aiSummaryText: {
+        fontSize: 13,
+        color: '#374151',
+        lineHeight: 20,
+    },
+    reviewContent: { fontSize: 14, color: '#374151', lineHeight: 20, marginBottom: 8 },
     reviewFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderTopWidth: 1,
-        borderTopColor: '#F9FAFB',
-        paddingTop: 12,
+        paddingTop: 8,
     },
     date: { fontSize: 11, color: '#9CA3AF' },
     reviewActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -1925,18 +2303,14 @@ const styles = StyleSheet.create({
     deleteTag: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#FCA5A5',
-        backgroundColor: '#FEF2F2',
+        padding: 4,
+        opacity: 0.45,
     },
 
     // Sorting
     sortContainer: { flexDirection: 'row', gap: 12, marginBottom: 16, paddingHorizontal: 20 },
     sortButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: '#F3F4F6' },
-    sortButtonActive: { backgroundColor: '#4B0082' },
+    sortButtonActive: { backgroundColor: '#2563EB' },
     sortText: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
     sortTextActive: { color: '#fff' },
 
@@ -1967,7 +2341,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     messageBubble: { maxWidth: '80%', padding: 12, borderRadius: 16 },
-    myBubble: { backgroundColor: '#4B0082', borderBottomRightRadius: 4 },
+    myBubble: { backgroundColor: '#0F172A', borderBottomRightRadius: 4 },
     otherBubble: { backgroundColor: '#fff', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#E5E7EB' },
     messageAuthor: { fontSize: 10, color: '#9CA3AF', marginBottom: 4, marginRight: 6 },
     myMessageAuthor: { fontSize: 10, color: 'rgba(255,255,255,0.7)', marginBottom: 4, marginRight: 6 },
@@ -2013,7 +2387,7 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#1E3A8A',
+        backgroundColor: '#0F172A',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -2048,9 +2422,35 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    diffButtonActive: { backgroundColor: '#4B0082' },
+    diffButtonActive: { backgroundColor: '#2563EB' },
     diffText: { color: '#6B7280', fontWeight: '600' },
     diffTextActive: { color: '#fff' },
+    reviewTagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 16,
+    },
+    reviewTagItem: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    reviewTagItemActive: {
+        backgroundColor: '#EFF6FF',
+        borderColor: '#2563EB',
+    },
+    reviewTagText: {
+        fontSize: 13,
+        color: '#6B7280',
+    },
+    reviewTagTextActive: {
+        color: '#2563EB',
+        fontWeight: '500',
+    },
     input: {
         backgroundColor: '#F9FAFB',
         borderRadius: 12,
@@ -2060,7 +2460,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
     submitButton: {
-        backgroundColor: '#1E3A8A',
+        backgroundColor: '#0F172A',
         borderRadius: 16,
         paddingVertical: 16,
         alignItems: 'center',
@@ -2085,8 +2485,8 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     checkboxActive: {
-        backgroundColor: '#4B0082',
-        borderColor: '#4B0082',
+        backgroundColor: '#2563EB',
+        borderColor: '#2563EB',
     },
     anonymousText: {
         fontSize: 15,
@@ -2131,7 +2531,7 @@ const styles = StyleSheet.create({
     sectionBadgeText: {
         fontSize: 12,
         fontWeight: '700',
-        color: '#4F46E5',
+        color: '#2563EB',
     },
     teamingDetailBox: {
         backgroundColor: '#F8FAFC',
@@ -2178,7 +2578,7 @@ const styles = StyleSheet.create({
     contactIconBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#4B0082',
+        backgroundColor: '#2563EB',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 10,
@@ -2239,15 +2639,15 @@ const styles = StyleSheet.create({
         borderColor: '#E5E7EB',
     },
     chipActive: {
-        backgroundColor: '#F3E8FF',
-        borderColor: '#4B0082',
+        backgroundColor: '#EFF6FF',
+        borderColor: '#2563EB',
     },
     chipText: {
         fontSize: 12,
         color: '#6B7280',
     },
     chipTextActive: {
-        color: '#4B0082',
+        color: '#2563EB',
         fontWeight: '600',
     },
     dynamicInputContainer: {
@@ -2262,7 +2662,7 @@ const styles = StyleSheet.create({
     hintBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F3E8FF',
+        backgroundColor: '#EFF6FF',
         padding: 12,
         borderRadius: 12,
         marginBottom: 20,
@@ -2271,7 +2671,7 @@ const styles = StyleSheet.create({
     hintText: {
         flex: 1,
         fontSize: 12,
-        color: '#4B0082',
+        color: '#2563EB',
         lineHeight: 18,
     },
     teamingCommentContainer: {
@@ -2327,10 +2727,10 @@ const styles = StyleSheet.create({
         fontSize: 10, color: '#9CA3AF', marginTop: 2
     },
     teamingReplyBtn: {
-        fontSize: 12, color: '#4B0082', fontWeight: '700'
+        fontSize: 12, color: '#2563EB', fontWeight: '700'
     },
     teamingReplyBtnSmall: {
-        fontSize: 11, color: '#4B0082', fontWeight: '700'
+        fontSize: 11, color: '#2563EB', fontWeight: '700'
     },
     teamingNestedReplies: {
         marginLeft: 64,
@@ -2341,16 +2741,210 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#F3E8FF',
+        backgroundColor: '#EFF6FF',
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderTopWidth: 1,
-        borderTopColor: '#E9D5FF',
+        borderTopColor: '#BFDBFE',
     },
     teamingReplyBarText: {
-        fontSize: 12, color: '#4B0082', flex: 1, marginRight: 10
+        fontSize: 12, color: '#2563EB', flex: 1, marginRight: 10
     },
     replyIndicator: {
         fontSize: 12, color: '#9CA3AF', marginLeft: 4
+    },
+
+    // Course info flat section
+    courseInfoFlat: {
+        backgroundColor: '#fff',
+        paddingHorizontal: 20,
+        paddingTop: 18,
+        paddingBottom: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    courseNameLarge: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#111827',
+        marginBottom: 10,
+        lineHeight: 28,
+    },
+    courseMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        flexWrap: 'wrap',
+    },
+    courseMetaText: {
+        fontSize: 13,
+        color: '#6B7280',
+    },
+    courseMetaDot: {
+        fontSize: 13,
+        color: '#D1D5DB',
+    },
+    courseBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+    },
+    courseCodeBadge: {
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    courseCodeBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#1E40AF',
+        letterSpacing: 0.5,
+    },
+    courseDeptText: {
+        fontSize: 12,
+        color: '#9CA3AF',
+        marginBottom: 6,
+        flexShrink: 1,
+    },
+    semesterRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginTop: 10,
+    },
+    semesterLabel: {
+        fontSize: 11,
+        color: '#9CA3AF',
+    },
+    semesterChip: {
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    semesterChipText: {
+        fontSize: 11,
+        color: '#1E40AF',
+        fontWeight: '500',
+    },
+
+    // Reviews top bar
+    reviewsTopBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+        backgroundColor: '#fff',
+    },
+    reviewsStatLine: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '500',
+    },
+
+    // AI Summary blockquote
+    aiSummaryBlock: {
+        marginHorizontal: 16,
+        marginVertical: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderLeftWidth: 3,
+        borderLeftColor: '#2563EB',
+        backgroundColor: '#EFF6FF',
+        borderRadius: 8,
+    },
+    aiSummaryQuote: {
+        fontSize: 13,
+        color: '#1E40AF',
+        fontStyle: 'italic',
+        lineHeight: 20,
+    },
+
+    // Combined filter row
+    filterRow: {
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    filterChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#F5F5F5',
+    },
+    filterChipActive: {
+        backgroundColor: '#2563EB',
+    },
+    filterChipText: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '500',
+    },
+    filterChipTextActive: {
+        color: '#fff',
+        fontWeight: '600',
+    },
+    filterSep: {
+        width: 1,
+        height: 14,
+        backgroundColor: '#E5E7EB',
+        alignSelf: 'center',
+    },
+    reviewsSkeletonWrap: {
+        paddingTop: 8,
+    },
+    reviewSkeleton: {
+        flexDirection: 'row',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+        gap: 12,
+    },
+    skeletonAvatar: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#F3F4F6',
+    },
+    skeletonLines: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    skeletonLine: {
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: '#F3F4F6',
+    },
+    sortChip: {
+        paddingHorizontal: 4,
+        paddingVertical: 6,
+        alignItems: 'center',
+    },
+    sortChipText: {
+        fontSize: 13,
+        color: '#9CA3AF',
+        fontWeight: '500',
+    },
+    sortChipTextActive: {
+        color: '#0F172A',
+        fontWeight: '700',
+    },
+    sortChipUnderline: {
+        height: 2,
+        width: '100%',
+        backgroundColor: '#2563EB',
+        borderRadius: 1,
+        marginTop: 3,
     },
 });

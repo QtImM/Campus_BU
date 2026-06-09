@@ -36,6 +36,7 @@ import {
     deleteForumPost,
     fetchForumComments,
     fetchForumPostById,
+    getCachedForumPost,
     toggleForumUpvote,
 } from '../../services/forum';
 import { ForumComment, ForumPost } from '../../types';
@@ -56,9 +57,10 @@ export default function ForumPostDetailScreen() {
     const router = useRouter();
     const { checkLogin } = useLoginPrompt();
 
-    const [post, setPost] = useState<ForumPost | null>(null);
+    const [post, setPost] = useState<ForumPost | null>(() => getCachedForumPost(id as string));
     const [comments, setComments] = useState<ForumComment[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState<boolean>(() => !getCachedForumPost(id as string));
+    const [commentsLoading, setCommentsLoading] = useState(true);
     const [imageZoomed, setImageZoomed] = useState(false);
     const [commentText, setCommentText] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -99,6 +101,8 @@ export default function ForumPostDetailScreen() {
             try {
                 const currentUser = await getCurrentUser();
                 setUser(currentUser);
+                // Post and comments load in parallel; post unblocks the page,
+                // comments show their own spinner below.
                 const [p, c] = await Promise.all([
                     fetchForumPostById(id as string, currentUser?.uid),
                     fetchForumComments(id as string, currentUser?.uid),
@@ -109,6 +113,7 @@ export default function ForumPostDetailScreen() {
                 console.error('Forum post load error:', e);
             } finally {
                 setLoading(false);
+                setCommentsLoading(false);
             }
         };
         load();
@@ -353,12 +358,18 @@ export default function ForumPostDetailScreen() {
                 {/* Comments section */}
                 <View style={styles.divider} />
                 <Text style={styles.commentsLabel}>
-                    {comments.length > 0
-                        ? t('forum.detail.replies_count', { count: comments.length })
-                        : t('forum.detail.empty_comments')}
+                    {commentsLoading
+                        ? t('forum.detail.empty_comments')
+                        : comments.length > 0
+                            ? t('forum.detail.replies_count', { count: comments.length })
+                            : t('forum.detail.empty_comments')}
                 </Text>
 
-                {organizedComments.map(c => (
+                {commentsLoading && (
+                    <ActivityIndicator size="small" color="#1E3A8A" style={{ marginVertical: 16 }} />
+                )}
+
+                {!commentsLoading && organizedComments.map(c => (
                     <View key={c.id} style={styles.commentContainer}>
                         <Animated.View style={[styles.commentItem, ugcActions.getHighlightStyle(c.id)]}>
                             <TouchableOpacity

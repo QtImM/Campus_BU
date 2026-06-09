@@ -33,6 +33,9 @@ export type PostCourseReviewDraft = {
     courseCode: string | null;
     rating: number | null;
     difficulty: number | null;
+    workload: number | null;
+    grading: number | null;
+    tags: string[];
     content: string;
     anonymous: boolean;
 };

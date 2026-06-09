@@ -177,8 +177,21 @@ export const createUserProfile = async (
     return userData;
 };
 
+// ── User profile cache (instant public profile page render) ──────────────────
+const _userProfileCache = new Map<string, { user: User; ts: number }>();
+const USER_PROFILE_CACHE_TTL = 60_000;
+
+export const getCachedUserProfile = (uid: string): User | null => {
+    const entry = _userProfileCache.get(uid);
+    if (!entry || Date.now() - entry.ts > USER_PROFILE_CACHE_TTL) return null;
+    return entry.user;
+};
+
 // Get user profile
 export const getUserProfile = async (uid: string): Promise<User | null> => {
+    const cached = getCachedUserProfile(uid);
+    if (cached) return cached;
+
     const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -196,15 +209,16 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
     }
     if (!data) return null;
 
-    // Map back to User type (snake_case -> camelCase)
-    return {
+    const user = {
         uid: data.id,
-        displayName: data.display_name || data.displayName, // Fallback
+        displayName: data.display_name || data.displayName,
         major: data.major,
         email: data.email,
         avatarUrl: data.avatar_url || data.avatarUrl,
         createdAt: data.created_at ? new Date(data.created_at) : new Date(),
     } as User;
+    _userProfileCache.set(uid, { user, ts: Date.now() });
+    return user;
 };
 
 const isTransientNetworkError = (error: unknown): boolean => {

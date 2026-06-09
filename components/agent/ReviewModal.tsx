@@ -2,7 +2,7 @@
  * Review Modal
  *
  * Renders the course review form when actionPayload.uiSchema.surface === 'review_modal'.
- * Supports rating selection, preset content templates, and field editing.
+ * Supports rating selection, difficulty/workload/grading dimensions, tags, and preset templates.
  * See docs/agent/action-agent-contract-and-flow.md §8.2, §12.
  */
 
@@ -31,6 +31,11 @@ interface ReviewModalProps {
 
 const PRESET_TEMPLATES = REVIEW_PRESETS.ratingToContentTemplates;
 
+const COURSE_TAGS = [
+    'Chill课', '给分高', '点名严', '作业多', '要小组',
+    '干货多', '水课', '考试难', '实用', '讲解清晰',
+];
+
 export const ReviewModal: React.FC<ReviewModalProps> = ({
     visible,
     payload,
@@ -40,6 +45,10 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     const draft = (payload?.action.draft as PostCourseReviewDraft) ?? {
         courseCode: null,
         rating: null,
+        difficulty: null,
+        workload: null,
+        grading: null,
+        tags: [],
         content: '',
         anonymous: false,
     };
@@ -51,17 +60,22 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     const [courseCode, setCourseCode] = useState(draft.courseCode ?? '');
     const [rating, setRating] = useState<number | null>(draft.rating);
     const [difficulty, setDifficulty] = useState<number | null>(draft.difficulty ?? null);
+    const [workload, setWorkload] = useState<number | null>(draft.workload ?? null);
+    const [grading, setGrading] = useState<number | null>(draft.grading ?? null);
+    const [selectedTags, setSelectedTags] = useState<string[]>(draft.tags ?? []);
     const [content, setContent] = useState(draft.content);
     const [anonymous, setAnonymous] = useState(draft.anonymous);
     const [showPresets, setShowPresets] = useState(false);
 
-    // Sync state when payload changes
     useEffect(() => {
         if (payload) {
             const d = payload.action.draft as PostCourseReviewDraft;
             setCourseCode(d.courseCode ?? '');
             setRating(d.rating);
             setDifficulty(d.difficulty ?? null);
+            setWorkload(d.workload ?? null);
+            setGrading(d.grading ?? null);
+            setSelectedTags(d.tags ?? []);
             setContent(d.content);
             setAnonymous(d.anonymous);
         }
@@ -70,7 +84,6 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     const handleRatingSelect = useCallback((selected: number) => {
         setRating(selected);
         const templates = PRESET_TEMPLATES[String(selected) as keyof typeof PRESET_TEMPLATES];
-        // Auto-fill preset content if content is empty OR content is a preset from a different rating
         const isCurrentContentAPreset = Object.values(PRESET_TEMPLATES).flat().includes(content.trim());
         if (!content.trim() || isCurrentContentAPreset) {
             if (templates && templates.length > 0) {
@@ -78,7 +91,6 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                 setShowPresets(true);
             }
         } else {
-            // Content is user-written, just show presets without overwriting
             setShowPresets(true);
         }
     }, [content]);
@@ -88,19 +100,60 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         setShowPresets(false);
     }, []);
 
+    const handleTagToggle = useCallback((tag: string) => {
+        setSelectedTags(prev =>
+            prev.includes(tag)
+                ? prev.filter(t => t !== tag)
+                : prev.length < 3 ? [...prev, tag] : prev
+        );
+    }, []);
+
     const handleSubmit = useCallback(() => {
         onSubmit({
             courseCode: courseCode.trim().toUpperCase() || null,
             rating,
             difficulty,
+            workload,
+            grading,
+            tags: selectedTags,
             content: content.trim(),
             anonymous,
         });
-    }, [courseCode, rating, difficulty, content, anonymous, onSubmit]);
+    }, [courseCode, rating, difficulty, workload, grading, selectedTags, content, anonymous, onSubmit]);
 
     const canSubmit = courseCode.trim().length > 0 && rating != null && content.trim().length > 0;
 
     if (!payload) return null;
+
+    const renderNumberPicker = (
+        value: number | null,
+        onChange: (v: number) => void,
+        labels: [string, string]
+    ) => (
+        <View style={styles.pickerRow}>
+            <Text style={styles.pickerEndLabel}>{labels[0]}</Text>
+            <View style={styles.numberRow}>
+                {[1, 2, 3, 4, 5].map((level) => (
+                    <TouchableOpacity
+                        key={level}
+                        onPress={() => onChange(level)}
+                        style={[
+                            styles.numberButton,
+                            value === level && styles.numberButtonActive,
+                        ]}
+                    >
+                        <Text style={[
+                            styles.numberButtonText,
+                            value === level && styles.numberButtonTextActive,
+                        ]}>
+                            {level}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+            <Text style={styles.pickerEndLabel}>{labels[1]}</Text>
+        </View>
+    );
 
     return (
         <Modal
@@ -113,7 +166,10 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                 <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
                     {/* Header */}
                     <View style={styles.header}>
-                        <Text style={styles.title}>发布课程评价</Text>
+                        <View>
+                            <Text style={styles.title}>发布课程评价</Text>
+                            <Text style={styles.subtitle}>填完即得 +15 积分</Text>
+                        </View>
                         <TouchableOpacity onPress={onCancel} style={styles.closeButton}>
                             <X size={20} color="#6B7280" />
                         </TouchableOpacity>
@@ -138,7 +194,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                         )}
 
                         {/* Rating */}
-                        <Text style={styles.label}>评分 *</Text>
+                        <Text style={styles.label}>总体评分 *</Text>
                         <View style={styles.ratingRow}>
                             {[1, 2, 3, 4, 5].map((star) => (
                                 <TouchableOpacity
@@ -159,22 +215,34 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                         </View>
 
                         {/* Difficulty */}
-                        <Text style={styles.label}>难度 (1=简单, 5=困难)</Text>
-                        <View style={styles.difficultyRow}>
-                            {[1, 2, 3, 4, 5].map((level) => (
+                        <Text style={styles.label}>难度</Text>
+                        {renderNumberPicker(difficulty, setDifficulty, ['简单', '困难'])}
+
+                        {/* Workload */}
+                        <Text style={styles.label}>工作量</Text>
+                        {renderNumberPicker(workload, setWorkload, ['轻松', '很重'])}
+
+                        {/* Grading */}
+                        <Text style={styles.label}>给分</Text>
+                        {renderNumberPicker(grading, setGrading, ['严格', '慷慨'])}
+
+                        {/* Tags */}
+                        <Text style={styles.label}>标签 <Text style={styles.labelHint}>(最多选3个)</Text></Text>
+                        <View style={styles.tagsContainer}>
+                            {COURSE_TAGS.map((tag) => (
                                 <TouchableOpacity
-                                    key={level}
-                                    onPress={() => setDifficulty(level)}
+                                    key={tag}
+                                    onPress={() => handleTagToggle(tag)}
                                     style={[
-                                        styles.difficultyButton,
-                                        difficulty === level && styles.difficultyButtonActive,
+                                        styles.tagItem,
+                                        selectedTags.includes(tag) && styles.tagItemSelected,
                                     ]}
                                 >
                                     <Text style={[
-                                        styles.difficultyButtonText,
-                                        difficulty === level && styles.difficultyButtonTextActive,
+                                        styles.tagText,
+                                        selectedTags.includes(tag) && styles.tagTextSelected,
                                     ]}>
-                                        {level}
+                                        {tag}
                                     </Text>
                                 </TouchableOpacity>
                             ))}
@@ -194,12 +262,10 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
                                             ]}
                                             onPress={() => handlePresetSelect(template)}
                                         >
-                                            <Text
-                                                style={[
-                                                    styles.presetText,
-                                                    content === template && styles.presetTextSelected,
-                                                ]}
-                                            >
+                                            <Text style={[
+                                                styles.presetText,
+                                                content === template && styles.presetTextSelected,
+                                            ]}>
                                                 {template}
                                             </Text>
                                         </TouchableOpacity>
@@ -264,7 +330,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        maxHeight: '85%',
+        maxHeight: '90%',
         paddingBottom: 34,
     },
     header: {
@@ -281,6 +347,12 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
         color: '#111827',
+    },
+    subtitle: {
+        fontSize: 12,
+        color: '#10B981',
+        fontWeight: '500',
+        marginTop: 2,
     },
     closeButton: {
         width: 32,
@@ -300,6 +372,11 @@ const styles = StyleSheet.create({
         color: '#374151',
         marginBottom: 6,
         marginTop: 16,
+    },
+    labelHint: {
+        fontSize: 12,
+        fontWeight: '400',
+        color: '#9CA3AF',
     },
     input: {
         backgroundColor: '#F9FAFB',
@@ -342,12 +419,23 @@ const styles = StyleSheet.create({
         color: '#F59E0B',
         marginLeft: 8,
     },
-    difficultyRow: {
+    pickerRow: {
         flexDirection: 'row',
+        alignItems: 'center',
         gap: 8,
     },
-    difficultyButton: {
-        width: 40,
+    pickerEndLabel: {
+        fontSize: 12,
+        color: '#9CA3AF',
+        minWidth: 28,
+    },
+    numberRow: {
+        flexDirection: 'row',
+        gap: 8,
+        flex: 1,
+    },
+    numberButton: {
+        flex: 1,
         height: 40,
         borderRadius: 20,
         backgroundColor: '#F3F4F6',
@@ -356,17 +444,42 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
-    difficultyButtonActive: {
+    numberButtonActive: {
         backgroundColor: '#1E3A8A',
         borderColor: '#1E3A8A',
     },
-    difficultyButtonText: {
+    numberButtonText: {
         fontSize: 15,
         fontWeight: '600',
         color: '#6B7280',
     },
-    difficultyButtonTextActive: {
+    numberButtonTextActive: {
         color: '#fff',
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    tagItem: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    tagItemSelected: {
+        backgroundColor: '#EFF6FF',
+        borderColor: '#1E3A8A',
+    },
+    tagText: {
+        fontSize: 13,
+        color: '#6B7280',
+    },
+    tagTextSelected: {
+        color: '#1E3A8A',
+        fontWeight: '500',
     },
     presetsContainer: {
         marginTop: 12,

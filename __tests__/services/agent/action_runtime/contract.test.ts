@@ -74,6 +74,10 @@ describe('UT-002: review draft missing fields', () => {
         const draft: PostCourseReviewDraft = {
             courseCode: 'COMP3015',
             rating: 5,
+            difficulty: null,
+            workload: null,
+            grading: null,
+            tags: [],
             content: '老师讲解清晰',
             anonymous: false,
         };
@@ -110,6 +114,10 @@ describe('UT-004: review draft enters confirm state when complete', () => {
         const draft: PostCourseReviewDraft = {
             courseCode: 'COMP3015',
             rating: 5,
+            difficulty: null,
+            workload: null,
+            grading: null,
+            tags: [],
             content: '老师讲解清晰',
             anonymous: false,
         };
@@ -137,6 +145,10 @@ describe('UT-005: completed result state', () => {
         const draft: PostCourseReviewDraft = {
             courseCode: 'COMP3015',
             rating: 5,
+            difficulty: null,
+            workload: null,
+            grading: null,
+            tags: [],
             content: '老师讲解清晰',
             anonymous: false,
         };
@@ -188,6 +200,10 @@ describe('UT-007: state transitions independent of text', () => {
         const draft: PostCourseReviewDraft = {
             courseCode: 'COMP3015',
             rating: 5,
+            difficulty: null,
+            workload: null,
+            grading: null,
+            tags: [],
             content: '很好',
             anonymous: false,
         };
@@ -268,6 +284,10 @@ describe('UT-010: finalAnswer and message.text are semantically aligned', () => 
         const draft: PostCourseReviewDraft = {
             courseCode: 'COMP3015',
             rating: 5,
+            difficulty: null,
+            workload: null,
+            grading: null,
+            tags: [],
             content: '很好',
             anonymous: false,
         };

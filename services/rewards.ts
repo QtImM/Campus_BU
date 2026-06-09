@@ -6,7 +6,9 @@ export type TaskId =
     | 'first_like'
     | 'first_follow'
     | 'first_comment'
-    | 'first_review';
+    | 'first_review'
+    | 'review_5_courses'
+    | 'review_master';
 
 export interface RewardTask {
     id: TaskId;
@@ -37,7 +39,9 @@ export const TASK_DEFINITIONS: Omit<RewardTask, 'completed'>[] = [
     { id: 'first_like',    label: '给帖子点个赞',     points: 5,  route: '/(tabs)/campus',    emoji: '❤️' },
     { id: 'first_follow',  label: '关注一位同学',     points: 5,  route: '/(tabs)/connect',   emoji: '👋' },
     { id: 'first_comment', label: '评论一条帖子',     points: 10, route: '/(tabs)/campus',    emoji: '💬' },
-    { id: 'first_review',  label: '写第一条课程评价', points: 15, route: '/(tabs)/course',    emoji: '📚' },
+    { id: 'first_review',     label: '写第一条课程评价',  points: 15, route: '/(tabs)/course', emoji: '📚' },
+    { id: 'review_5_courses', label: '点评 5 门不同课程', points: 25, route: '/(tabs)/course', emoji: '🏅' },
+    { id: 'review_master',    label: '点评 10 门不同课程', points: 40, route: '/(tabs)/course', emoji: '🏆' },
 ];
 
 export const TOTAL_TASK_POINTS = TASK_DEFINITIONS.reduce((s, t) => s + t.points, 0); // 65 pts
@@ -47,14 +51,14 @@ const pointsForTask = (taskId: TaskId): number =>
 
 export function getLevelInfo(points: number): LevelInfo {
     // label values are i18n keys resolved by the caller via t(level.label)
-    if (points >= 100) {
+    if (points >= 145) {
         return { label: 'rewards.levels.master', color: '#D97706', bg: '#FEF3C7', progress: 1, pointsToNext: 0 };
     }
-    if (points >= 65) {
-        return { label: 'rewards.levels.contributor', color: '#7C3AED', bg: '#EDE9FE', progress: (points - 65) / 35, pointsToNext: 100 - points };
+    if (points >= 80) {
+        return { label: 'rewards.levels.contributor', color: '#7C3AED', bg: '#EDE9FE', progress: (points - 80) / 65, pointsToNext: 145 - points };
     }
     if (points >= 30) {
-        return { label: 'rewards.levels.active', color: '#2563EB', bg: '#DBEAFE', progress: (points - 30) / 35, pointsToNext: 65 - points };
+        return { label: 'rewards.levels.active', color: '#2563EB', bg: '#DBEAFE', progress: (points - 30) / 50, pointsToNext: 80 - points };
     }
     return { label: 'rewards.levels.novice', color: '#6B7280', bg: '#F3F4F6', progress: points / 30, pointsToNext: 30 - points };
 }

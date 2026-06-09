@@ -4,6 +4,20 @@ import { ensureContentSafety } from './contentFilter';
 import { getBlockedUserIds } from './moderation';
 import { supabase } from './supabase';
 
+// ── Client-side cache (instant detail-page render) ────────────────────────────
+const _teacherCache = new Map<string, { teacher: Teacher; ts: number }>();
+const TEACHER_CACHE_TTL = 60_000;
+
+export const cacheTeacher = (teacher: Teacher) => {
+    _teacherCache.set(teacher.id, { teacher, ts: Date.now() });
+};
+
+export const getCachedTeacher = (id: string): Teacher | null => {
+    const entry = _teacherCache.get(id);
+    if (!entry || Date.now() - entry.ts > TEACHER_CACHE_TTL) return null;
+    return entry.teacher;
+};
+
 /**
  * 获取教师列表，支持按学院、学系过滤和姓名搜索
  */
@@ -32,7 +46,7 @@ export const getTeachers = async (options?: {
     }
     if (!data) return [];
 
-    return data.map(t => ({
+    const teachers: Teacher[] = data.map(t => ({
         id: t.id,
         faculty: t.faculty,
         department: t.department,
@@ -45,6 +59,8 @@ export const getTeachers = async (options?: {
         reviewCount: t.review_count || 0,
         tags: Array.isArray(t.tags) ? t.tags : []
     }));
+    teachers.forEach(cacheTeacher);
+    return teachers;
 };
 
 /**
@@ -63,7 +79,7 @@ export const getTeacherById = async (id: string): Promise<Teacher | null> => {
     }
     if (!data) return null;
 
-    return {
+    const teacher: Teacher = {
         id: data.id,
         faculty: data.faculty,
         department: data.department,
@@ -76,6 +92,8 @@ export const getTeacherById = async (id: string): Promise<Teacher | null> => {
         reviewCount: data.review_count || 0,
         tags: Array.isArray(data.tags) ? data.tags : []
     };
+    cacheTeacher(teacher);
+    return teacher;
 };
 
 /**

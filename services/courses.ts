@@ -8,6 +8,20 @@ import { supabase } from './supabase';
 const LOCAL_COURSES_KEY = 'hkcampus_local_courses';
 const LOCAL_REVIEWS_KEY = 'hkcampus_local_reviews';
 
+// ── Course detail cache (instant detail-page render) ─────────────────────────
+const _courseDetailCache = new Map<string, { course: Course; ts: number }>();
+const COURSE_DETAIL_CACHE_TTL = 60_000;
+
+export const cacheCourseDetail = (course: Course) => {
+    _courseDetailCache.set(course.id, { course, ts: Date.now() });
+};
+
+export const getCachedCourseDetail = (id: string): Course | null => {
+    const entry = _courseDetailCache.get(id);
+    if (!entry || Date.now() - entry.ts > COURSE_DETAIL_CACHE_TTL) return null;
+    return entry.course;
+};
+
 export const getLocalReviews = async (courseId: string): Promise<Review[]> => {
     try {
         const jsonValue = await storage.getItem(LOCAL_REVIEWS_KEY);
@@ -35,8 +49,10 @@ export const addLocalReview = async (review: Partial<Review>): Promise<{ error: 
             authorAvatar: review.authorAvatar || '👤',
             rating: review.rating, // Optional
             difficulty: review.difficulty || 3,
+            workload: review.workload ?? undefined,
+            grading: review.grading ?? undefined,
             content: review.content || '',
-            tags: [],
+            tags: review.tags ?? [],
             likes: 0,
             createdAt: new Date(),
             semester: review.semester || '2025 Spring',
@@ -373,7 +389,7 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
         .single();
 
     if (error || !data) return null;
-    return {
+    const course: Course = {
         id: data.id,
         code: data.code,
         name: data.name || '',
@@ -383,6 +399,8 @@ export const getCourseById = async (id: string): Promise<Course | null> => {
         rating: data.rating || 0,
         reviewCount: data.review_count || 0
     };
+    cacheCourseDetail(course);
+    return course;
 };
 
 export const getReviews = async (courseId: string, courseCode?: string, currentUserId?: string): Promise<Review[]> => {
@@ -421,8 +439,10 @@ export const getReviews = async (courseId: string, courseCode?: string, currentU
             authorAvatar: r.author_avatar || author.avatar_url || '👤',
             rating: r.rating,
             difficulty: r.difficulty || 3,
+            workload: r.workload ?? undefined,
+            grading: r.grading ?? undefined,
             content: r.content || '',
-            tags: [],
+            tags: Array.isArray(r.tags) ? r.tags : [],
             likes: r.likes || 0,
             createdAt: new Date(r.created_at),
             semester: r.semester || 'Current',
@@ -492,8 +512,10 @@ export const getReviewsAndHasReviewed = async (
             authorAvatar: r.author_avatar || author?.avatar_url || '👤',
             rating: r.rating,
             difficulty: r.difficulty || 3,
+            workload: r.workload ?? undefined,
+            grading: r.grading ?? undefined,
             content: r.content || '',
-            tags: [],
+            tags: Array.isArray(r.tags) ? r.tags : [],
             likes: r.likes || 0,
             createdAt: new Date(r.created_at),
             semester: r.semester || 'Current',
@@ -724,6 +746,9 @@ export const addReview = async (reviewData: Partial<Review>): Promise<{ error: a
             author_avatar: reviewData.authorAvatar,
             rating: reviewData.rating,
             difficulty: reviewData.difficulty,
+            workload: reviewData.workload ?? null,
+            grading: reviewData.grading ?? null,
+            tags: reviewData.tags ?? [],
             content: reviewData.content,
             semester: reviewData.semester,
             is_anonymous: reviewData.isAnonymous || false
@@ -744,9 +769,20 @@ export const addReview = async (reviewData: Partial<Review>): Promise<{ error: a
         await updateCourseStatsForAllCandidates(requestedCourseId, courseId);
     }
 
-    // Reward: mark the "first review" task complete (idempotent, non-blocking).
+    // Reward: milestone tasks (all idempotent, non-blocking).
     if (reviewData.authorId) {
-        void import('./rewards').then(({ completeTask }) => completeTask(reviewData.authorId!, 'first_review')).catch(() => { });
+        void import('./rewards').then(async ({ completeTask }) => {
+            const uid = reviewData.authorId!;
+            await completeTask(uid, 'first_review');
+            // Check distinct course count for milestone badges
+            const { count } = await supabase
+                .from('course_reviews')
+                .select('course_id', { count: 'estimated', head: true })
+                .eq('author_id', uid);
+            const distinctCount = count ?? 0;
+            if (distinctCount >= 5) await completeTask(uid, 'review_5_courses');
+            if (distinctCount >= 10) await completeTask(uid, 'review_master');
+        }).catch(() => { });
     }
 
     return { error: null };
@@ -1132,3 +1168,46 @@ export const refreshAllCourseStats = async (): Promise<{
         return { processed, updated, errors: [error?.message || 'Unknown exception'] };
     }
 };
+
+export const summarizeCourseReviews = (reviews: Review[], courseName?: string): string => {
+    if (reviews.length === 0) return '暂无评价，期待你的首发锐评！';
+
+    const avgRating = reviews.reduce((s, r) => s + (r.rating || 0), 0) / reviews.filter(r => r.rating).length || 0;
+    const avgDifficulty = reviews.reduce((s, r) => s + r.difficulty, 0) / reviews.length;
+
+    const workloadReviews = reviews.filter(r => r.workload != null);
+    const avgWorkload = workloadReviews.length > 0
+        ? workloadReviews.reduce((s, r) => s + r.workload!, 0) / workloadReviews.length
+        : null;
+
+    const gradingReviews = reviews.filter(r => r.grading != null);
+    const avgGrading = gradingReviews.length > 0
+        ? gradingReviews.reduce((s, r) => s + r.grading!, 0) / gradingReviews.length
+        : null;
+
+    const allTags = reviews.flatMap(r => r.tags);
+    let topTag = '';
+    if (allTags.length > 0) {
+        const counts: Record<string, number> = {};
+        allTags.forEach(tag => counts[tag] = (counts[tag] || 0) + 1);
+        topTag = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+    }
+
+    const name = courseName || '这门课';
+    const ratingDesc = avgRating >= 4 ? '口碑不错' : avgRating >= 3 ? '评价中等' : '争议较多';
+    const diffDesc = avgDifficulty > 3.5 ? '难度偏高' : avgDifficulty < 2.5 ? '难度较低' : '难度适中';
+    const workloadDesc = avgWorkload != null ? (avgWorkload > 3.5 ? '作业偏多' : avgWorkload < 2.5 ? '工作量轻松' : '工作量一般') : null;
+    const gradingDesc = avgGrading != null ? (avgGrading >= 4 ? '给分慷慨' : avgGrading <= 2 ? '给分严格' : null) : null;
+
+    const highlights = [diffDesc, workloadDesc, gradingDesc].filter(Boolean).join('、');
+    const tagPart = topTag ? `"${topTag}"是同学们最常提到的关键词。` : '';
+
+    const templates = [
+        `${name}${ratingDesc}，${highlights}。${tagPart}选课前建议参考一下同学评价。`,
+        `同学锐评：${name}主打${highlights}${topTag ? `，"${topTag}"呼声最高` : ''}。整体来看${ratingDesc}。`,
+        `${highlights}${topTag ? `，"${topTag}"是大家的共识` : ''}。${name}整体${ratingDesc}，${reviews.length} 位同学已点评。`,
+    ];
+
+    return templates[reviews.length % templates.length];
+};
+

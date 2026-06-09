@@ -32,6 +32,9 @@ export const createDefaultReviewDraft = (): PostCourseReviewDraft => ({
     courseCode: null,
     rating: null,
     difficulty: null,
+    workload: null,
+    grading: null,
+    tags: [],
     content: '',
     anonymous: false,
 });
@@ -147,7 +150,7 @@ export const computeMissingFields = (actionType: ActionType, draft: ActionDraft)
 // ─── Editable Fields ────────────────────────────────────────────────
 
 const ALL_EDITABLE_FIELDS: Record<ActionType, string[]> = {
-    post_course_review: ['courseCode', 'rating', 'difficulty', 'content', 'anonymous'],
+    post_course_review: ['courseCode', 'rating', 'difficulty', 'workload', 'grading', 'tags', 'content', 'anonymous'],
     post_teacher_review: ['teacherName', 'rating', 'difficulty', 'workload', 'content', 'tags'],
     post_course_teaming: ['courseCode', 'section', 'content', 'contactMethod'],
     send_course_chat_message: ['courseCode', 'content'],
@@ -207,6 +210,9 @@ export const createReviewUiSchema = (phase: ActionPhase, options?: { courseLocke
             { name: 'courseCode', label: courseLabel, component: 'course_picker', required: true, readonly: options?.courseLocked, placeholder: '例如 COMP3015' },
             { name: 'rating', label: '评分', component: 'rating_picker', required: true, scale: 5 },
             { name: 'difficulty', label: '难度 (1=简单, 5=困难)', component: 'number_picker', required: false, scale: 5 },
+            { name: 'workload', label: '工作量 (1=轻松, 5=很重)', component: 'number_picker', required: false, scale: 5 },
+            { name: 'grading', label: '给分 (1=严格, 5=慷慨)', component: 'number_picker', required: false, scale: 5 },
+            { name: 'tags', label: '标签 (最多选3个)', component: 'tag_picker', required: false, placeholder: '选择标签' },
             { name: 'content', label: '评价内容', component: 'textarea', required: true, placeholder: '写下你的上课体验' },
             { name: 'anonymous', label: '匿名发布', component: 'switch', required: false },
         ],
@@ -263,6 +269,7 @@ const labelMap: Record<string, string> = {
     rating: '评分',
     difficulty: '难度',
     workload: '工作量',
+    grading: '给分',
     content: '内容',
     anonymous: '匿名',
     tags: '标签',
@@ -284,7 +291,7 @@ const dayOfWeekLabels = ['', '周一', '周二', '周三', '周四', '周五', '
 
 const formatFieldValue = (key: string, value: any): string => {
     if (value == null || value === '') return '未填写';
-    if (key === 'rating' || key === 'difficulty' || key === 'workload') return `${value}/5`;
+    if (key === 'rating' || key === 'difficulty' || key === 'workload' || key === 'grading') return `${value}/5`;
     if (key === 'anonymous') return value ? '是' : '否';
     if (key === 'tags' && Array.isArray(value)) return value.length > 0 ? value.join(', ') : '无';
     if (key === 'dayOfWeek' && typeof value === 'number') return dayOfWeekLabels[value] || String(value);

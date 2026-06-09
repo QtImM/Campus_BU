@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { ForumPostRow } from '../../../components/forum/ForumPostRow';
 import { getCurrentUser } from '../../../services/auth';
-import { fetchForumPosts, FORUM_PAGE_SIZE } from '../../../services/forum';
+import { fetchForumPosts, FORUM_PAGE_SIZE, getCachedCategoryList } from '../../../services/forum';
 import { ForumCategory, ForumPost, ForumSort } from '../../../types';
 import { filterHiddenPosts, getHiddenPostIds } from '../../../services/feedPreferences';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -64,8 +64,8 @@ export default function CategoryForumScreen() {
     const router = useRouter();
     const { t } = useTranslation();
 
-    const [posts, setPosts] = useState<ForumPost[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [posts, setPosts] = useState<ForumPost[]>(() => getCachedCategoryList(id ?? '', 'recommended') ?? []);
+    const [loading, setLoading] = useState<boolean>(() => !getCachedCategoryList(id ?? '', 'recommended'));
     const [refreshing, setRefreshing] = useState(false);
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
@@ -104,8 +104,7 @@ export default function CategoryForumScreen() {
     };
 
     useEffect(() => {
-        setPosts([]);
-        loadData(true, 0);
+        loadData(false, 0);
     }, [id, activeSort]);
 
     // Handle updates from detail screen

@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCurrentUser } from '../../services/auth';
 import {
     deleteTeacherReview,
+    getCachedTeacher,
     getTeacherById,
     getTeacherReviews,
     submitTeacherReview,
@@ -65,9 +66,10 @@ export default function TeacherDetailScreen() {
     const router = useRouter();
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
-    const [teacher, setTeacher] = useState<Teacher | null>(null);
+    const [teacher, setTeacher] = useState<Teacher | null>(() => getCachedTeacher(id as string));
     const [reviews, setReviews] = useState<TeacherReview[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState<boolean>(() => !getCachedTeacher(id as string));
+    const [reviewsLoading, setReviewsLoading] = useState(true);
     const [summary, setSummary] = useState<string | null>(null);
     const [summaryLoading, setSummaryLoading] = useState(false);
 
@@ -96,17 +98,17 @@ export default function TeacherDetailScreen() {
     const loadData = async () => {
         if (!id) return;
         try {
-            setLoading(true);
             const user = await getCurrentUser();
             setCurrentUserId(user?.uid || null);
 
-            const teacherData = await getTeacherById(id as string);
-            setTeacher(teacherData);
+            const [teacherData, reviewsData] = await Promise.all([
+                getTeacherById(id as string),
+                getTeacherReviews(id as string, user?.uid),
+            ]);
 
-            const reviewsData = await getTeacherReviews(id as string, user?.uid);
+            if (teacherData) setTeacher(teacherData);
             setReviews(reviewsData);
 
-            // Generate AI summary if enough reviews
             if (reviewsData.length >= 3) {
                 setSummaryLoading(true);
                 summarizeTeacherReviews(id as string)
@@ -118,6 +120,7 @@ export default function TeacherDetailScreen() {
             console.error(err);
         } finally {
             setLoading(false);
+            setReviewsLoading(false);
         }
     };
 
@@ -269,7 +272,9 @@ export default function TeacherDetailScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {reviews.length === 0 ? (
+                        {reviewsLoading ? (
+                            <ActivityIndicator size="small" color="#1E3A8A" style={{ marginVertical: 16 }} />
+                        ) : reviews.length === 0 ? (
                             <Text style={styles.emptyText}>{t('teachers.no_reviews')}</Text>
                         ) : (
                             reviews.map(review => (

@@ -10,6 +10,20 @@ const FORUM_POSTS = 'forum_posts';
 const FORUM_COMMENTS = 'forum_comments';
 const FORUM_UPVOTES = 'forum_upvotes';
 
+// ── Client-side cache (instant detail-page render) ────────────────────────────
+const _forumPostCache = new Map<string, { post: ForumPost; ts: number }>();
+const FORUM_POST_CACHE_TTL = 60_000; // 1 min
+
+export const cacheForumPost = (post: ForumPost) => {
+    _forumPostCache.set(post.id, { post, ts: Date.now() });
+};
+
+export const getCachedForumPost = (postId: string): ForumPost | null => {
+    const entry = _forumPostCache.get(postId);
+    if (!entry || Date.now() - entry.ts > FORUM_POST_CACHE_TTL) return null;
+    return entry.post;
+};
+
 // ── Helper: 原子地调整帖子的 reply_count / upvote_count ─────────────────────────
 // 对应 supabase migration 20260420_forum_editorial_support.sql 中的 RPC
 const incrementForumPostCounts = async (
@@ -86,6 +100,21 @@ const markFollowingAuthors = async (posts: ForumPost[], currentUserId?: string) 
 
 export const FORUM_PAGE_SIZE = 20;
 
+// ── Category list cache (instant category page render, first page only) ───────
+const _categoryListCache = new Map<string, { posts: ForumPost[]; ts: number }>();
+const CATEGORY_LIST_CACHE_TTL = 60_000;
+
+export const getCachedCategoryList = (category: string, sort: string): ForumPost[] | null => {
+    const key = `${category}:${sort}`;
+    const entry = _categoryListCache.get(key);
+    if (!entry || Date.now() - entry.ts > CATEGORY_LIST_CACHE_TTL) return null;
+    return entry.posts;
+};
+
+const cacheCategoryList = (category: string, sort: string, posts: ForumPost[]) => {
+    _categoryListCache.set(`${category}:${sort}`, { posts, ts: Date.now() });
+};
+
 // ── Fetch list ────────────────────────────────────────────────────────────────
 export const fetchForumPosts = async (
     category: ForumCategory | 'all' = 'all',
@@ -151,6 +180,9 @@ export const fetchForumPosts = async (
 
     await markFollowingAuthors(posts, currentUserId);
 
+    posts.forEach(cacheForumPost);
+    if (page === undefined || page === 0) cacheCategoryList(category, sort, posts);
+
     return posts;
 };
 
@@ -194,6 +226,8 @@ export const searchForumPosts = async (
 
     await markFollowingAuthors(posts, currentUserId);
 
+    posts.forEach(cacheForumPost);
+
     return posts;
 };
 
@@ -231,6 +265,7 @@ export const fetchForumPostById = async (
         post.isFollowingAuthor = followingIds.includes(post.authorId);
     }
 
+    cacheForumPost(post);
     return post;
 };
 

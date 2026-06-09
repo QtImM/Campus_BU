@@ -224,6 +224,8 @@ export interface Review {
     authorAvatar: string;
     rating?: number; // Overall (optional for follow-up updates)
     difficulty: number; // 1-5
+    workload?: number; // 1=轻松, 5=很重
+    grading?: number;  // 1=严格, 5=慷慨
     content: string;
     tags: string[];
     likes: number;
