@@ -865,7 +865,9 @@
             "first_like": "给帖子点个赞",
             "first_follow": "关注一位同学",
             "first_comment": "评论一条帖子",
-            "first_review": "写第一条课程评价"
+            "first_review": "写第一条课程评价",
+            "review_5_courses": "评价 5 门课程",
+            "review_master": "课程评价达人"
         },
         "progress_done": "🎉 新手任务全部完成，继续保持活跃解锁更多徽章！",
         "progress_next": "再得 {{count}} 积分升级，完成任务即可获得",

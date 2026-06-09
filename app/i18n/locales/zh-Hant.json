@@ -863,7 +863,9 @@
             "first_like": "給貼文點個讚",
             "first_follow": "追蹤一位同學",
             "first_comment": "評論一則貼文",
-            "first_review": "寫第一條課程評價"
+            "first_review": "寫第一條課程評價",
+            "review_5_courses": "評價 5 門課程",
+            "review_master": "課程評價達人"
         },
         "progress_done": "🎉 新手任務全部完成，繼續保持活躍解鎖更多徽章！",
         "progress_next": "再得 {{count}} 積分升級，完成任務即可獲得",

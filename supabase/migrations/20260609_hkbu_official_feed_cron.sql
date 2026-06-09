@@ -10,7 +10,7 @@
 --   insert into public.app_config (key, value) values (
 --     'hkbu_crawl_cron',
 --     jsonb_build_object(
---       'function_url',     'https://<PROJECT_REF>.supabase.co/functions/v1/crawl_hkbu',
+--       'function_url',     'https://fcbsekidlijtidqzkddx.supabase.co/functions/v1/crawl_hkbu',
 --       'cron_secret',      '<the same value you set as the CRON_SECRET function secret>',
 --       'limit_per_source', 8
 --     )
@@ -61,8 +61,8 @@ $$;
 revoke all on function public.trigger_hkbu_crawl() from public;
 
 -- ──────────────────────────────────────────────────────────────────────────
--- Schedule: hourly. Idempotent — drop any prior job of the same name first.
--- Adjust the cron expression to taste (e.g. '*/30 * * * *' for every 30 min).
+-- Schedule: every 6 hours. Idempotent — drop any prior job of the same name first.
+-- Adjust the cron expression to taste (e.g. '0 * * * *' for hourly).
 -- ──────────────────────────────────────────────────────────────────────────
 do $$
 begin
@@ -74,6 +74,6 @@ $$;
 
 select cron.schedule(
     'crawl-hkbu',
-    '0 * * * *',
+    '0 */6 * * *',
     $$ select public.trigger_hkbu_crawl(); $$
 );

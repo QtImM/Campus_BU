@@ -864,7 +864,9 @@
             "first_like": "Like a post",
             "first_follow": "Follow a classmate",
             "first_comment": "Comment on a post",
-            "first_review": "Write your first course review"
+            "first_review": "Write your first course review",
+            "review_5_courses": "Review 5 courses",
+            "review_master": "Course review master"
         },
         "progress_done": "🎉 All starter tasks done — stay active to unlock more badges!",
         "progress_next": "{{count}} more pts to level up — complete a task to earn them",
