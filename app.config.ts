@@ -22,7 +22,7 @@ export default (): ExpoConfig => {
     const ocrApiUrl = (process.env.EXPO_PUBLIC_OCR_API_URL || "").trim();
     const deepseekBaseUrl = (process.env.EXPO_PUBLIC_DEEPSEEK_BASE_URL || "").trim();
     const widgetEnabled = shouldEnableScheduleWidget();
-    const buildNumber = "2";
+    const buildNumber = "3";
     const appExtensions = widgetEnabled
         ? [
               {
@@ -86,7 +86,7 @@ export default (): ExpoConfig => {
             edgeToEdgeEnabled: true,
             predictiveBackGestureEnabled: false,
             package: "com.budev.hkcampus",
-            versionCode: 7,
+            versionCode: 8,
             permissions: [
                 "android.permission.RECORD_AUDIO",
                 "android.permission.USE_BIOMETRIC",
