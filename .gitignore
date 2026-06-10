@@ -63,3 +63,7 @@ skills-lock.json
 
 # benchmark history
 scripts/benchmark_history.json
+
+# Supabase local runtime
+supabase/.branches/
+supabase/.temp/
