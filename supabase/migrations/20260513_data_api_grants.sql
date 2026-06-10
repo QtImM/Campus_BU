@@ -5,196 +5,89 @@
 -- 本迁移为所有已存在的 public 表补上显式 GRANT，确保 supabase-js / PostgREST
 -- 继续正常工作。RLS 策略不变，GRANT 仅控制"角色能否碰到表"。
 --
--- 分类逻辑：
---   公开数据（课程/建筑/教师/帖子等）→ anon 可 SELECT，authenticated 可 CRUD
---   私有用户数据（课表/日历/私信/通知等）→ 仅 authenticated 可 CRUD
---   管理员表 → 仅 authenticated 可 CRUD（RLS 决定谁能看/改）
+-- 注意：部分表（courses, buildings, teachers 等）由外部脚本创建，本地首次
+-- supabase start 时可能尚不存在。使用 to_regclass 检查，不存在则跳过。
 -- ============================================================================
 
--- ──────────────────────────────────────────────────────────────────────────────
--- 1. 公开数据表：anon SELECT + authenticated CRUD
--- ──────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+    -- (table_name, anon_privs, auth_privs)
+    -- anon_privs = NULL 表示不授权给 anon
+    rec RECORD;
+BEGIN
+    FOR rec IN VALUES
+        -- 公开数据表：anon SELECT + authenticated CRUD
+        ('courses',               'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('buildings',             'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('teachers',              'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('course_reviews',        'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('teacher_reviews',       'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('teacher_review_likes',  'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('posts',                 'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('post_comments',         'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('post_likes',            'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('forum_posts',           'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('forum_comments',        'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('forum_upvotes',         'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('course_exchanges',      'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('exchange_comments',     'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('course_teaming',        'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('teaming_comments',      'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('food_reviews',          'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('food_review_likes',     'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('food_review_comments',  'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('course_submissions',    'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('user_follows',          'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('weekly_prompts',        'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        ('agent_knowledge_base',  'SELECT', 'SELECT,INSERT,UPDATE,DELETE'),
+        -- 私有用户数据：仅 authenticated + service_role
+        ('notifications',         NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('interactions',          NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('messages',              NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('agent_memory',          NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('course_favorites',      NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('building_favorites',    NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('user_schedules',        NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('schedule_import_jobs',  NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('schedule_import_items', NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('user_schedule_entries', NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('user_calendar_events',  NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('user_push_tokens',      NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('direct_conversations',  NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('direct_messages',       NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('user_eula_consents',    NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('user_blocks',           NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('reports',               NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('users',                 NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        -- 管理员 / 审计表
+        ('app_admins',            NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('moderation_actions',    NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('user_bans',             NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('post_comment_likes',    NULL, 'SELECT,INSERT,DELETE'),
+        ('user_reward_tasks',     NULL, 'SELECT,INSERT,DELETE'),
+        ('push_broadcasts',       NULL, 'SELECT,INSERT,UPDATE,DELETE'),
+        ('app_config',            NULL, 'SELECT,INSERT,UPDATE,DELETE')
+    LOOP
+        -- Skip tables that don't exist in this environment yet
+        IF to_regclass('public.' || rec.column1) IS NULL THEN
+            RAISE NOTICE 'Skipping GRANT: table public.% does not exist', rec.column1;
+            CONTINUE;
+        END IF;
 
--- 课程 / 建筑 / 教师
-grant select                                                     on public.courses       to anon;
-grant select, insert, update, delete                             on public.courses       to authenticated;
-grant select, insert, update, delete                             on public.courses       to service_role;
+        IF rec.column2 IS NOT NULL THEN
+            EXECUTE format('GRANT %s ON public.%I TO anon', rec.column2, rec.column1);
+        END IF;
+        EXECUTE format('GRANT %s ON public.%I TO authenticated', rec.column3, rec.column1);
+        EXECUTE format('GRANT %s ON public.%I TO service_role',  rec.column3, rec.column1);
+    END LOOP;
+END;
+$$;
 
-grant select                                                     on public.buildings     to anon;
-grant select, insert, update, delete                             on public.buildings     to authenticated;
-grant select, insert, update, delete                             on public.buildings     to service_role;
-
-grant select                                                     on public.teachers      to anon;
-grant select, insert, update, delete                             on public.teachers      to authenticated;
-grant select, insert, update, delete                             on public.teachers      to service_role;
-
--- 课程评价 / 教师评价
-grant select                                                     on public.course_reviews      to anon;
-grant select, insert, update, delete                             on public.course_reviews      to authenticated;
-grant select, insert, update, delete                             on public.course_reviews      to service_role;
-
-grant select                                                     on public.teacher_reviews     to anon;
-grant select, insert, update, delete                             on public.teacher_reviews     to authenticated;
-grant select, insert, update, delete                             on public.teacher_reviews     to service_role;
-
-grant select                                                     on public.teacher_review_likes to anon;
-grant select, insert, update, delete                             on public.teacher_review_likes to authenticated;
-grant select, insert, update, delete                             on public.teacher_review_likes to service_role;
-
--- 发现板块（帖子 / 评论 / 点赞）
-grant select                                                     on public.posts         to anon;
-grant select, insert, update, delete                             on public.posts         to authenticated;
-grant select, insert, update, delete                             on public.posts         to service_role;
-
-grant select                                                     on public.post_comments to anon;
-grant select, insert, update, delete                             on public.post_comments to authenticated;
-grant select, insert, update, delete                             on public.post_comments to service_role;
-
-grant select                                                     on public.post_likes    to anon;
-grant select, insert, update, delete                             on public.post_likes    to authenticated;
-grant select, insert, update, delete                             on public.post_likes    to service_role;
-
--- 论坛
-grant select                                                     on public.forum_posts     to anon;
-grant select, insert, update, delete                             on public.forum_posts     to authenticated;
-grant select, insert, update, delete                             on public.forum_posts     to service_role;
-
-grant select                                                     on public.forum_comments  to anon;
-grant select, insert, update, delete                             on public.forum_comments  to authenticated;
-grant select, insert, update, delete                             on public.forum_comments  to service_role;
-
-grant select                                                     on public.forum_upvotes   to anon;
-grant select, insert, update, delete                             on public.forum_upvotes   to authenticated;
-grant select, insert, update, delete                             on public.forum_upvotes   to service_role;
-
--- 课程交换 / 评论
-grant select                                                     on public.course_exchanges   to anon;
-grant select, insert, update, delete                             on public.course_exchanges   to authenticated;
-grant select, insert, update, delete                             on public.course_exchanges   to service_role;
-
-grant select                                                     on public.exchange_comments  to anon;
-grant select, insert, update, delete                             on public.exchange_comments  to authenticated;
-grant select, insert, update, delete                             on public.exchange_comments  to service_role;
-
--- 组队 / 评论
-grant select                                                     on public.course_teaming   to anon;
-grant select, insert, update, delete                             on public.course_teaming   to authenticated;
-grant select, insert, update, delete                             on public.course_teaming   to service_role;
-
-grant select                                                     on public.teaming_comments to anon;
-grant select, insert, update, delete                             on public.teaming_comments to authenticated;
-grant select, insert, update, delete                             on public.teaming_comments to service_role;
-
--- 美食评论
-grant select                                                     on public.food_reviews        to anon;
-grant select, insert, update, delete                             on public.food_reviews        to authenticated;
-grant select, insert, update, delete                             on public.food_reviews        to service_role;
-
-grant select                                                     on public.food_review_likes   to anon;
-grant select, insert, update, delete                             on public.food_review_likes   to authenticated;
-grant select, insert, update, delete                             on public.food_review_likes   to service_role;
-
-grant select                                                     on public.food_review_comments to anon;
-grant select, insert, update, delete                             on public.food_review_comments to authenticated;
-grant select, insert, update, delete                             on public.food_review_comments to service_role;
-
--- 课程提交审核（公开查看已批准 + 自己的提交）
-grant select                                                     on public.course_submissions  to anon;
-grant select, insert, update, delete                             on public.course_submissions  to authenticated;
-grant select, insert, update, delete                             on public.course_submissions  to service_role;
-
--- 用户关注关系（公开读取用于计数/关系图）
-grant select                                                     on public.user_follows  to anon;
-grant select, insert, update, delete                             on public.user_follows  to authenticated;
-grant select, insert, update, delete                             on public.user_follows  to service_role;
-
--- 通知（用户看自己的，系统插入）
-grant select, insert, update, delete                             on public.notifications to authenticated;
-grant select, insert, update, delete                             on public.notifications to service_role;
-
--- 互动表（poke/wave）
-grant select, insert, update, delete                             on public.interactions  to authenticated;
-grant select, insert, update, delete                             on public.interactions  to service_role;
-
--- 聊天消息
-grant select, insert, update, delete                             on public.messages      to authenticated;
-grant select, insert, update, delete                             on public.messages      to service_role;
-
--- agent 知识库（公开读取，已在 20260325 迁移中授权，此处确保 service_role 也有权限）
-grant select, insert, update, delete                             on public.agent_knowledge_base to service_role;
-
--- ──────────────────────────────────────────────────────────────────────────────
--- 2. 私有用户数据表：仅 authenticated + service_role（不给 anon）
--- ──────────────────────────────────────────────────────────────────────────────
-
--- agent 记忆
-grant select, insert, update, delete                             on public.agent_memory          to authenticated;
-grant select, insert, update, delete                             on public.agent_memory          to service_role;
-
--- 收藏
-grant select, insert, update, delete                             on public.course_favorites      to authenticated;
-grant select, insert, update, delete                             on public.course_favorites      to service_role;
-
-grant select, insert, update, delete                             on public.building_favorites     to authenticated;
-grant select, insert, update, delete                             on public.building_favorites     to service_role;
-
--- 用户课表
-grant select, insert, update, delete                             on public.user_schedules         to authenticated;
-grant select, insert, update, delete                             on public.user_schedules         to service_role;
-
--- 课表导入管线
-grant select, insert, update, delete                             on public.schedule_import_jobs   to authenticated;
-grant select, insert, update, delete                             on public.schedule_import_jobs   to service_role;
-
-grant select, insert, update, delete                             on public.schedule_import_items  to authenticated;
-grant select, insert, update, delete                             on public.schedule_import_items  to service_role;
-
-grant select, insert, update, delete                             on public.user_schedule_entries  to authenticated;
-grant select, insert, update, delete                             on public.user_schedule_entries  to service_role;
-
--- 用户日历事件
-grant select, insert, update, delete                             on public.user_calendar_events   to authenticated;
-grant select, insert, update, delete                             on public.user_calendar_events   to service_role;
-
--- 推送 token
-grant select, insert, update, delete                             on public.user_push_tokens       to authenticated;
-grant select, insert, update, delete                             on public.user_push_tokens       to service_role;
-
--- 私信
-grant select, insert, update, delete                             on public.direct_conversations   to authenticated;
-grant select, insert, update, delete                             on public.direct_conversations   to service_role;
-
-grant select, insert, update, delete                             on public.direct_messages        to authenticated;
-grant select, insert, update, delete                             on public.direct_messages        to service_role;
-
--- EULA 同意记录
-grant select, insert, update, delete                             on public.user_eula_consents     to authenticated;
-grant select, insert, update, delete                             on public.user_eula_consents     to service_role;
-
--- 用户屏蔽
-grant select, insert, update, delete                             on public.user_blocks            to authenticated;
-grant select, insert, update, delete                             on public.user_blocks            to service_role;
-
--- 举报
-grant select, insert, update, delete                             on public.reports                to authenticated;
-grant select, insert, update, delete                             on public.reports                to service_role;
-
--- 用户档案
-grant select, insert, update, delete                             on public.users                  to authenticated;
-grant select, insert, update, delete                             on public.users                  to service_role;
-
--- ──────────────────────────────────────────────────────────────────────────────
--- 3. 管理员 / 审计表：仅 authenticated + service_role
--- ──────────────────────────────────────────────────────────────────────────────
-
--- 管理员表（用户可查自己状态，管理员可增删改）
-grant select, insert, update, delete                             on public.app_admins            to authenticated;
-grant select, insert, update, delete                             on public.app_admins            to service_role;
-
--- 审核操作日志（管理员 + 操作者可读，认证用户可插入）
-grant select, insert, update, delete                             on public.moderation_actions    to authenticated;
-grant select, insert, update, delete                             on public.moderation_actions    to service_role;
-
--- 用户封禁
-grant select, insert, update, delete                             on public.user_bans             to authenticated;
-grant select, insert, update, delete                             on public.user_bans             to service_role;
+-- weekly_prompts sequence (bigserial)
+DO $$
+BEGIN
+    IF to_regclass('public.weekly_prompts') IS NOT NULL THEN
+        EXECUTE 'GRANT USAGE, SELECT ON SEQUENCE public.weekly_prompts_id_seq TO service_role';
+    END IF;
+END;
+$$;

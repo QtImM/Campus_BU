@@ -36,3 +36,9 @@ using (auth.uid() = user_id);
 -- Data API GRANT（私有用户数据，不给 anon）
 grant select, insert, delete on public.user_reward_tasks to authenticated;
 grant select, insert, delete on public.user_reward_tasks to service_role;
+
+-- Pioneer badge trigger (function defined in 20260608_pioneer_badge.sql which runs first)
+drop trigger if exists trg_grant_pioneer_badge on public.user_reward_tasks;
+create trigger trg_grant_pioneer_badge
+after insert on public.user_reward_tasks
+for each row execute function public.grant_pioneer_badge();

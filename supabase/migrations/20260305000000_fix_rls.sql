@@ -1,0 +1,2 @@
+-- No-op: policy already applied in 20260305_knowledge_base.sql.
+-- This file kept for migration history continuity.

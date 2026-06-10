@@ -21,7 +21,4 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_grant_pioneer_badge on public.user_reward_tasks;
-create trigger trg_grant_pioneer_badge
-after insert on public.user_reward_tasks
-for each row execute function public.grant_pioneer_badge();
+-- Trigger created in 20260608_user_rewards.sql (runs after this file alphabetically).

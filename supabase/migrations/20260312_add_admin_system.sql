@@ -3,14 +3,17 @@
 -- Admins have special privileges like content moderation, user management, etc.
 
 -- Step 1: Drop existing policies (to avoid "already exists" errors)
-DROP POLICY IF EXISTS "public_check_admin_status" ON public.app_admins;
-DROP POLICY IF EXISTS "admins_view_admin_list" ON public.app_admins;
-DROP POLICY IF EXISTS "admins_insert_admins" ON public.app_admins;
-DROP POLICY IF EXISTS "admins_update_admins" ON public.app_admins;
-DROP POLICY IF EXISTS "admins_delete_admins" ON public.app_admins;
-
--- Step 2: Drop existing trigger/function for updated_at (clean slate)
-DROP TRIGGER IF EXISTS trigger_app_admins_updated_at ON public.app_admins;
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'app_admins') THEN
+    DROP POLICY IF EXISTS "public_check_admin_status" ON public.app_admins;
+    DROP POLICY IF EXISTS "admins_view_admin_list" ON public.app_admins;
+    DROP POLICY IF EXISTS "admins_insert_admins" ON public.app_admins;
+    DROP POLICY IF EXISTS "admins_update_admins" ON public.app_admins;
+    DROP POLICY IF EXISTS "admins_delete_admins" ON public.app_admins;
+    DROP TRIGGER IF EXISTS trigger_app_admins_updated_at ON public.app_admins;
+  END IF;
+END $$;
 DROP FUNCTION IF EXISTS update_app_admins_updated_at();
 
 -- Step 3: Drop existing helper functions (to avoid conflicts)

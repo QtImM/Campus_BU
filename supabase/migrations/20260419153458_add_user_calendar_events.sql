@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS public.user_calendar_events (
     title TEXT NOT NULL,
     event_type TEXT NOT NULL CHECK (event_type IN ('exam', 'quiz', 'assignment', 'custom')),
     course_code TEXT,
-    matched_course_id UUID REFERENCES courses(id) ON DELETE SET NULL,
+    matched_course_id TEXT REFERENCES courses(id) ON DELETE SET NULL,
     event_date DATE NOT NULL,
     start_time TIME,
     end_time TIME,

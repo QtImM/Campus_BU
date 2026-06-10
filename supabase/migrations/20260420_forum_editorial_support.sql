@@ -179,7 +179,10 @@ CREATE TRIGGER forum_posts_touch_verified_at_trg
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- 5. Helper view: editorial feed with freshness annotation
+--    (initial_schema created this as a TABLE; drop it first so we can use a view)
 -- ──────────────────────────────────────────────────────────────────────────
+
+DROP TABLE IF EXISTS public.forum_editorial_posts CASCADE;
 
 CREATE OR REPLACE VIEW public.forum_editorial_posts AS
 SELECT

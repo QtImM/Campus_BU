@@ -21,9 +21,10 @@ create policy "Allow everyone to read knowledge base"
     using (true);
 
 drop policy if exists "Allow authenticated users to insert knowledge base" on public.agent_knowledge_base;
-create policy "Allow authenticated users to insert knowledge base"
+drop policy if exists "Allow anon to insert knowledge base" on public.agent_knowledge_base;
+create policy "Allow anon to insert knowledge base"
     on public.agent_knowledge_base for insert
-    to authenticated
+    to anon, authenticated
     with check (true);
 
 -- Create a Postgres function for similarity search matching

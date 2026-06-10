@@ -3,8 +3,10 @@
 -- topic_title_zh / _en: snapshot of the prompt text at time of posting
 --   so old posts stay self-describing even after the prompt expires.
 
+-- Add columns first (without FK so this runs before weekly_prompts.sql alphabetically).
+-- The FK constraint is added by 20260608_weekly_prompts.sql after the table exists.
 alter table public.posts
-    add column if not exists prompt_id       bigint references public.weekly_prompts(id) on delete set null,
+    add column if not exists prompt_id       bigint,
     add column if not exists topic_title_zh  text,
     add column if not exists topic_title_en  text;
 
