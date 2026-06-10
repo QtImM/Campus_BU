@@ -67,3 +67,14 @@ scripts/benchmark_history.json
 # Supabase local runtime
 supabase/.branches/
 supabase/.temp/
+
+# Temporary test/debug artifacts
+.tmp-*.json
+test_faq.ts
+test_rag.ts
+test_rag_simple.ts
+DEBUG_EDU_TAG.ts
+course_extract.txt
+course_notes_extract.txt
+batch_0.json
+npx
