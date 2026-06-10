@@ -43,7 +43,10 @@ interface SourceConfig {
   category: string; // must be a valid forum_posts.category
   tags: string[];
   important: boolean; // eligible to trigger a push broadcast
+  type?: "aem" | "html"; // default: "aem"
 }
+
+const RESEARCH_HOST = "https://research.hkbu.edu.hk";
 
 const SOURCES: SourceConfig[] = [
   {
@@ -62,23 +65,12 @@ const SOURCES: SourceConfig[] = [
   },
   {
     key: "research_news",
-    rootPath: `${AEM_CONTENT_PREFIX}/en/whats-new/research-news`,
+    rootPath: `${RESEARCH_HOST}/news`,
     category: "general",
     tags: ["hkbu", "official", "research"],
     important: false,
+    type: "html",
   },
-  {
-    key: "announcement",
-    rootPath: `${AEM_CONTENT_PREFIX}/en/whats-new/announcement`,
-    category: "general",
-    tags: ["hkbu", "official", "announcement"],
-    important: true,
-  },
-  // ── Not yet configured (no stable structured source confirmed) ───────────
-  // events       → separate platform event.hkbu.edu.hk (JS-rendered)
-  // scholarships → location TBD
-  // career       → location TBD
-  // Add a SourceConfig entry here once a QueryBuilder rootPath is confirmed.
 ];
 
 const corsHeaders = {
@@ -187,6 +179,39 @@ function normalizeHits(payload: any): FeedItem[] {
       descEn: (content?.["jcr:description"] ?? "").toString().trim(),
       imageUrl: extractImageUrl(content),
       publishedAt: parseDate(content?.["displayTime"]) ?? parseDate(hit?.["jcr:created"]),
+    });
+  }
+  return items;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Parse research.hkbu.edu.hk HTML listing → feed items
+// ──────────────────────────────────────────────────────────────────────────
+function parseDDMMYYYY(raw: string): string | null {
+  const m = raw.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  if (!m) return null;
+  return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00Z`).toISOString();
+}
+
+async function fetchResearchHtml(listingUrl: string, limit: number): Promise<FeedItem[]> {
+  const res = await fetchWithTimeout(listingUrl, REQUEST_TIMEOUT_MS);
+  if (!res.ok) throw new Error(`research HTML fetch failed: HTTP ${res.status}`);
+  const html = await res.text();
+
+  const items: FeedItem[] = [];
+  // Pattern: date → href → title (repeating blocks)
+  const blockRe = /ev-blk__sm-date date">(\d{2}\.\d{2}\.\d{4})[\s\S]*?href="\/news\/([a-z0-9][^"]+)"[\s\S]*?underline-link__line">([^<]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = blockRe.exec(html)) !== null && items.length < limit) {
+    const [, dateStr, slug, title] = match;
+    if (slug.startsWith("page")) continue;
+    items.push({
+      externalId: `/news/${slug}`,
+      url: `${RESEARCH_HOST}/news/${slug}`,
+      titleEn: title.trim().replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#039;/g, "'").replace(/&quot;/g, '"'),
+      descEn: "",
+      imageUrl: null,
+      publishedAt: parseDDMMYYYY(dateStr),
     });
   }
   return items;
@@ -406,8 +431,9 @@ serve(async (req) => {
     };
 
     try {
-      const payload = await fetchJsonWithRetry(buildQueryBuilderUrl(source.rootPath, limitPerSource));
-      const items = normalizeHits(payload);
+      const items = source.type === "html"
+        ? await fetchResearchHtml(source.rootPath, limitPerSource)
+        : normalizeHits(await fetchJsonWithRetry(buildQueryBuilderUrl(source.rootPath, limitPerSource)));
       sourceReport.fetched = items.length;
 
       if (items.length === 0) {
