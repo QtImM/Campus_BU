@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { EULAModal } from '../components/common/EULAModal';
+import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { StartupAnimation } from '../components/common/StartupAnimation';
 import { CourseActivityProvider } from '../context/CourseActivityContext';
 import { LoginPromptProvider } from '../context/LoginPromptContext';
@@ -17,8 +18,12 @@ import { prefetchLocalCourses } from '../services/courses';
 import { acceptCommunityEula, hasAcceptedCommunityEula } from '../services/moderation';
 import { syncScheduleToWidgetForUser } from '../services/widgetBridge';
 import { registerForPushNotificationsAsync, savePushToken } from '../services/push_notifications';
+import { initMonitoring, setMonitoringUser, wrapRootComponent } from '../lib/monitoring';
 import './i18n/i18n'; // Initialize i18n
 import { i18nPromise } from './i18n/i18n';
+
+// Initialize crash reporting as early as possible (no-op without a DSN).
+initMonitoring();
 
 // Keep native splash visible until RootLayout mounts, then hide it without transition.
 void SplashScreen.preventAutoHideAsync().catch(() => {
@@ -28,7 +33,7 @@ void SplashScreen.preventAutoHideAsync().catch(() => {
 // Check if running in Expo Go (where some features are limited)
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
-export default function RootLayout() {
+function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const navigationRef = useNavigationContainerRef();
@@ -110,6 +115,8 @@ export default function RootLayout() {
       const unsubscribe = onAuthChange(async (user) => {
         try {
           setCurrentUser(user);
+          // Tag crash reports with the current user (cleared on sign-out).
+          setMonitoringUser(user?.uid ?? null);
 
           // Skip all redirects if the flag is set (during password reset flow)
           if (shouldSkipAuthRedirect()) {
@@ -228,6 +235,7 @@ export default function RootLayout() {
   }
 
   return (
+    <ErrorBoundary>
     <GestureHandlerRootView style={{ flex: 1 }}>
       {(!isAnimationFinished || loading) && (
         <StartupAnimation
@@ -251,5 +259,10 @@ export default function RootLayout() {
         </NotificationProvider>
       </LoginPromptProvider>
     </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
+
+// Wrap with Sentry so it can capture native crashes & navigation context
+// (no-op when no DSN is configured).
+export default wrapRootComponent(RootLayout);

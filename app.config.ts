@@ -21,6 +21,7 @@ const shouldEnableScheduleWidget = (): boolean => {
 export default (): ExpoConfig => {
     const ocrApiUrl = (process.env.EXPO_PUBLIC_OCR_API_URL || "").trim();
     const deepseekBaseUrl = (process.env.EXPO_PUBLIC_DEEPSEEK_BASE_URL || "").trim();
+    const sentryEnabled = !!(process.env.EXPO_PUBLIC_SENTRY_DSN || "").trim();
     const widgetEnabled = shouldEnableScheduleWidget();
     const buildNumber = "3";
     const appExtensions = widgetEnabled
@@ -127,6 +128,9 @@ export default (): ExpoConfig => {
                 },
             ],
             "expo-notifications",
+            // Sentry config plugin wires up native crash reporting + source map
+            // upload. Only included when a DSN is configured.
+            ...(sentryEnabled ? ["@sentry/react-native"] : []),
             ...(widgetEnabled ? [SCHEDULE_WIDGET_PLUGIN] : []),
         ],
         owner: "timchindev",
