@@ -8,6 +8,7 @@ import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, T
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { auth, createUserProfile, getUserProfile, signOut, uploadAndUpdateAvatar } from '../../services/auth';
+import { registerForPushNotificationsAsync, savePushToken } from '../../services/push_notifications';
 import { completeTask } from '../../services/rewards';
 import { isRemoteImageUrl } from '../../utils/remoteImage';
 
@@ -132,6 +133,12 @@ export default function SetupScreen() {
                     router.push('/(tabs)/profile');
                 }, 1500);
             } else {
+                // Request push notification permission for new users as part of onboarding
+                try {
+                    const token = await registerForPushNotificationsAsync();
+                    if (token) savePushToken(user.id, token).catch(() => {});
+                } catch {}
+
                 // For new users: keep the welcome message
                 Alert.alert(
                     t('setup.welcome_title', '欢迎加入!'),

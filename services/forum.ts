@@ -462,6 +462,7 @@ export interface PendingOfficialPost {
     id: string;
     title: string;
     summary: string | null;
+    content: string | null;
     url: string | null;
     imageUrl: string | null;
     createdAt: Date;
@@ -470,7 +471,7 @@ export interface PendingOfficialPost {
 export const fetchPendingOfficialPosts = async (): Promise<PendingOfficialPost[]> => {
     const { data, error } = await supabase
         .from(FORUM_POSTS)
-        .select('id, title, summary, sources, images, created_at')
+        .select('id, title, summary, content, sources, images, created_at')
         .eq('content_type', 'official')
         .eq('status', 'pending_review')
         .order('created_at', { ascending: false })
@@ -486,6 +487,7 @@ export const fetchPendingOfficialPosts = async (): Promise<PendingOfficialPost[]
             id: row.id,
             title: row.title ?? '',
             summary: row.summary ?? null,
+            content: row.content ?? null,
             url: sourceUrl,
             imageUrl: images[0] ?? null,
             createdAt: new Date(row.created_at),

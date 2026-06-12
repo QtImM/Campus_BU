@@ -1,10 +1,13 @@
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Ban, CheckCircle2, Clock3, ShieldAlert, Trash2, XCircle } from 'lucide-react-native';
+import { ArrowLeft, Ban, CheckCircle2, Clock3, Eye, ShieldAlert, Trash2, X, XCircle } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Alert,
+    Image,
+    Linking,
+    Modal,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -44,6 +47,7 @@ export default function ModerationAdminScreen() {
     const [reports, setReports] = useState<Report[]>([]);
     const [newAlertCount, setNewAlertCount] = useState(0);
     const [pendingPosts, setPendingPosts] = useState<PendingOfficialPost[]>([]);
+    const [previewPost, setPreviewPost] = useState<PendingOfficialPost | null>(null);
     const [summary, setSummary] = useState({
         pending: 0,
         overdue: 0,
@@ -152,6 +156,56 @@ export default function ModerationAdminScreen() {
         }
     };
 
+    const renderPreviewModal = () => {
+        if (!previewPost) return null;
+        return (
+            <Modal visible animationType="slide" onRequestClose={() => setPreviewPost(null)}>
+                <SafeAreaView style={styles.previewContainer}>
+                    <View style={styles.previewHeader}>
+                        <Text style={styles.previewHeaderTitle} numberOfLines={1}>预览</Text>
+                        <TouchableOpacity onPress={() => setPreviewPost(null)} style={styles.iconButton}>
+                            <X size={20} color="#1E3A8A" />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView contentContainerStyle={styles.previewContent}>
+                        {!!previewPost.imageUrl && (
+                            <Image
+                                source={{ uri: previewPost.imageUrl }}
+                                style={styles.previewImage}
+                                resizeMode="cover"
+                            />
+                        )}
+                        <Text style={styles.previewTitle}>{previewPost.title}</Text>
+                        {!!previewPost.content && (
+                            <Text style={styles.previewBody}>{previewPost.content}</Text>
+                        )}
+                        {!!previewPost.url && (
+                            <TouchableOpacity onPress={() => void Linking.openURL(previewPost.url!)}>
+                                <Text style={styles.previewLink}>{previewPost.url}</Text>
+                            </TouchableOpacity>
+                        )}
+                    </ScrollView>
+                    <View style={styles.previewActions}>
+                        <TouchableOpacity
+                            style={[styles.actionButton, styles.resolveButton, { flex: 1 }]}
+                            onPress={() => { void handleReviewPost(previewPost.id, 'publish'); setPreviewPost(null); }}
+                        >
+                            <CheckCircle2 size={14} color="#fff" />
+                            <Text style={styles.actionText}>发布</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.actionButton, styles.dismissButton, { flex: 1 }]}
+                            onPress={() => { void handleReviewPost(previewPost.id, 'reject'); setPreviewPost(null); }}
+                        >
+                            <XCircle size={14} color="#fff" />
+                            <Text style={styles.actionText}>不发</Text>
+                        </TouchableOpacity>
+                    </View>
+                </SafeAreaView>
+            </Modal>
+        );
+    };
+
     const handleReviewPost = async (postId: string, action: 'publish' | 'reject') => {
         try {
             await reviewOfficialPost(postId, action);
@@ -163,6 +217,7 @@ export default function ModerationAdminScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            {renderPreviewModal()}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
                     <ArrowLeft size={20} color="#1E3A8A" />
@@ -217,6 +272,13 @@ export default function ModerationAdminScreen() {
                                         <Text style={styles.officialUrl} numberOfLines={1}>{post.url}</Text>
                                     )}
                                     <View style={styles.actionRow}>
+                                        <TouchableOpacity
+                                            style={[styles.actionButton, styles.previewButton]}
+                                            onPress={() => setPreviewPost(post)}
+                                        >
+                                            <Eye size={14} color="#fff" />
+                                            <Text style={styles.actionText}>预览</Text>
+                                        </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[styles.actionButton, styles.resolveButton]}
                                             onPress={() => void handleReviewPost(post.id, 'publish')}
@@ -582,5 +644,66 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#3B82F6',
         marginBottom: 6,
+    },
+    previewButton: {
+        backgroundColor: '#0369A1',
+    },
+    previewContainer: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+    },
+    previewHeader: {
+        height: 56,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+    },
+    previewHeaderTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: '#0F172A',
+        flex: 1,
+        marginRight: 8,
+    },
+    previewContent: {
+        padding: 16,
+        paddingBottom: 28,
+    },
+    previewImage: {
+        width: '100%',
+        height: 200,
+        borderRadius: 12,
+        marginBottom: 14,
+    },
+    previewTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#0F172A',
+        marginBottom: 12,
+        lineHeight: 26,
+    },
+    previewBody: {
+        fontSize: 14,
+        color: '#334155',
+        lineHeight: 22,
+        marginBottom: 16,
+    },
+    previewLink: {
+        fontSize: 13,
+        color: '#3B82F6',
+        textDecorationLine: 'underline',
+        marginBottom: 16,
+    },
+    previewActions: {
+        flexDirection: 'row',
+        gap: 10,
+        padding: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#E2E8F0',
+        backgroundColor: '#fff',
     },
 });
