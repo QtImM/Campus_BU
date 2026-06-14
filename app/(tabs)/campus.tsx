@@ -5,7 +5,6 @@ import { Check, X as CloseIcon, Globe, Plus, Search, Calendar, BookOpen, Shoppin
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
     Animated,
     DeviceEventEmitter,
     Dimensions,
@@ -270,7 +269,20 @@ export default function CampusScreen() {
                 });
               }}
             />
-            {loading ? <View style={{ padding: 12 }}><ActivityIndicator color="#1E3A8A" /></View> : (
+            {loading ? (
+              <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingTop: 4, gap: 8 }}>
+                <View style={{ flex: 1, gap: 8 }}>
+                  <Skeleton width="100%" height={180} borderRadius={12} />
+                  <Skeleton width="100%" height={130} borderRadius={12} />
+                  <Skeleton width="100%" height={160} borderRadius={12} />
+                </View>
+                <View style={{ flex: 1, gap: 8 }}>
+                  <Skeleton width="100%" height={140} borderRadius={12} />
+                  <Skeleton width="100%" height={190} borderRadius={12} />
+                  <Skeleton width="100%" height={120} borderRadius={12} />
+                </View>
+              </View>
+            ) : (
               <MasonryGrid
                 data={currentUser ? filteredPosts : filteredPosts.slice(0, 4)}
                 columnGap={8}

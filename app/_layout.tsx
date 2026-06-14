@@ -98,6 +98,20 @@ function RootLayout() {
   }, [router]);
 
   useEffect(() => {
+    // Dismiss the splash exactly once, from whichever path resolves first.
+    let settled = false;
+    const finishLoading = () => {
+      if (settled) return;
+      settled = true;
+      setLoading(false);
+    };
+
+    // Failsafe: the splash must NEVER hang. If the auth/profile/network chain
+    // stalls on a slow or dead connection, enter the app anyway after a hard
+    // cap (instead of leaving the user stuck at the progress bar, needing a
+    // restart). Guest/public screens render fine; auth-gated bits re-check later.
+    const failsafeTimer = setTimeout(finishLoading, 5000);
+
     const checkAuth = async () => {
       // Ensure i18n is initialized
       await i18nPromise;
@@ -120,7 +134,7 @@ function RootLayout() {
 
           // Skip all redirects if the flag is set (during password reset flow)
           if (shouldSkipAuthRedirect()) {
-            setLoading(false);
+            finishLoading();
             return;
           }
 
@@ -149,40 +163,48 @@ function RootLayout() {
             prefetchLocalCourses().catch(e => console.log('Prefetch courses failed:', e));
             prefetchBuildings().catch(e => console.log('Prefetch buildings failed:', e));
 
-            const profile = await getUserProfile(user.uid);
+            // We already hold a valid session — reveal the app immediately so
+            // cold start stays well under 2s, instead of blocking the splash on
+            // a profile network round-trip. The profile check below only drives
+            // the rare setup-redirect (brand-new accounts) and runs in the
+            // background; for returning users (who have a profile) nothing moves.
+            finishLoading();
 
-            if (!profile) {
-              // Only redirect to setup if we're not currently in verify or forgot-password flow
-              if (currentSegment !== 'setup' &&
-                currentSegment !== 'verify' &&
-                !isForgotPasswordPage) {
-                router.replace('/(auth)/setup');
-              }
-            } else {
-              if (inAuthGroup) {
-                // Don't auto-redirect if user is on forgot-password page
-                if (currentSegment !== 'setup' && !isForgotPasswordPage) {
-                  router.replace('/(tabs)/campus');
+            getUserProfile(user.uid)
+              .then((profile) => {
+                if (profile === null) {
+                  // Confirmed no profile row → onboarding setup.
+                  // Skip while in verify / forgot-password flow.
+                  if (currentSegment !== 'setup' &&
+                    currentSegment !== 'verify' &&
+                    !isForgotPasswordPage) {
+                    router.replace('/(auth)/setup');
+                  }
+                } else if (profile) {
+                  if (inAuthGroup && currentSegment !== 'setup' && !isForgotPasswordPage) {
+                    router.replace('/(tabs)/campus');
+                  }
+                  // Request push permission after login (non-blocking); token save skipped if undefined (e.g. Expo Go)
+                  registerForPushNotificationsAsync()
+                    .then(token => { if (token) savePushToken(user.uid, token).catch(() => {}); })
+                    .catch(() => {});
                 }
-              }
-              // Request push permission after login (non-blocking); token save skipped if undefined (e.g. Expo Go)
-              registerForPushNotificationsAsync()
-                .then(token => { if (token) savePushToken(user.uid, token).catch(() => {}); })
-                .catch(() => {});
-            }
+              })
+              .catch(e => console.log('Profile check failed:', e));
           }
         } catch (err) {
           console.error('RootLayout Auth Check Error:', err);
           // If profile fetch fails due to network, don't yank the user to setup
           // Just let them stay where they are or handle at component level
         }
-        setLoading(false);
+        finishLoading();
       });
 
       return unsubscribe;
     };
 
     checkAuth();
+    return () => clearTimeout(failsafeTimer);
   }, []);
 
   useEffect(() => {
@@ -190,7 +212,7 @@ function RootLayout() {
     const tab = segments[1] || '';
 
     const requiresEula =
-      (root === '(tabs)' && ['campus', 'course', 'messages'].includes(tab))
+      (root === '(tabs)' && ['campus', 'course', 'messages', 'profile'].includes(tab))
       || ['campus', 'forum', 'courses', 'teachers', 'messages'].includes(root);
 
     if (!requiresEula) {
@@ -252,7 +274,9 @@ function RootLayout() {
                 animationDuration: 400,
                 headerShown: false,
               }}
-            />
+            >
+              <Stack.Screen name="legal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+            </Stack>
             <EULAModal visible={eulaVisible} onAccept={handleAcceptEula} />
             <StatusBar style="auto" />
           </CourseActivityProvider>

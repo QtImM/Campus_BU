@@ -44,11 +44,13 @@ export const StartupAnimation: React.FC<StartupAnimationProps> = ({ isAppReady, 
 
     useEffect(() => {
         // Upon mount, softly fade in the progress bar container
-        elementsOpacity.value = withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) });
+        elementsOpacity.value = withTiming(1, { duration: 350, easing: Easing.inOut(Easing.ease) });
 
-        // Start the fake loading progress up to ~85% (slowed down to 2500ms)
+        // Climb to ~85% quickly so the bar reads as "fast" even when the app is
+        // ready almost instantly. This is a ceiling, not a gate — `isAppReady`
+        // snaps it to 100% the moment startup finishes.
         progressWidth.value = withTiming(85, {
-            duration: 2500,
+            duration: 1200,
             easing: Easing.out(Easing.cubic)
         });
 
@@ -68,18 +70,18 @@ export const StartupAnimation: React.FC<StartupAnimationProps> = ({ isAppReady, 
         if (isAppReady && !hasExploded) {
             setHasExploded(true);
 
-            // 1. Push the progress bar to 100% (slightly slower)
+            // 1. Snap the progress bar to 100% (quick — the app is already ready)
             progressWidth.value = withTiming(100, {
-                duration: 600,
-                easing: Easing.inOut(Easing.ease)
+                duration: 220,
+                easing: Easing.out(Easing.ease)
             }, (finishedProgress) => {
                 if (finishedProgress) {
-                    // 2. The Slow, Buttery Smooth Explosion
-                    const smoothExplosionEasing = Easing.bezier(0.5, 0, 0.2, 1);
+                    // 2. The explosion — kept smooth but tightened so the whole
+                    //    reveal lands in ~0.7s instead of ~1.9s.
+                    const smoothExplosionEasing = Easing.bezier(0.4, 0, 0.2, 1);
 
-                    // Explosion takes 1100ms for extra smoothness
                     scale.value = withTiming(MAX_SCALE, {
-                        duration: 1100,
+                        duration: 450,
                         easing: smoothExplosionEasing
                     }, (finishedScale) => {
                         if (finishedScale) {
@@ -87,14 +89,14 @@ export const StartupAnimation: React.FC<StartupAnimationProps> = ({ isAppReady, 
                         }
                     });
 
-                    // 3. Smoothly fade out the content
+                    // 3. Fade out the logo/text early into the explosion
                     contentOpacity.value = withSequence(
-                        withDelay(200, withTiming(0, { duration: 500, easing: Easing.inOut(Easing.ease) }))
+                        withDelay(60, withTiming(0, { duration: 240, easing: Easing.inOut(Easing.ease) }))
                     );
 
-                    // 4. Finally, fade out the whole screen (slightly later)
+                    // 4. Fade out the white overlay to reveal the app underneath
                     containerOpacity.value = withSequence(
-                        withDelay(700, withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }))
+                        withDelay(220, withTiming(0, { duration: 300, easing: Easing.inOut(Easing.ease) }))
                     );
                 }
             });
