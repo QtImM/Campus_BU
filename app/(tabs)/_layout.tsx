@@ -1,7 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import { Bot, Calendar as CalendarIcon, GraduationCap, Map as MapIcon, User as UserIcon } from 'lucide-react-native';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AnimatedTabIcon } from '../../components/common/AnimatedTabIcon';
@@ -21,6 +21,21 @@ const AgentTabIcon = ({ color, focused }: { color: string; focused: boolean }) =
     </View>
   </View>
 );
+
+// Unread dots subscribe to their realtime contexts in isolation, so a new
+// notification/message re-renders only the dot — not the whole tab bar.
+// This keeps tab presses snappy even while realtime updates arrive.
+const ProfileUnreadDot = React.memo(() => {
+  const { hasAnyUnread, totalUnreadCount } = useNotifications();
+  if (!(hasAnyUnread || totalUnreadCount > 0)) return null;
+  return <View style={styles.unreadDot} />;
+});
+
+const CourseUnreadDot = React.memo(() => {
+  const { hasAnyUnread } = useCourseActivity();
+  if (!hasAnyUnread) return null;
+  return <View style={styles.unreadDot} />;
+});
 
 export default function TabLayout() {
   const { t: tTabs } = useTranslation('translation', { keyPrefix: 'tabs' });
@@ -62,8 +77,6 @@ export default function TabLayout() {
 
   // Custom TabBar Component to handle the sliding indicator
   const CustomTabBar = ({ state, descriptors, navigation }: any) => {
-    const { hasAnyUnread, totalUnreadCount } = useNotifications();
-    const { hasAnyUnread: hasCourseActivityUnread } = useCourseActivity();
     // Filter out tabs that should be hidden (href: null) OR don't have an icon
     const visibleRoutes = state.routes.filter((r: any) => {
       const { options } = descriptors[r.key];
@@ -76,17 +89,26 @@ export default function TabLayout() {
     const activeRouteName = state.routes[state.index].name;
     const activeIndex = visibleRoutes.findIndex((r: any) => r.name === activeRouteName);
 
-    useEffect(() => {
-      if (containerWidth > 0 && activeIndex !== -1 && totalTabs > 0) {
+    // Move the sliding indicator to a given visible-tab index. Called directly
+    // from onPress so the slide starts on the same frame as the tap — instead of
+    // waiting for navigation to commit `activeIndex` (which can lag behind the
+    // JS thread). The effect below is just a fallback for programmatic/back nav.
+    const animateIndicator = useCallback((index: number) => {
+      if (containerWidth > 0 && index !== -1 && totalTabs > 0) {
         const tabWidth = (containerWidth - 16) / totalTabs;
         Animated.spring(scrollX, {
-          toValue: activeIndex * tabWidth,
+          toValue: index * tabWidth,
           useNativeDriver: true,
-          stiffness: 200,
-          damping: 22,
+          stiffness: 300,
+          damping: 26,
+          mass: 0.8,
         }).start();
       }
-    }, [activeIndex, containerWidth, totalTabs]);
+    }, [containerWidth, totalTabs]);
+
+    useEffect(() => {
+      animateIndicator(activeIndex);
+    }, [activeIndex, animateIndicator]);
 
     return (
       <View style={styles.tabBarWrapper}>
@@ -125,6 +147,7 @@ export default function TabLayout() {
               });
 
               if (route.name === 'map' && !event.defaultPrevented) {
+                animateIndicator(index);
                 navigation.navigate(route.name, { openFoodMap: 'true' });
                 return;
               }
@@ -141,6 +164,7 @@ export default function TabLayout() {
               }
 
               if (!isFocused && !event.defaultPrevented) {
+                animateIndicator(index);
                 navigation.navigate(route.name);
               }
             };
@@ -156,12 +180,8 @@ export default function TabLayout() {
                   color: isFocused ? '#1E3A8A' : '#8E8E93',
                   focused: isFocused
                 })}
-                {route.name === 'profile' && (hasAnyUnread || totalUnreadCount > 0) && (
-                  <View style={styles.unreadDot} />
-                )}
-                {route.name === 'course' && hasCourseActivityUnread && (
-                  <View style={styles.unreadDot} />
-                )}
+                {route.name === 'profile' && <ProfileUnreadDot />}
+                {route.name === 'course' && <CourseUnreadDot />}
                 <Text style={[styles.tabLabel, { color: isFocused ? '#1E3A8A' : '#8E8E93' }]}>
                   {label}
                 </Text>
