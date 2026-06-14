@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Skeleton } from '../../components/common/Skeleton';
 import { FavoriteCourseSkeletonStrip } from '../../components/course/FavoriteCourseSkeletonStrip';
+import { RecentReviewsTicker } from '../../components/course/RecentReviewsTicker';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useCourseActivity } from '../../context/CourseActivityContext';
 import { getCurrentUser } from '../../services/auth';
@@ -475,6 +476,14 @@ export default function CoursesScreen() {
                     })}
                 </ScrollView>
                 </View>
+            )}
+
+            {/* Live recent-reviews ticker — only on the default (all courses) view */}
+            {!isSearchMode && !selectedDept && (
+                <RecentReviewsTicker
+                    currentUserId={currentUserId}
+                    onPressReview={handleCoursePress}
+                />
             )}
 
             {/* Favorites strip — only when not searching and no dept selected */}

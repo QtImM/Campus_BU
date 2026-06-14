@@ -529,6 +529,105 @@ export const getReviewsAndHasReviewed = async (
 
 
 
+export interface RecentReview extends Review {
+    courseName: string;
+    courseCode: string;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Fetch recent reviews across ALL courses (for the course-list "live reviews"
+ * ticker and the "all reviews" feed). Resolves each review's course name/code in
+ * a second batched query so we sidestep the mixed course_id formats (uuid / code
+ * / local_*) that break a PostgREST embedded join. Only reviews with non-empty
+ * content are kept. Pass `offset` to paginate the feed.
+ */
+export const getRecentReviewsGlobal = async (
+    limit: number = 20,
+    currentUserId?: string,
+    offset: number = 0
+): Promise<RecentReview[]> => {
+    const { data, error } = await supabase
+        .from('course_reviews')
+        .select('*, author:users!author_id(display_name, avatar_url)')
+        .not('content', 'is', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+    if (error) {
+        console.error('getRecentReviewsGlobal error:', error);
+        return [];
+    }
+    if (!data) return [];
+
+    let rows = (data as any[]).filter(r => (r.content || '').trim().length > 0);
+
+    if (currentUserId) {
+        const blockedIds = await getBlockedUserIds(currentUserId);
+        if (blockedIds.length > 0) {
+            const blockedSet = new Set(blockedIds);
+            rows = rows.filter(r => !blockedSet.has(r.author_id));
+        }
+    }
+
+    if (rows.length === 0) return [];
+
+    // Resolve course names: split course_ids into uuid-shaped vs code-shaped and
+    // build lookup maps keyed by both id and normalized code.
+    const courseIds = Array.from(new Set(rows.map(r => String(r.course_id || '')).filter(Boolean)));
+    const uuidIds = courseIds.filter(id => UUID_RE.test(id));
+    const codeIds = courseIds
+        .filter(id => !UUID_RE.test(id) && !id.startsWith('local_'))
+        .map(normalizeCourseCode);
+
+    const byId = new Map<string, { name: string; code: string }>();
+    const byCode = new Map<string, { name: string; code: string }>();
+
+    const [byIdRes, byCodeRes] = await Promise.all([
+        uuidIds.length
+            ? supabase.from('courses').select('id, code, name').in('id', uuidIds)
+            : Promise.resolve({ data: [], error: null }),
+        codeIds.length
+            ? supabase.from('courses').select('id, code, name').in('code', codeIds)
+            : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    (byIdRes.data as any[] | null)?.forEach(c => {
+        const entry = { name: c.name || '', code: c.code || '' };
+        byId.set(c.id, entry);
+        if (c.code) byCode.set(normalizeCourseCode(c.code), entry);
+    });
+    (byCodeRes.data as any[] | null)?.forEach(c => {
+        if (c.code) byCode.set(normalizeCourseCode(c.code), { name: c.name || '', code: c.code || '' });
+    });
+
+    return rows.map(r => {
+        const rawId = String(r.course_id || '');
+        const resolved = byId.get(rawId) || byCode.get(normalizeCourseCode(rawId));
+        const author = r.author || {};
+        return {
+            id: r.id,
+            courseId: r.course_id,
+            authorId: r.author_id,
+            authorName: r.author_name || author.display_name || 'Anonymous',
+            authorAvatar: r.author_avatar || author.avatar_url || '👤',
+            rating: r.rating,
+            difficulty: r.difficulty || 3,
+            workload: r.workload ?? undefined,
+            grading: r.grading ?? undefined,
+            content: r.content || '',
+            tags: Array.isArray(r.tags) ? r.tags : [],
+            likes: r.likes || 0,
+            createdAt: new Date(r.created_at),
+            semester: r.semester || 'Current',
+            isAnonymous: r.is_anonymous || false,
+            courseName: resolved?.name || '',
+            courseCode: resolved?.code || (UUID_RE.test(rawId) ? '' : rawId),
+        };
+    });
+};
+
 const resolveCourseIdForReviewQueries = async (courseId: string): Promise<string> => {
     // Normal database IDs and seeded placeholder IDs can be queried directly.
     if (!courseId || !courseId.startsWith('local_')) {

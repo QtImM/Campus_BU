@@ -48,6 +48,12 @@
         "search_placeholder": "输入课程代码...",
         "favorites": "我的收藏",
         "all_courses": "全部课程",
+        "live_reviews_title": "🔥 同学们的最新评价",
+        "live_reviews_more": "查看更多",
+        "live_reviews_anon": "匿名同学",
+        "all_reviews_title": "全部评价",
+        "all_reviews_subtitle": "来自全校的最新评价",
+        "all_reviews_empty": "还没有评价",
         "add_new_course": "添加新课程",
         "no_courses_found": "未找到相关课程",
         "course_chat_block_msg": "屏蔽后你将不再看到该用户在本课程聊天室中的消息。",
@@ -660,7 +666,13 @@
         "agreement_checkbox_prefix": "我已阅读并同意使用条款、隐私政策和社区安全规则。",
         "must_accept_terms_before_login": "请先勾选同意使用条款、隐私政策和社区安全规则，再登录或进入应用。",
         "must_accept_terms_before_send_code": "请先勾选同意使用条款、隐私政策和社区安全规则，再获取验证码。",
-        "must_accept_terms_before_register": "请先勾选同意使用条款、隐私政策和社区安全规则，再完成注册。"
+        "must_accept_terms_before_register": "请先勾选同意使用条款、隐私政策和社区安全规则，再完成注册。",
+        "agree_and_continue": "同意并继续",
+        "email_no_school_tip": "没有学校账户？也可以先创建！",
+        "email_suffix_tip": "没有学校邮箱？可以切换后缀",
+        "confirm_password_label": "确认密码",
+        "confirm_password_placeholder": "请再次输入密码",
+        "password_mismatch": "两次密码输入不一致"
     },
     "setup": {
         "title": "你是谁？",

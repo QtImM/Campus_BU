@@ -30,18 +30,8 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
 const DRY_RUN = process.argv.includes('--dry-run');
 const SEED_DIR = path.resolve(__dirname, '../data/seed_reviews');
 
-// 匿名种子作者池：评价本就匿名显示，不暴露身份。轮流挂到这些 id 下，
-// 让点赞/统计/"最有用"等逻辑自然工作。这些是稳定 UUID（不依赖 auth.users）。
-const SEED_AUTHOR_IDS = [
-    'a0000000-0000-4000-8000-000000000001',
-    'a0000000-0000-4000-8000-000000000002',
-    'a0000000-0000-4000-8000-000000000003',
-    'a0000000-0000-4000-8000-000000000004',
-    'a0000000-0000-4000-8000-000000000005',
-    'a0000000-0000-4000-8000-000000000006',
-    'a0000000-0000-4000-8000-000000000007',
-    'a0000000-0000-4000-8000-000000000008',
-];
+// 评价匿名显示，author_id 设为 null：course_reviews.author_id 外键指向 users，
+// 而 users.id 又指向 auth.users，无法塞自造 UUID；null 不触发外键，读取是 left join。
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -130,18 +120,8 @@ function spreadCreatedAt(index: number, total: number): string {
     return new Date(Date.now() - (windowDays - offsetDays) * ONE_DAY_MS).toISOString();
 }
 
-const pickAuthor = (index: number) => SEED_AUTHOR_IDS[index % SEED_AUTHOR_IDS.length];
-
-// ── 种子作者档案：确保 users 表里有对应行（author_id 无 FK，但保持数据干净）──
-async function ensureSeedAuthors(supabase: SupabaseClient): Promise<void> {
-    const rows = SEED_AUTHOR_IDS.map((id, i) => ({
-        id,
-        display_name: `种子用户${i + 1}`,
-        major: '种子数据',
-    }));
-    const { error } = await supabase.from('users').upsert(rows, { onConflict: 'id' });
-    if (error) console.warn('⚠️  种子作者 upsert 警告:', error.message);
-}
+// 注：不创建 users 行。public.users.id 外键指向 auth.users，无法塞自造 UUID；
+// course_reviews.author_id 无外键 + 读取是 left join，匿名评价用任意 UUID 即可。
 
 // ── 课程评价导入 ──────────────────────────────────────────────────────────────
 async function seedCourseReviews(supabase: SupabaseClient): Promise<void> {
@@ -191,7 +171,7 @@ async function seedCourseReviews(supabase: SupabaseClient): Promise<void> {
 
         const payload = {
             course_id: courseId,
-            author_id: pickAuthor(i),
+            author_id: null,
             author_name: '匿名同学',
             author_avatar: null,
             rating,
@@ -277,7 +257,7 @@ async function seedTeacherReviews(supabase: SupabaseClient): Promise<void> {
 
         const payload = {
             teacher_id: teacherId,
-            author_id: pickAuthor(i),
+            author_id: null,
             author_name: '匿名的同学',
             author_avatar: null,
             rating,
@@ -343,7 +323,6 @@ async function main() {
         auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    if (!DRY_RUN) await ensureSeedAuthors(supabase);
     await seedCourseReviews(supabase);
     await seedTeacherReviews(supabase);
 

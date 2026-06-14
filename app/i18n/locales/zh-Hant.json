@@ -48,6 +48,12 @@
         "search_placeholder": "輸入課程代碼...",
         "favorites": "我的收藏",
         "all_courses": "全部課程",
+        "live_reviews_title": "🔥 同學們的最新評價",
+        "live_reviews_more": "查看更多",
+        "live_reviews_anon": "匿名同學",
+        "all_reviews_title": "全部評價",
+        "all_reviews_subtitle": "來自全校的最新評價",
+        "all_reviews_empty": "還沒有評價",
         "add_new_course": "添加新課程",
         "no_courses_found": "未找到相關課程",
         "course_chat_block_msg": "封鎖後你將不再看到該用戶在本課程聊天室中的訊息。",
@@ -658,7 +664,13 @@
         "agreement_checkbox_prefix": "我已閱讀並同意使用條款、隱私政策和社區安全規則。",
         "must_accept_terms_before_login": "請先勾選同意使用條款、隱私政策和社區安全規則，再登錄或進入應用。",
         "must_accept_terms_before_send_code": "請先勾選同意使用條款、隱私政策和社區安全規則，再獲取驗證碼。",
-        "must_accept_terms_before_register": "請先勾選同意使用條款、隱私政策和社區安全規則，再完成註冊。"
+        "must_accept_terms_before_register": "請先勾選同意使用條款、隱私政策和社區安全規則，再完成註冊。",
+        "agree_and_continue": "同意並繼續",
+        "email_no_school_tip": "沒有學校帳戶？也可以先創建！",
+        "email_suffix_tip": "沒有學校信箱？可以切換後綴",
+        "confirm_password_label": "確認密碼",
+        "confirm_password_placeholder": "請再次輸入密碼",
+        "password_mismatch": "兩次密碼輸入不一致"
     },
     "setup": {
         "title": "你是誰？",

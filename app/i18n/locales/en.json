@@ -48,6 +48,12 @@
         "search_placeholder": "Enter course code...",
         "favorites": "My Favorites",
         "all_courses": "All Courses",
+        "live_reviews_title": "🔥 Latest student reviews",
+        "live_reviews_more": "See all",
+        "live_reviews_anon": "Anonymous",
+        "all_reviews_title": "All Reviews",
+        "all_reviews_subtitle": "Latest reviews from across campus",
+        "all_reviews_empty": "No reviews yet",
         "add_new_course": "Add New Course",
         "no_courses_found": "No courses found",
         "course_chat_block_msg": "Once blocked, you will no longer see this user's messages in this course chat.",
@@ -659,7 +665,13 @@
         "agreement_checkbox_prefix": "I have read and agree to the terms, privacy policy, and community safety rules.",
         "must_accept_terms_before_login": "Please agree to the terms, privacy policy, and community safety rules before logging in or entering the app.",
         "must_accept_terms_before_send_code": "Please agree to the terms, privacy policy, and community safety rules before requesting a verification code.",
-        "must_accept_terms_before_register": "Please agree to the terms, privacy policy, and community safety rules before creating an account."
+        "must_accept_terms_before_register": "Please agree to the terms, privacy policy, and community safety rules before creating an account.",
+        "agree_and_continue": "Agree & Continue",
+        "email_no_school_tip": "No school email? You can still sign up!",
+        "email_suffix_tip": "No school email? Tap to switch",
+        "confirm_password_label": "Confirm Password",
+        "confirm_password_placeholder": "Enter password again",
+        "password_mismatch": "Passwords do not match"
     },
     "setup": {
         "title": "Who are you?",

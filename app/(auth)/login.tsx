@@ -1,18 +1,16 @@
 import { useRouter } from 'expo-router';
-import { Check, ChevronDown, Eye, EyeOff, Globe } from 'lucide-react-native';
+import { ArrowUp, Check, ChevronDown, Eye, EyeOff, Globe } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { AUTH_DOMAIN_OPTIONS, AUTH_LANGUAGE_OPTIONS } from '../../constants/authOptions';
 import { signIn } from '../../services/auth';
-import { getAgreementGuardResult } from '../../services/authLegalAgreement';
 import { runSupabaseDiagnostics, type SupabaseDiagnosticItem } from '../../services/supabaseDiagnostics';
 import { changeLanguage } from '../i18n/i18n';
 
 export default function LoginScreen() {
     const router = useRouter();
     const { t, i18n } = useTranslation();
-    const isEnglish = i18n.language === 'en';
     const [emailPrefix, setEmailPrefix] = useState('');
     const [emailSuffix, setEmailSuffix] = useState('@life.hkbu.edu.hk');
     const [password, setPassword] = useState('');
@@ -27,16 +25,16 @@ export default function LoginScreen() {
     const [diagnosticLoading, setDiagnosticLoading] = useState(false);
     const [diagnosticResults, setDiagnosticResults] = useState<SupabaseDiagnosticItem[]>([]);
 
-    const ensureAgreementAccepted = (action: 'login' | 'send_otp' | 'register') => {
-        const result = getAgreementGuardResult(hasAcceptedTerms, action);
-        if (!result.ok) {
-            Alert.alert(
-                t('common.tip', 'Tip'),
-                t(result.messageKey, 'Please agree to the terms, privacy policy, and community safety rules before continuing.'),
-            );
-            return false;
-        }
-        return true;
+    const requireTerms = (action: 'login' | 'guest', onAgreed: () => void) => {
+        if (hasAcceptedTerms) { onAgreed(); return; }
+        Alert.alert(
+            t('common.tip', 'Tip'),
+            t(action === 'login' ? 'auth.must_accept_terms_before_login' : 'auth.must_accept_terms_before_login'),
+            [
+                { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+                { text: t('auth.agree_and_continue', 'Agree & Continue'), onPress: () => { setHasAcceptedTerms(true); onAgreed(); } },
+            ]
+        );
     };
 
     const handleLanguageChange = async (lang: string) => {
@@ -65,11 +63,7 @@ export default function LoginScreen() {
         }
     };
 
-    const handlePasswordLogin = async () => {
-        if (!ensureAgreementAccepted('login')) {
-            return;
-        }
-
+    const doPasswordLogin = async () => {
         if (!emailPrefix || !password) {
             const placeholder = emailSuffix === 'other' ? t('auth.email_label') : t('auth.email_placeholder');
             Alert.alert(t('common.tip', 'Tip'), `${placeholder} & ${t('auth.password_placeholder')}`);
@@ -104,6 +98,10 @@ export default function LoginScreen() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handlePasswordLogin = () => {
+        requireTerms('login', () => { void doPasswordLogin(); });
     };
 
     const renderDomainItem = ({ item }: { item: any }) => (
@@ -209,6 +207,13 @@ export default function LoginScreen() {
                             </View>
                         )}
 
+                        {emailSuffix !== 'other' && (
+                            <View style={styles.emailTipRow}>
+                                <Text style={styles.emailTipText}>{t('auth.email_suffix_tip', 'No school email? Tap to switch')}</Text>
+                                <ArrowUp size={10} color="#9CA3AF" />
+                            </View>
+                        )}
+
                         <Text style={styles.label}>{t('auth.password_label')}</Text>
                         <View style={styles.passwordContainer}>
                             <TextInput
@@ -259,31 +264,20 @@ export default function LoginScreen() {
 
                         <TouchableOpacity
                             style={styles.guestButton}
-                            onPress={() => {
-                                if (!ensureAgreementAccepted('login')) {
-                                    return;
-                                }
-                                router.replace('/(tabs)/campus');
-                            }}
+                            onPress={() => requireTerms('guest', () => router.replace('/(tabs)/campus'))}
                         >
                             <Text style={styles.guestButtonText}>{t('auth.guest_login')}</Text>
                         </TouchableOpacity>
 
                         <View style={styles.agreementCard}>
                             <Text style={styles.agreementNotice}>{t('auth.age_gate_notice', 'This app is intended for users 18+.')}</Text>
-                            <View style={[styles.agreementLinksRow, isEnglish && styles.agreementLinksRowEnglish]}>
-                                <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
-                                    <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.user_agreement', 'Terms')}</Text>
-                                </TouchableOpacity>
-                                <Text style={[styles.agreementSeparator, isEnglish && styles.agreementSeparatorEnglish]}>{t('auth.and', ' / ')}</Text>
-                                <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>
-                                    <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
-                                </TouchableOpacity>
-                                <Text style={[styles.agreementSeparator, isEnglish && styles.agreementSeparatorEnglish]}>{t('auth.and', ' / ')}</Text>
-                                <TouchableOpacity onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>
-                                    <Text style={[styles.agreementLink, isEnglish && styles.agreementLinkEnglish]}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
-                                </TouchableOpacity>
-                            </View>
+                            <Text style={styles.agreementLinksText}>
+                                <Text style={styles.agreementLink} onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>{t('auth.user_agreement', 'Terms')}</Text>
+                                <Text style={styles.agreementSep}> · </Text>
+                                <Text style={styles.agreementLink} onPress={() => router.push({ pathname: '/legal', params: { tab: 'privacy' } } as any)}>{t('auth.privacy_policy', 'Privacy Policy')}</Text>
+                                <Text style={styles.agreementSep}> · </Text>
+                                <Text style={styles.agreementLink} onPress={() => router.push({ pathname: '/legal', params: { tab: 'terms' } } as any)}>{t('auth.community_rules', 'Community Safety Rules')}</Text>
+                            </Text>
                             <TouchableOpacity
                                 testID="auth-agreement-checkbox-login"
                                 style={styles.checkboxRow}
@@ -578,44 +572,31 @@ const styles = StyleSheet.create({
         marginTop: 40,
     },
     agreementCard: {
-        marginTop: 28,
-        padding: 16,
+        marginTop: 20,
+        padding: 12,
         borderRadius: 16,
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
     agreementNotice: {
-        marginBottom: 8,
+        marginBottom: 6,
         color: '#475569',
         fontSize: 12,
         textAlign: 'center',
     },
-    agreementLinksRow: {
-        marginTop: 2,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexWrap: 'wrap',
-    },
-    agreementLinksRowEnglish: {
-        flexWrap: 'nowrap',
-    },
-    agreementSeparator: {
-        color: '#9CA3AF',
-        fontSize: 11,
-        marginHorizontal: 5,
-    },
-    agreementSeparatorEnglish: {
-        fontSize: 10,
-        marginHorizontal: 4,
+    agreementLinksText: {
+        marginTop: 4,
+        textAlign: 'center',
+        lineHeight: 20,
     },
     agreementLink: {
         color: '#3B82F6',
         fontWeight: '600',
         fontSize: 11,
     },
-    agreementLinkEnglish: {
+    agreementSep: {
+        color: '#9CA3AF',
         fontSize: 10,
     },
     footerText: {
@@ -752,5 +733,17 @@ const styles = StyleSheet.create({
         fontSize: 12.2,
         lineHeight: 18,
         letterSpacing: -0.15,
+    },
+    emailTipRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: 3,
+        marginBottom: 14,
+        paddingRight: 2,
+    },
+    emailTipText: {
+        fontSize: 11,
+        color: '#9CA3AF',
     },
 });
