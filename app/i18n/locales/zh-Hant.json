@@ -44,8 +44,9 @@
         "official_reply": "官方回覆"
     },
     "share": {
-        "card_tagline": "香港高校 · 課程點評",
-        "card_cta": "下載 HKCampus · 查看完整評價",
+        "card_tagline": "HKBU · 課程點評",
+        "card_slogan": "萬物皆可評 · HKBU 課程點評",
+        "card_scan": "掃碼下載，查看完整評價",
         "card_reviews_count": "{{count}} 則評價",
         "card_difficulty": "難度 {{value}}",
         "sheet_title": "分享這張卡片",

@@ -40,6 +40,15 @@ export const APP_CONFIG = {
     appName: 'HKCampus',
     version: '1.2.1',
 
+    /**
+     * App Store download link encoded into shareable cards' QR code.
+     * TODO: replace with the real App Store listing URL once published
+     * (e.g. https://apps.apple.com/app/idXXXXXXXXX). Keep it a single URL so
+     * one QR works everywhere; swap to a smart-redirect page if you later
+     * want iOS→App Store / Android→Play Store from the same code.
+     */
+    downloadUrl: 'https://apps.apple.com/app/hkcampus',
+
     // --- Coze Integration (Option B) ---
     cozeConfig: {
         apiBase: 'https://api.coze.cn/v1/workflow/run',

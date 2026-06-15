@@ -3,6 +3,8 @@ import { Quote } from 'lucide-react-native';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { APP_CONFIG } from '../../constants/Config';
 import { StarRating } from '../common/StarRating';
 
 const LOGO = require('../../assets/images/HKCampusicon.png');
@@ -42,7 +44,7 @@ interface ShareCardProps {
  */
 export const ShareCard: React.FC<ShareCardProps> = ({ payload, width }) => {
     const { t } = useTranslation();
-    const { variant, course } = payload;
+    const { variant } = payload;
 
     const Brand = (
         <View style={styles.brandRow}>
@@ -57,11 +59,31 @@ export const ShareCard: React.FC<ShareCardProps> = ({ payload, width }) => {
     const Footer = (
         <View style={styles.footer}>
             <View style={styles.footerDivider} />
-            <View style={styles.footerRow}>
-                <View style={styles.footerDot} />
-                <Text style={styles.footerText} numberOfLines={1}>
-                    {t('share.card_cta', '下载 HKCampus · 查看完整评价')}
-                </Text>
+            <View style={styles.footerMain}>
+                <View style={styles.footerBrand}>
+                    <View style={styles.footerBrandRow}>
+                        <Image source={LOGO} style={styles.footerLogo} />
+                        <Text style={styles.footerAppName}>{APP_CONFIG.appName}</Text>
+                        <View style={styles.footerAppTag}>
+                            <Text style={styles.footerAppTagText}>App</Text>
+                        </View>
+                    </View>
+                    <Text style={styles.footerSlogan} numberOfLines={1}>
+                        {t('share.card_slogan', '万物皆可评 · 港校课程点评')}
+                    </Text>
+                    <Text style={styles.footerScan} numberOfLines={1}>
+                        {t('share.card_scan', '扫码下载，查看完整评价')}
+                    </Text>
+                </View>
+                <View style={styles.qrWrap}>
+                    <QRCode
+                        value={APP_CONFIG.downloadUrl}
+                        size={56}
+                        color="#0F172A"
+                        backgroundColor="#FFFFFF"
+                        ecl="M"
+                    />
+                </View>
             </View>
         </View>
     );
@@ -82,7 +104,7 @@ export const ShareCard: React.FC<ShareCardProps> = ({ payload, width }) => {
             {variant === 'course' ? (
                 <CourseBody payload={payload} t={t} />
             ) : (
-                <ReviewBody payload={payload} t={t} />
+                <ReviewBody payload={payload} />
             )}
 
             {Footer}
@@ -144,7 +166,7 @@ const CourseBody: React.FC<{ payload: ShareCardPayload; t: (k: string, d?: any) 
     );
 };
 
-const ReviewBody: React.FC<{ payload: ShareCardPayload; t: (k: string, d?: any) => string }> = ({ payload, t }) => {
+const ReviewBody: React.FC<{ payload: ShareCardPayload }> = ({ payload }) => {
     const { course, review } = payload;
     if (!review) return null;
 
@@ -353,21 +375,58 @@ const styles = StyleSheet.create({
         height: 1,
         backgroundColor: 'rgba(255,255,255,0.18)',
     },
-    footerRow: {
+    footerMain: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 14,
+        gap: 12,
+    },
+    footerBrand: {
+        flex: 1,
+    },
+    footerBrandRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 7,
-        marginTop: 12,
     },
-    footerDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
+    footerLogo: {
+        width: 20,
+        height: 20,
+        borderRadius: 6,
+    },
+    footerAppName: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#fff',
+        letterSpacing: 0.2,
+    },
+    footerAppTag: {
         backgroundColor: STAR_GOLD,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
     },
-    footerText: {
-        fontSize: 11.5,
+    footerAppTagText: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#1E293B',
+    },
+    footerSlogan: {
+        fontSize: 11,
         fontWeight: '600',
-        color: 'rgba(255,255,255,0.85)',
+        color: 'rgba(255,255,255,0.78)',
+        marginTop: 7,
+    },
+    footerScan: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: STAR_GOLD,
+        marginTop: 3,
+    },
+    qrWrap: {
+        backgroundColor: '#fff',
+        padding: 5,
+        borderRadius: 8,
     },
 });

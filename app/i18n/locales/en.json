@@ -44,8 +44,9 @@
         "official_reply": "Official Reply"
     },
     "share": {
-        "card_tagline": "HK Universities · Course Reviews",
-        "card_cta": "Get HKCampus · See all reviews",
+        "card_tagline": "HKBU · Course Reviews",
+        "card_slogan": "Rate anything · HKBU reviews",
+        "card_scan": "Scan to download & see all reviews",
         "card_reviews_count": "{{count}} reviews",
         "card_difficulty": "Difficulty {{value}}",
         "sheet_title": "Share this card",
