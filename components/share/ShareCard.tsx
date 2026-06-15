@@ -193,7 +193,7 @@ const ReviewBody: React.FC<{ payload: ShareCardPayload }> = ({ payload }) => {
 
 const styles = StyleSheet.create({
     card: {
-        borderRadius: 26,
+        borderRadius: 0,
         padding: 22,
         overflow: 'hidden',
     },

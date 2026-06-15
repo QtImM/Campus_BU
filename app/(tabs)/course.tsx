@@ -20,6 +20,7 @@ import { FavoriteCourseSkeletonStrip } from '../../components/course/FavoriteCou
 import { RecentReviewsTicker } from '../../components/course/RecentReviewsTicker';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useScheduleReviewPrompts } from '../../hooks/useScheduleReviewPrompts';
+import { useThrottledCallback } from '../../hooks/useThrottle';
 import { useCourseActivity } from '../../context/CourseActivityContext';
 import { getCurrentUser } from '../../services/auth';
 import { enrichCoursesWithReviewStats, getLocalCourses } from '../../services/courses';
@@ -346,16 +347,16 @@ export default function CoursesScreen() {
         }
     };
 
-    const handleCoursePress = (courseId: string) => {
+    const handleCoursePress = useThrottledCallback((courseId: string) => {
         if (!checkLogin(currentUserId)) return;
         router.push(`/courses/${courseId}` as any);
-    };
+    });
 
-    const handleAddCourse = () => {
+    const handleAddCourse = useThrottledCallback(() => {
         if (checkLogin(currentUserId)) {
             router.push('/courses/add');
         }
-    };
+    });
 
     const isSearchMode = searchQuery.trim().length >= 2;
     const displayedCourses = isSearchMode ? searchResults : courses;

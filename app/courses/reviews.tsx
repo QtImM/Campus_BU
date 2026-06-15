@@ -18,6 +18,7 @@ import {
 import { getCurrentUser } from '../../services/auth';
 import { getRecentReviewsGlobal, RecentReview } from '../../services/courses';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+import { useThrottledCallback } from '../../hooks/useThrottle';
 
 const PAGE_SIZE = 20;
 
@@ -77,10 +78,10 @@ export default function AllReviewsScreen() {
         setLoadingMore(false);
     }, [loadingMore, hasMore, loading, load]);
 
-    const handlePressReview = (courseId: string) => {
+    const handlePressReview = useThrottledCallback((courseId: string) => {
         if (!checkLogin(userIdRef.current || null)) return;
         router.push(`/courses/${courseId}` as any);
-    };
+    });
 
     const buildReviewPayload = (item: RecentReview): ShareCardPayload => ({
         variant: 'review',

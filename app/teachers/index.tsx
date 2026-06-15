@@ -1,7 +1,7 @@
 import { Stack, useRouter } from 'expo-router';
 import { ArrowLeft, ChevronRight, Search } from 'lucide-react-native';
 import { StarRating } from '../../components/common/StarRating';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
@@ -14,6 +14,7 @@ import {
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useThrottledCallback } from '../../hooks/useThrottle';
 import { getTeachers } from '../../services/teachers';
 import { Teacher } from '../../types';
 
@@ -92,10 +93,14 @@ export default function TeacherListScreen() {
         setRefreshing(false);
     };
 
+    const handleTeacherPress = useThrottledCallback((id: string) => {
+        router.push(`/teachers/${id}` as any);
+    });
+
     const renderTeacherItem = ({ item }: { item: Teacher }) => (
         <TouchableOpacity
             style={styles.card}
-            onPress={() => router.push(`/teachers/${item.id}` as any)}
+            onPress={() => handleTeacherPress(item.id)}
         >
             <View style={styles.cardContent}>
                 <View style={[styles.initialsAvatar, { backgroundColor: getAvatarColor(item.name) }]}>

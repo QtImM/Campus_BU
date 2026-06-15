@@ -76,12 +76,14 @@ export const ShareCardSheet: React.FC<ShareCardSheetProps> = ({ visible, payload
                         showsVerticalScrollIndicator={false}
                     >
                         {payload && (
-                            <ViewShot
-                                ref={shotRef}
-                                options={{ format: 'png', quality: 1, result: 'tmpfile' }}
-                            >
-                                <ShareCard payload={payload} width={CARD_WIDTH} />
-                            </ViewShot>
+                            <View style={styles.previewClip}>
+                                <ViewShot
+                                    ref={shotRef}
+                                    options={{ format: 'png', quality: 1, result: 'tmpfile' }}
+                                >
+                                    <ShareCard payload={payload} width={CARD_WIDTH} />
+                                </ViewShot>
+                            </View>
                         )}
                     </ScrollView>
 
@@ -150,6 +152,10 @@ const styles = StyleSheet.create({
     previewArea: {
         alignItems: 'center',
         paddingVertical: 8,
+    },
+    previewClip: {
+        borderRadius: 26,
+        overflow: 'hidden',
     },
     shareBtn: {
         flexDirection: 'row',

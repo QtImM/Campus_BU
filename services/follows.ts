@@ -208,7 +208,7 @@ export const getFollowingUserIds = async (followerId?: string): Promise<string[]
             return [];
         }
         console.error('Error fetching following list:', error);
-        throw error;
+        return [];
     }
 
     const ids = (data || []).map((item: any) => item.following_id).filter(Boolean);

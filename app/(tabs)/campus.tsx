@@ -28,6 +28,7 @@ import { Toast, ToastType } from '../../components/campus/Toast';
 import { Skeleton } from '../../components/common/Skeleton';
 import { ForumPostRow } from '../../components/forum/ForumPostRow';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+import { useThrottledCallback } from '../../hooks/useThrottle';
 import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 import { getCurrentUser } from '../../services/auth';
 import { cachePost, deletePost, fetchPosts, POSTS_PAGE_SIZE, subscribeToPosts, togglePostLike } from '../../services/campus';
@@ -174,7 +175,7 @@ export default function CampusScreen() {
     } catch (e) { console.warn('[campus] refreshUnseenSections failed:', e); }
   }, []);
 
-  const handleSectionPress = useCallback((section: { id: string; label: string }) => {
+  const handleSectionPress = useThrottledCallback((section: { id: string; label: string }) => {
     setUnseenSections(prev => {
       if (!prev.has(section.id)) return prev;
       const next = new Set(prev);
@@ -183,7 +184,7 @@ export default function CampusScreen() {
     });
     void markCategorySeen(section.id);
     router.push({ pathname: '/forum/category/[id]', params: { id: section.id, title: section.label } });
-  }, [router]);
+  });
 
   useEffect(() => {
     loadPosts();
@@ -197,21 +198,20 @@ export default function CampusScreen() {
     return [...res].sort((a, b) => sortOrder === 'latest' ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() : b.likes - a.likes);
   }, [posts, activeCategory, sortOrder]);
 
-  const handlePostPress = useCallback((postId: string) => {
+  const handlePostPress = useThrottledCallback((postId: string) => {
     const post = posts.find(p => p.id === postId);
     const imgs = post?.images?.length ? post.images : post?.imageUrl ? [post.imageUrl] : [];
     const cover = imgs.find(img => isRemoteImageUrl(img)) ?? '';
     const textOnly = !cover ? '1' : '0';
-    // Pre-warm the post cache so detail page renders instantly from local data
     if (post) cachePost(post);
     router.push({ pathname: '/campus/[id]' as any, params: { id: postId, coverImage: cover, isTextOnly: textOnly } });
-  }, [router, posts]);
+  });
 
-  const handleCompose = useCallback(() => {
+  const handleCompose = useThrottledCallback(() => {
     if (!checkLogin(currentUser)) return;
     if (mainTab === 'forum') router.push('/forum/compose');
     else router.push('/campus/compose');
-  }, [router, mainTab, currentUser, checkLogin]);
+  });
 
   const handleLike = useCallback(async (postId: string) => {
     if (!checkLogin(currentUser)) return;
@@ -223,6 +223,10 @@ export default function CampusScreen() {
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, isLiked: wasLiked, likes: wasLiked ? p.likes : Math.max(0, p.likes) } : p));
     }
   }, [currentUser, posts]);
+
+  const handleForumPostPress = useThrottledCallback((postId: string) => {
+    router.push(`/forum/${postId}`);
+  });
 
   const handleDiscoverCardLongPress = useCallback((post: Post) => {
     ugcActions.openActions({ id: post.id, targetId: post.id, targetType: 'post', content: post.content, authorId: post.authorId, authorName: post.authorName, isAnonymous: post.isAnonymous });
@@ -351,7 +355,7 @@ export default function CampusScreen() {
                 ))}
               </View>
             )}
-            renderItem={({ item }) => <ForumPostRow post={item} onPress={() => router.push(`/forum/${item.id}`)} onAuthorPress={(id) => router.push({ pathname: '/profile/[id]', params: { id } })} />}
+            renderItem={({ item }) => <ForumPostRow post={item} onPress={() => handleForumPostPress(item.id)} onAuthorPress={(id) => router.push({ pathname: '/profile/[id]', params: { id } })} />}
             refreshControl={<RefreshControl refreshing={forumRefreshing} onRefresh={() => { void loadForumPosts(true, 0); void refreshUnseenSections(); }} tintColor="#1E3A8A" />}
             contentContainerStyle={{ paddingBottom: 120 }}
           />
