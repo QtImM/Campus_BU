@@ -15,7 +15,7 @@ const shouldEnableScheduleWidget = (): boolean => {
         return isTruthy(process.env.EXPO_ENABLE_SCHEDULE_WIDGET);
     }
 
-    return (process.env.EAS_BUILD_PROFILE || "").trim().toLowerCase() !== "production";
+    return true;
 };
 
 export default (): ExpoConfig => {
@@ -23,7 +23,7 @@ export default (): ExpoConfig => {
     const deepseekBaseUrl = (process.env.EXPO_PUBLIC_DEEPSEEK_BASE_URL || "").trim();
     const sentryEnabled = !!(process.env.EXPO_PUBLIC_SENTRY_DSN || "").trim();
     const widgetEnabled = shouldEnableScheduleWidget();
-    const buildNumber = "3";
+    const buildNumber = "1";
     const appExtensions = widgetEnabled
         ? [
               {
