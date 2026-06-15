@@ -24,12 +24,12 @@ const styles = StyleSheet.create({
     },
     card: {
         width: 108,
-        backgroundColor: '#FFFBEB',
+        backgroundColor: '#DBEAFE',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 10,
         marginRight: 10,
         borderWidth: 1,
-        borderColor: '#FDE68A',
+        borderColor: '#1D4ED830',
     },
 });

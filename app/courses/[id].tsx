@@ -824,9 +824,7 @@ export default function CourseDetailScreen() {
             reviewCount: reviews.length,
             avgDifficulty: avgDiff,
             tags: allReviewTags.slice(0, 3),
-            quote: featured
-                ? { text: featured.content, author: featured.isAnonymous ? t('courses.live_reviews_anon') : featured.authorName }
-                : null,
+            quote: null,
         };
     };
 
