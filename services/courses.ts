@@ -452,6 +452,48 @@ export const getReviews = async (courseId: string, courseCode?: string, currentU
 };
 
 
+/**
+ * Returns the set of normalized course codes the user has already reviewed.
+ * Drives review-nudges (e.g. "rate the courses still in your timetable")
+ * with a single query instead of one hasUserReviewed() call per course.
+ * Handles the mixed course_id formats (uuid / code / local_*) the same way
+ * getRecentReviewsGlobal does.
+ */
+export const getReviewedCourseCodes = async (userId: string): Promise<Set<string>> => {
+    const codes = new Set<string>();
+    if (!userId) return codes;
+
+    const { data, error } = await supabase
+        .from('course_reviews')
+        .select('course_id')
+        .eq('author_id', userId);
+
+    if (error || !data) return codes;
+
+    const ids = Array.from(new Set((data as any[]).map(r => String(r.course_id || '')).filter(Boolean)));
+    const uuidIds: string[] = [];
+    ids.forEach(id => {
+        if (UUID_RE.test(id)) {
+            uuidIds.push(id);
+        } else {
+            // code-shaped or local_* — normalize the code part directly.
+            codes.add(normalizeCourseCode(id.replace(/^local_/, '')));
+        }
+    });
+
+    if (uuidIds.length > 0) {
+        const { data: rows } = await supabase
+            .from('courses')
+            .select('id, code')
+            .in('id', uuidIds);
+        (rows as any[] | null)?.forEach(c => {
+            if (c.code) codes.add(normalizeCourseCode(c.code));
+        });
+    }
+
+    return codes;
+};
+
 export const hasUserReviewed = async (courseId: string, userId: string, courseCode?: string): Promise<boolean> => {
     const candidateCourseIds = await buildReviewCourseIdCandidates(courseId, courseCode);
 

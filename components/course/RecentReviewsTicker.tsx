@@ -10,8 +10,9 @@ import Animated, {
     withRepeat,
     withTiming,
 } from 'react-native-reanimated';
-import { ChevronRight, Star } from 'lucide-react-native';
+import { ChevronRight, PencilLine } from 'lucide-react-native';
 import { getRecentReviewsGlobal, RecentReview } from '../../services/courses';
+import { StarRating } from '../common/StarRating';
 
 // Fisher–Yates shuffle so the ticker doesn't just mirror the course list order.
 const shuffle = <T,>(arr: T[]): T[] => {
@@ -26,6 +27,10 @@ const shuffle = <T,>(arr: T[]): T[] => {
 interface RecentReviewsTickerProps {
     onPressReview: (courseId: string) => void;
     currentUserId?: string | null;
+    /** When provided, an invite card ("write your own review") is appended to
+        the marquee. The parent decides the target (e.g. open the first un-
+        reviewed timetable course), so the card only shows when it's actionable. */
+    onPressInvite?: () => void;
 }
 
 // Scroll speed in pixels / second — slow enough to read and to tap a card.
@@ -33,7 +38,7 @@ const SPEED = 38;
 
 const isHttpAvatar = (a?: string) => !!a && /^https?:\/\//.test(a);
 
-export const RecentReviewsTicker: React.FC<RecentReviewsTickerProps> = ({ onPressReview, currentUserId }) => {
+export const RecentReviewsTicker: React.FC<RecentReviewsTickerProps> = ({ onPressReview, currentUserId, onPressInvite }) => {
     const { t } = useTranslation();
     const router = useRouter();
     const [reviews, setReviews] = useState<RecentReview[]>([]);
@@ -97,16 +102,27 @@ export const RecentReviewsTicker: React.FC<RecentReviewsTickerProps> = ({ onPres
                         </View>
                     )}
                     {!!review.rating && (
-                        <View style={styles.ratingChip}>
-                            <Star size={11} color="#F59E0B" fill="#F59E0B" />
-                            <Text style={styles.ratingChipText}>{review.rating.toFixed(1)}</Text>
-                        </View>
+                        <StarRating rating={review.rating} size={11} gap={1} />
                     )}
                 </View>
                 <Text style={styles.content} numberOfLines={2}>{snippet}</Text>
             </TouchableOpacity>
         );
     };
+
+    const renderInviteCard = (keyPrefix: string) => (
+        <TouchableOpacity
+            key={`${keyPrefix}-invite`}
+            style={styles.inviteCard}
+            activeOpacity={0.85}
+            onPress={onPressInvite}
+        >
+            <View style={styles.inviteIcon}>
+                <PencilLine size={16} color="#fff" />
+            </View>
+            <Text style={styles.inviteText} numberOfLines={2}>{t('courses.live_reviews_invite', '写下你的评价 · +15 积分')}</Text>
+        </TouchableOpacity>
+    );
 
     return (
         <View style={styles.wrapper}>
@@ -135,10 +151,12 @@ export const RecentReviewsTicker: React.FC<RecentReviewsTickerProps> = ({ onPres
                         }}
                     >
                         {reviews.map((r, i) => renderCard(r, i, 'a'))}
+                        {onPressInvite && renderInviteCard('a')}
                     </View>
                     {/* Duplicate set for a seamless wrap-around */}
                     <View style={styles.set}>
                         {reviews.map((r, i) => renderCard(r, i, 'b'))}
+                        {onPressInvite && renderInviteCard('b')}
                     </View>
                 </Animated.View>
             </View>
@@ -250,5 +268,30 @@ const styles = StyleSheet.create({
         fontSize: 12,
         lineHeight: 17,
         color: '#6B7280',
+    },
+    inviteCard: {
+        width: 170,
+        backgroundColor: '#1E3A8A',
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginRight: 12,
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        gap: 10,
+    },
+    inviteIcon: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: 'rgba(255,255,255,0.18)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    inviteText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#fff',
+        lineHeight: 18,
     },
 });

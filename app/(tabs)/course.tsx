@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ArrowLeftRight, BookOpen, GraduationCap, Plus, Search, Star, X } from 'lucide-react-native';
+import { ArrowLeftRight, BookOpen, CalendarCheck, ChevronRight, GraduationCap, Plus, Search, Star, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,9 +15,11 @@ import {
     View
 } from 'react-native';
 import { Skeleton } from '../../components/common/Skeleton';
+import { StarRating } from '../../components/common/StarRating';
 import { FavoriteCourseSkeletonStrip } from '../../components/course/FavoriteCourseSkeletonStrip';
 import { RecentReviewsTicker } from '../../components/course/RecentReviewsTicker';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+import { useScheduleReviewPrompts } from '../../hooks/useScheduleReviewPrompts';
 import { useCourseActivity } from '../../context/CourseActivityContext';
 import { getCurrentUser } from '../../services/auth';
 import { enrichCoursesWithReviewStats, getLocalCourses } from '../../services/courses';
@@ -108,6 +110,11 @@ export default function CoursesScreen() {
     const [deptLoading, setDeptLoading] = useState(false);
     const { checkLogin } = useLoginPrompt();
     const { unreadByCourse, refresh: refreshCourseActivity } = useCourseActivity();
+    // Courses the user took (in their timetable) but hasn't reviewed yet — the
+    // highest-quality review source. Only those matched to a DB course can be
+    // navigated to reliably, so we filter to those for the prompt chips.
+    const { pendingReviewCourses } = useScheduleReviewPrompts(currentUserId);
+    const reviewableScheduleCourses = pendingReviewCourses.filter(c => !!c.matchedCourseId);
 
     const CourseSkeleton = () => (
         <View style={styles.skeletonCard}>
@@ -353,7 +360,7 @@ export default function CoursesScreen() {
     const isSearchMode = searchQuery.trim().length >= 2;
     const displayedCourses = isSearchMode ? searchResults : courses;
 
-    const sectionTitle = isSearchMode
+    const sectionTitleText = isSearchMode
         ? `搜索结果${searchResults.length > 0 ? ` (${searchResults.length})` : ''}`
         : selectedDept
             ? `${selectedDept} · ${courses.length} 门课程`
@@ -380,8 +387,10 @@ export default function CoursesScreen() {
                     </View>
                     <View style={styles.courseStatsColumn}>
                         <View style={styles.ratingContainer}>
-                            <Star size={14} color="#FFD700" fill="#FFD700" />
-                            <Text style={styles.ratingText}>{(item.rating || 0).toFixed(1)}</Text>
+                            <StarRating rating={item.rating || 0} size={12} gap={1.5} />
+                            {(item.rating || 0) > 0 && (
+                                <Text style={styles.ratingText}>{(item.rating || 0).toFixed(1)}</Text>
+                            )}
                         </View>
                         <TouchableOpacity
                             style={styles.favoriteButton}
@@ -402,6 +411,103 @@ export default function CoursesScreen() {
             </TouchableOpacity>
         );
     };
+
+    // Secondary content (schedule prompt, live-reviews ticker, favorites) lives
+    // INSIDE the course list as its scrollable header — so dragging the list up
+    // slides this stack away proportionally and hands the courses the full
+    // screen, instead of these blocks permanently eating space above a fixed
+    // list. Only the app header / search / dept filter stay pinned.
+    const listHeader = (
+        <>
+            {/* Targeted nudge: rate the courses still in your timetable. Shown
+                only on the default view, for users who actually took courses
+                they haven't reviewed yet. */}
+            {!isSearchMode && !selectedDept && reviewableScheduleCourses.length > 0 && (
+                <View style={styles.scheduleRateSection}>
+                    <View style={styles.scheduleRateHeader}>
+                        <CalendarCheck size={16} color="#1D4ED8" />
+                        <Text style={styles.scheduleRateTitle}>{t('courses.rate_your_courses_title', '给你这学期的课打分')}</Text>
+                    </View>
+                    <FlatList
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        data={reviewableScheduleCourses}
+                        keyExtractor={(item) => `sched-${item.code}`}
+                        contentContainerStyle={styles.scheduleRateList}
+                        renderItem={({ item }) => {
+                            const dc = getDeptColor(item.displayCode);
+                            return (
+                                <TouchableOpacity
+                                    style={[styles.scheduleRateCard, { borderColor: dc.text + '30' }]}
+                                    activeOpacity={0.85}
+                                    onPress={() => handleCoursePress(item.matchedCourseId!)}
+                                >
+                                    <Text style={[styles.scheduleRateCode, { color: dc.text }]} numberOfLines={1}>
+                                        {(item.displayCode || '').toUpperCase()}
+                                    </Text>
+                                    <Text style={styles.scheduleRateName} numberOfLines={1}>{item.title}</Text>
+                                    <View style={styles.scheduleRateCta}>
+                                        <Text style={styles.scheduleRateCtaText}>{t('courses.schedule_nudge_action', '写评价')}</Text>
+                                        <ChevronRight size={12} color="#1D4ED8" />
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        }}
+                    />
+                </View>
+            )}
+
+            {/* Live recent-reviews ticker — only on the default (all courses) view.
+                The invite card opens the first un-reviewed timetable course (or a
+                favorite as fallback); omitted entirely when there's no target. */}
+            {!isSearchMode && !selectedDept && (() => {
+                const inviteTargetId = reviewableScheduleCourses[0]?.matchedCourseId ?? favoriteCourses[0]?.id;
+                return (
+                    <RecentReviewsTicker
+                        currentUserId={currentUserId}
+                        onPressReview={handleCoursePress}
+                        onPressInvite={inviteTargetId ? () => handleCoursePress(inviteTargetId) : undefined}
+                    />
+                );
+            })()}
+
+            {/* Favorites strip — only when not searching and no dept selected */}
+            {(favoriteCoursesLoading || favoriteCourses.length > 0) && !isSearchMode && !selectedDept && (
+                <View style={styles.favoritesSection}>
+                    <Text style={styles.favoritesTitle}>⭐ {t('courses.favorites')}</Text>
+                    {favoriteCoursesLoading ? (
+                        <FavoriteCourseSkeletonStrip />
+                    ) : (
+                        <FlatList
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            data={favoriteCourses}
+                            keyExtractor={(item) => `fav-${item.id}`}
+                            contentContainerStyle={styles.favoritesList}
+                            renderItem={({ item }) => {
+                                const dc = getDeptColor(item.code);
+                                return (
+                                    <TouchableOpacity
+                                        style={[styles.favoriteCard, { backgroundColor: dc.bg, borderColor: dc.text + '30' }]}
+                                        onPress={() => handleCoursePress(item.id)}
+                                    >
+                                        {!!unreadByCourse[item.id]?.hasAnyUnread && <View style={styles.favoriteUnreadDot} />}
+                                        <Text style={[styles.favoriteCode, { color: dc.text }]}>{(item.code || '').toUpperCase()}</Text>
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                    )}
+                </View>
+            )}
+
+            {/* Section title */}
+            <View style={styles.sectionTitleRow}>
+                <Text style={styles.allCoursesTitle}>{sectionTitleText}</Text>
+                {deptLoading && <ActivityIndicator size="small" color="#1E3A8A" style={{ marginLeft: 8 }} />}
+            </View>
+        </>
+    );
 
     return (
         <View style={styles.container}>
@@ -478,56 +584,15 @@ export default function CoursesScreen() {
                 </View>
             )}
 
-            {/* Live recent-reviews ticker — only on the default (all courses) view */}
-            {!isSearchMode && !selectedDept && (
-                <RecentReviewsTicker
-                    currentUserId={currentUserId}
-                    onPressReview={handleCoursePress}
-                />
-            )}
-
-            {/* Favorites strip — only when not searching and no dept selected */}
-            {(favoriteCoursesLoading || favoriteCourses.length > 0) && !isSearchMode && !selectedDept && (
-                <View style={styles.favoritesSection}>
-                    <Text style={styles.favoritesTitle}>⭐ {t('courses.favorites')}</Text>
-                    {favoriteCoursesLoading ? (
-                        <FavoriteCourseSkeletonStrip />
-                    ) : (
-                        <FlatList
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            data={favoriteCourses}
-                            keyExtractor={(item) => `fav-${item.id}`}
-                            contentContainerStyle={styles.favoritesList}
-                            renderItem={({ item }) => {
-                                const dc = getDeptColor(item.code);
-                                return (
-                                    <TouchableOpacity
-                                        style={[styles.favoriteCard, { backgroundColor: dc.bg, borderColor: dc.text + '30' }]}
-                                        onPress={() => handleCoursePress(item.id)}
-                                    >
-                                        {!!unreadByCourse[item.id]?.hasAnyUnread && <View style={styles.favoriteUnreadDot} />}
-                                        <Text style={[styles.favoriteCode, { color: dc.text }]}>{(item.code || '').toUpperCase()}</Text>
-                                    </TouchableOpacity>
-                                );
-                            }}
-                        />
-                    )}
-                </View>
-            )}
-
-            {/* Section title */}
-            <View style={styles.sectionTitleRow}>
-                <Text style={styles.allCoursesTitle}>{sectionTitle}</Text>
-                {deptLoading && <ActivityIndicator size="small" color="#1E3A8A" style={{ marginLeft: 8 }} />}
-            </View>
-
-            {/* Course List */}
+            {/* Course List — its scrollable header carries the secondary
+                content (ticker / favorites / schedule prompt) so it slides away
+                as the user drags, giving courses the full screen. */}
             <FlatList
                 data={displayedCourses}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
                 renderItem={renderCourseItem}
+                ListHeaderComponent={listHeader}
                 onEndReached={loadMoreCourses}
                 onEndReachedThreshold={0.3}
                 refreshControl={
@@ -609,6 +674,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 16,
         padding: 16,
+        marginHorizontal: 20,
         marginBottom: 12,
         flexDirection: 'row',
         alignItems: 'center',
@@ -701,13 +767,59 @@ const styles = StyleSheet.create({
     },
     // Favorites
     listContent: {
-        padding: 20,
         paddingTop: 12,
         paddingBottom: 180,
     },
     loadingMore: {
         paddingVertical: 20,
         alignItems: 'center',
+    },
+    scheduleRateSection: { paddingTop: 14, paddingBottom: 6 },
+    scheduleRateHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 20,
+        marginBottom: 12,
+    },
+    scheduleRateTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1E3A8A',
+    },
+    scheduleRateList: { paddingHorizontal: 20, gap: 10 },
+    scheduleRateCard: {
+        width: 150,
+        backgroundColor: '#fff',
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    scheduleRateCode: {
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    scheduleRateName: {
+        marginTop: 4,
+        fontSize: 12,
+        color: '#6B7280',
+    },
+    scheduleRateCta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        marginTop: 10,
+    },
+    scheduleRateCtaText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#1D4ED8',
     },
     favoritesSection: { paddingTop: 12, paddingBottom: 8 },
     favoritesTitle: {
@@ -757,6 +869,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 16,
         padding: 16,
+        marginHorizontal: 20,
         marginBottom: 12,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -799,18 +912,14 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     ratingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF9C4',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 3,
     },
     ratingText: {
-        fontSize: 12,
-        fontWeight: 'bold',
+        fontSize: 11,
+        fontWeight: '700',
         color: '#F59E0B',
-        marginLeft: 4,
     },
     courseStatsColumn: {
         width: 90,

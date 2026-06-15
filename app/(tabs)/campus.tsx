@@ -33,7 +33,8 @@ import { getCurrentUser } from '../../services/auth';
 import { cachePost, deletePost, fetchPosts, POSTS_PAGE_SIZE, subscribeToPosts, togglePostLike } from '../../services/campus';
 import { addHiddenPostId, filterHiddenPosts, getHiddenPostIds } from '../../services/feedPreferences';
 import { getCurrentPrompt, WeeklyPrompt } from '../../services/weeklyPrompts';
-import { fetchForumPosts, FORUM_PAGE_SIZE } from '../../services/forum';
+import { fetchForumPosts, fetchLatestPostTimePerCategory, FORUM_PAGE_SIZE } from '../../services/forum';
+import { computeUnseenCategories, getCategorySeenMap, markCategorySeen, mergeCategoriesSeen } from '../../services/forumSeen';
 import { ForumCategory, ForumPost, ForumSort, Post, PostCategory } from '../../types';
 import { isRemoteImageUrl, normalizeRemoteImageUrl } from '../../utils/remoteImage';
 import { changeLanguage } from '../i18n/i18n';
@@ -105,6 +106,7 @@ export default function CampusScreen() {
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [sortOrder, setSortOrder] = useState<'latest' | 'top'>('latest');
   const [weeklyPrompt, setWeeklyPrompt] = useState<WeeklyPrompt | null>(null);
+  const [unseenSections, setUnseenSections] = useState<Set<string>>(new Set());
 
   const resolveCurrentUserSafely = useCallback(async () => {
     try {
@@ -156,11 +158,39 @@ export default function CampusScreen() {
     } catch (e) { console.error(e); } finally { setForumRefreshing(false); }
   };
 
+  const refreshUnseenSections = useCallback(async () => {
+    try {
+      const latest = await fetchLatestPostTimePerCategory();
+      const seen = await getCategorySeenMap();
+      // First launch: silently baseline any category we've never tracked so we
+      // only flag genuinely new posts going forward (no retroactive dots).
+      const unseededCats = Object.keys(latest).filter(cat => seen[cat] === undefined);
+      if (unseededCats.length > 0) {
+        const baseline: Record<string, number> = {};
+        for (const cat of unseededCats) { seen[cat] = latest[cat]; baseline[cat] = latest[cat]; }
+        await mergeCategoriesSeen(baseline);
+      }
+      setUnseenSections(computeUnseenCategories(latest, seen));
+    } catch (e) { console.warn('[campus] refreshUnseenSections failed:', e); }
+  }, []);
+
+  const handleSectionPress = useCallback((section: { id: string; label: string }) => {
+    setUnseenSections(prev => {
+      if (!prev.has(section.id)) return prev;
+      const next = new Set(prev);
+      next.delete(section.id);
+      return next;
+    });
+    void markCategorySeen(section.id);
+    router.push({ pathname: '/forum/category/[id]', params: { id: section.id, title: section.label } });
+  }, [router]);
+
   useEffect(() => {
     loadPosts();
     loadForumPosts();
+    refreshUnseenSections();
     getCurrentPrompt().then(setWeeklyPrompt).catch(() => {});
-  }, []);
+  }, [refreshUnseenSections]);
 
   const filteredPosts = useMemo(() => {
     const res = activeCategory === 'All' ? posts : posts.filter(p => p.category === activeCategory);
@@ -311,15 +341,18 @@ export default function CampusScreen() {
             ListHeaderComponent={() => (
               <View style={styles.forumSectionsContainer}>
                 {FORUM_SECTIONS.map(section => (
-                  <TouchableOpacity key={section.id} style={styles.forumSectionItem} onPress={() => router.push({ pathname: '/forum/category/[id]', params: { id: section.id, title: section.label } })}>
-                    <View style={[styles.forumSectionIcon, { backgroundColor: section.color + '10' }]}><section.icon size={26} color={section.color} /></View>
+                  <TouchableOpacity key={section.id} style={styles.forumSectionItem} onPress={() => handleSectionPress(section)}>
+                    <View style={[styles.forumSectionIcon, { backgroundColor: section.color + '10' }]}>
+                      <section.icon size={26} color={section.color} />
+                      {unseenSections.has(section.id) && <View style={styles.forumSectionDot} />}
+                    </View>
                     <Text style={styles.forumSectionLabel}>{section.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             )}
             renderItem={({ item }) => <ForumPostRow post={item} onPress={() => router.push(`/forum/${item.id}`)} onAuthorPress={(id) => router.push({ pathname: '/profile/[id]', params: { id } })} />}
-            refreshControl={<RefreshControl refreshing={forumRefreshing} onRefresh={() => loadForumPosts(true, 0)} tintColor="#1E3A8A" />}
+            refreshControl={<RefreshControl refreshing={forumRefreshing} onRefresh={() => { void loadForumPosts(true, 0); void refreshUnseenSections(); }} tintColor="#1E3A8A" />}
             contentContainerStyle={{ paddingBottom: 120 }}
           />
         </View>
@@ -365,7 +398,8 @@ const styles = StyleSheet.create({
   scrollContent: { backgroundColor: '#fff' },
   forumSectionsContainer: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, gap: 8, justifyContent: 'space-between', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingVertical: 14 },
   forumSectionItem: { width: (SCREEN_W - 48) / 4, alignItems: 'center', marginBottom: 16 },
-  forumSectionIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  forumSectionIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6, position: 'relative' },
+  forumSectionDot: { position: 'absolute', top: -2, right: -2, width: 11, height: 11, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#fff' },
   forumSectionLabel: { fontSize: 12, fontWeight: '600', color: '#374151', textAlign: 'center' },
   fab: { position: 'absolute', bottom: 100, right: 20, width: 60, height: 60, borderRadius: 30, overflow: 'hidden' },
   fabGradient: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },

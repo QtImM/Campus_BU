@@ -1,5 +1,8 @@
 import { useRouter } from 'expo-router';
-import { ArrowLeft, MessageSquare, Star } from 'lucide-react-native';
+import { ArrowLeft, MessageSquare, Share2 } from 'lucide-react-native';
+import { StarRating } from '../../components/common/StarRating';
+import { ShareCardSheet } from '../../components/share/ShareCardSheet';
+import type { ShareCardPayload } from '../../components/share/ShareCard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -30,6 +33,7 @@ export default function AllReviewsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
+    const [shareTarget, setShareTarget] = useState<ShareCardPayload | null>(null);
     const offsetRef = useRef(0);
     const userIdRef = useRef<string | undefined>(undefined);
     const seenIds = useRef<Set<string>>(new Set());
@@ -78,6 +82,16 @@ export default function AllReviewsScreen() {
         router.push(`/courses/${courseId}` as any);
     };
 
+    const buildReviewPayload = (item: RecentReview): ShareCardPayload => ({
+        variant: 'review',
+        course: { code: item.courseCode || '', name: item.courseName || '' },
+        review: {
+            content: item.content,
+            rating: item.rating,
+            author: item.isAnonymous ? t('courses.live_reviews_anon') : item.authorName,
+        },
+    });
+
     const renderItem = ({ item }: { item: RecentReview }) => {
         const anonymous = item.isAnonymous;
         const name = anonymous ? t('courses.live_reviews_anon') : item.authorName;
@@ -93,11 +107,15 @@ export default function AllReviewsScreen() {
                     )}
                     <Text style={styles.author} numberOfLines={1}>{name}</Text>
                     {!!item.rating && (
-                        <View style={styles.ratingChip}>
-                            <Star size={12} color="#F59E0B" fill="#F59E0B" />
-                            <Text style={styles.ratingChipText}>{item.rating.toFixed(1)}</Text>
-                        </View>
+                        <StarRating rating={item.rating} size={11} gap={1} />
                     )}
+                    <TouchableOpacity
+                        style={styles.shareBtn}
+                        onPress={() => setShareTarget(buildReviewPayload(item))}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Share2 size={15} color="#94A3B8" />
+                    </TouchableOpacity>
                 </View>
                 {!!courseLabel && (
                     <View style={styles.courseRow}>
@@ -154,6 +172,12 @@ export default function AllReviewsScreen() {
                         </View>
                     )
                 }
+            />
+
+            <ShareCardSheet
+                visible={!!shareTarget}
+                payload={shareTarget}
+                onClose={() => setShareTarget(null)}
             />
         </View>
     );
@@ -223,6 +247,10 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '600',
         color: '#374151',
+    },
+    shareBtn: {
+        padding: 4,
+        marginLeft: 4,
     },
     ratingChip: {
         flexDirection: 'row',

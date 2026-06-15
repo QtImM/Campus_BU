@@ -39,6 +39,7 @@ import { isRemoteImageUrl } from '../../utils/remoteImage';
 import { isHKBUEmail } from '../../utils/userUtils';
 import { EduBadge } from '../../components/common/EduBadge';
 import { SafetyNotice } from '../../components/common/SafetyNotice';
+import { StarRating } from '../../components/common/StarRating';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
 
@@ -226,10 +227,8 @@ export default function TeacherDetailScreen() {
 
                         <View style={styles.statsCard}>
                             <View style={styles.statItem}>
-                                <View style={styles.statValueRow}>
-                                    <Star size={20} color="#F59E0B" fill="#F59E0B" />
-                                    <Text style={styles.statValue}>{teacher.ratingAvg.toFixed(1)}</Text>
-                                </View>
+                                <StarRating rating={teacher.ratingAvg} size={12} gap={1} />
+                                <Text style={[styles.statValue, { marginLeft: 0, marginTop: 3 }]}>{teacher.ratingAvg.toFixed(1)}</Text>
                                 <Text style={styles.statLabel}>{t('teachers.overall_score')}</Text>
                             </View>
                             <View style={styles.divider} />
@@ -317,10 +316,7 @@ export default function TeacherDetailScreen() {
                                                 </Text>
                                             </View>
                                         </View>
-                                        <View style={styles.reviewRating}>
-                                            <Star size={14} color="#F59E0B" fill="#F59E0B" />
-                                            <Text style={styles.reviewRatingText}>{review.rating.toFixed(1)}</Text>
-                                        </View>
+                                        <StarRating rating={review.rating} size={13} gap={1.5} />
                                     </View>
 
                                     {review.tags && review.tags.length > 0 && (

@@ -159,49 +159,56 @@ export default function ModerationAdminScreen() {
     const renderPreviewModal = () => {
         if (!previewPost) return null;
         return (
-            <Modal visible animationType="slide" onRequestClose={() => setPreviewPost(null)}>
-                <SafeAreaView style={styles.previewContainer}>
-                    <View style={styles.previewHeader}>
-                        <Text style={styles.previewHeaderTitle} numberOfLines={1}>预览</Text>
-                        <TouchableOpacity onPress={() => setPreviewPost(null)} style={styles.iconButton}>
-                            <X size={20} color="#1E3A8A" />
-                        </TouchableOpacity>
-                    </View>
-                    <ScrollView contentContainerStyle={styles.previewContent}>
-                        {!!previewPost.imageUrl && (
-                            <Image
-                                source={{ uri: previewPost.imageUrl }}
-                                style={styles.previewImage}
-                                resizeMode="cover"
-                            />
-                        )}
-                        <Text style={styles.previewTitle}>{previewPost.title}</Text>
-                        {!!previewPost.content && (
-                            <Text style={styles.previewBody}>{previewPost.content}</Text>
-                        )}
-                        {!!previewPost.url && (
-                            <TouchableOpacity onPress={() => void Linking.openURL(previewPost.url!)}>
-                                <Text style={styles.previewLink}>{previewPost.url}</Text>
+            <Modal visible transparent animationType="fade" onRequestClose={() => setPreviewPost(null)}>
+                <View style={styles.previewOverlay}>
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={() => setPreviewPost(null)}
+                    />
+                    <View style={styles.previewCard}>
+                        <View style={styles.previewHeader}>
+                            <Text style={styles.previewHeaderTitle} numberOfLines={1}>预览</Text>
+                            <TouchableOpacity onPress={() => setPreviewPost(null)} style={styles.iconButton}>
+                                <X size={20} color="#1E3A8A" />
                             </TouchableOpacity>
-                        )}
-                    </ScrollView>
-                    <View style={styles.previewActions}>
-                        <TouchableOpacity
-                            style={[styles.actionButton, styles.resolveButton, { flex: 1 }]}
-                            onPress={() => { void handleReviewPost(previewPost.id, 'publish'); setPreviewPost(null); }}
-                        >
-                            <CheckCircle2 size={14} color="#fff" />
-                            <Text style={styles.actionText}>发布</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.actionButton, styles.dismissButton, { flex: 1 }]}
-                            onPress={() => { void handleReviewPost(previewPost.id, 'reject'); setPreviewPost(null); }}
-                        >
-                            <XCircle size={14} color="#fff" />
-                            <Text style={styles.actionText}>不发</Text>
-                        </TouchableOpacity>
+                        </View>
+                        <ScrollView style={styles.previewScroll} contentContainerStyle={styles.previewContent}>
+                            {!!previewPost.imageUrl && (
+                                <Image
+                                    source={{ uri: previewPost.imageUrl }}
+                                    style={styles.previewImage}
+                                    resizeMode="cover"
+                                />
+                            )}
+                            <Text style={styles.previewTitle}>{previewPost.title}</Text>
+                            {!!previewPost.content && (
+                                <Text style={styles.previewBody}>{previewPost.content}</Text>
+                            )}
+                            {!!previewPost.url && (
+                                <TouchableOpacity onPress={() => void Linking.openURL(previewPost.url!)}>
+                                    <Text style={styles.previewLink}>{previewPost.url}</Text>
+                                </TouchableOpacity>
+                            )}
+                        </ScrollView>
+                        <View style={styles.previewActions}>
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.resolveButton, { flex: 1 }]}
+                                onPress={() => { void handleReviewPost(previewPost.id, 'publish'); setPreviewPost(null); }}
+                            >
+                                <CheckCircle2 size={14} color="#fff" />
+                                <Text style={styles.actionText}>发布</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionButton, styles.dismissButton, { flex: 1 }]}
+                                onPress={() => { void handleReviewPost(previewPost.id, 'reject'); setPreviewPost(null); }}
+                            >
+                                <XCircle size={14} color="#fff" />
+                                <Text style={styles.actionText}>不发</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </SafeAreaView>
+                </View>
             </Modal>
         );
     };
@@ -648,9 +655,24 @@ const styles = StyleSheet.create({
     previewButton: {
         backgroundColor: '#0369A1',
     },
-    previewContainer: {
+    previewOverlay: {
         flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+    },
+    previewCard: {
+        width: '100%',
+        maxWidth: 560,
+        maxHeight: '90%',
         backgroundColor: '#F8FAFC',
+        borderRadius: 16,
+        overflow: 'hidden',
+    },
+    previewScroll: {
+        flexGrow: 0,
+        flexShrink: 1,
     },
     previewHeader: {
         height: 56,

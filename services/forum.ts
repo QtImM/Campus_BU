@@ -186,6 +186,26 @@ export const fetchForumPosts = async (
     return posts;
 };
 
+// ── Latest post time per category (for "new posts" red dots) ──────────────────
+export const fetchLatestPostTimePerCategory = async (): Promise<Record<string, number>> => {
+    // One round trip: pull recent posts ordered by creation, keep the newest per category.
+    const { data, error } = await supabase
+        .from(FORUM_POSTS)
+        .select('category, created_at')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(200);
+    if (error) throw error;
+
+    const latest: Record<string, number> = {};
+    for (const row of data || []) {
+        const cat = (row as any).category as string;
+        if (!cat || latest[cat] !== undefined) continue; // first seen = newest (sorted desc)
+        latest[cat] = new Date((row as any).created_at).getTime();
+    }
+    return latest;
+};
+
 // ── Search list ────────────────────────────────────────────────────────────────
 export const searchForumPosts = async (
     queryText: string,

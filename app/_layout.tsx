@@ -17,6 +17,7 @@ import { prefetchBuildings } from '../services/buildings';
 import { prefetchLocalCourses } from '../services/courses';
 import { acceptCommunityEula, hasAcceptedCommunityEula } from '../services/moderation';
 import { syncScheduleToWidgetForUser } from '../services/widgetBridge';
+import { syncReviewReminders } from '../services/review_reminders';
 import { registerForPushNotificationsAsync, savePushToken } from '../services/push_notifications';
 import { initMonitoring, setMonitoringUser, wrapRootComponent } from '../lib/monitoring';
 import './i18n/i18n'; // Initialize i18n
@@ -72,7 +73,7 @@ function RootLayout() {
     if (isExpoGo) return;
 
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { type?: string; relatedId?: string } | undefined;
+      const data = response.notification.request.content.data as { type?: string; relatedId?: string; matchedCourseId?: string } | undefined;
       const title = String(response.notification.request.content.title || '');
       const match = title.match(/(\d{4}-\d{2}-\d{2})/);
       const digestDate = match?.[1];
@@ -84,6 +85,8 @@ function RootLayout() {
 
       if (data?.type === 'broadcast' && relatedId) {
         router.push({ pathname: '/campus/[id]' as any, params: { id: relatedId } });
+      } else if (data?.type === 'review_reminder' && data?.matchedCourseId) {
+        router.push({ pathname: '/courses/[id]' as any, params: { id: data.matchedCourseId } });
       } else if (data?.type === 'system' && isDailyDigestNotification) {
         router.push({
           pathname: '/agent/chat',
@@ -238,6 +241,14 @@ function RootLayout() {
     if (!currentUser?.uid) return;
     // Defer to avoid competing with startup-critical queries (auth, feed)
     const t = setTimeout(() => void syncScheduleToWidgetForUser(currentUser.uid), 3000);
+    return () => clearTimeout(t);
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    // Reconcile end-of-semester review reminders against the user's exam
+    // schedule + review history. Deferred well past startup; fully non-fatal.
+    const t = setTimeout(() => void syncReviewReminders(currentUser.uid), 6000);
     return () => clearTimeout(t);
   }, [currentUser?.uid]);
 

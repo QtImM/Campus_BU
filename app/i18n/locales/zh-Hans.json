@@ -43,6 +43,15 @@
         "anonymous_student": "匿名的同学",
         "official_reply": "官方回复"
     },
+    "share": {
+        "card_tagline": "香港高校 · 课程点评",
+        "card_cta": "下载 HKCampus · 查看完整评价",
+        "card_reviews_count": "{{count}} 条评价",
+        "card_difficulty": "难度 {{value}}",
+        "sheet_title": "分享这张卡片",
+        "sheet_subtitle": "丢进迎新群，帮同学少踩坑 🙌",
+        "share_action": "分享卡片"
+    },
     "courses": {
         "title": "课程点评",
         "search_placeholder": "输入课程代码...",
@@ -51,6 +60,20 @@
         "live_reviews_title": "🔥 同学们的最新评价",
         "live_reviews_more": "查看更多",
         "live_reviews_anon": "匿名同学",
+        "live_reviews_invite": "写下你的评价 · +15 积分",
+        "rate_your_courses_title": "给你这学期的课打分",
+        "schedule_nudge_title": "你这学期在上 {{code}}",
+        "schedule_nudge_desc": "你的亲身体验最有参考价值，写两句帮学弟学妹避坑吧",
+        "schedule_nudge_action": "写评价",
+        "empty_cta_title": "成为第一个点评的人",
+        "empty_cta_desc": "分享你的上课体验，帮助学弟学妹做决定",
+        "empty_cta_title_schedule": "你这学期在上这门课",
+        "empty_cta_desc_schedule": "你的亲身体验最有参考价值，花 30 秒点评一下，还能领 +15 积分",
+        "empty_cta_button": "写评价 · 领 +15 积分",
+        "review_success_title": "评价发布成功",
+        "review_success_points": "首次评价 +15 积分",
+        "review_success_helped": "已有 {{count}} 条评价一起帮同学避坑 🙌",
+        "review_success_helped_first": "你的评价会帮到正在选课的同学 🙌",
         "all_reviews_title": "全部评价",
         "all_reviews_subtitle": "来自全校的最新评价",
         "all_reviews_empty": "还没有评价",
@@ -312,6 +335,8 @@
         "teaming_comment": "{{name}} 评论了你的 {{course}} 组队需求。",
         "teaming_like": "有人赞了你的 {{course}} 组队需求！",
         "review_like": "有人赞了你对 {{course}} 的课程评价！",
+        "review_reminder_title": "给 {{code}} 打个分？",
+        "review_reminder_body": "这学期的课快结束啦，花 30 秒点评一下，帮学弟学妹避坑 🙌",
         "moderation_report_created": "收到新的举报（类型：{{targetType}}，原因：{{reason}}），请尽快审核。"
     },
     "messages": {

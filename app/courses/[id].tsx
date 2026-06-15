@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Star, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
+import { CalendarCheck, Check, ChevronLeft, Info, MessageCircle, MessageSquare, Plus, Send, Share2, Star, ThumbsUp, Trash2, UserPlus, Users, X } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -24,10 +24,15 @@ import {
 import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
 import { EduBadge } from '../../components/common/EduBadge';
 import { SafetyNotice } from '../../components/common/SafetyNotice';
+import { StarRating } from '../../components/common/StarRating';
 import { TranslatableText } from '../../components/common/TranslatableText';
 import { useCourseActivity } from '../../context/CourseActivityContext';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
+import { useScheduleReviewPrompts } from '../../hooks/useScheduleReviewPrompts';
 import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
+import { ReviewSuccessOverlay } from '../../components/course/ReviewSuccessOverlay';
+import { ShareCardSheet } from '../../components/share/ShareCardSheet';
+import type { ShareCardPayload } from '../../components/share/ShareCard';
 import storage from '../../lib/storage';
 import { getCurrentUser } from '../../services/auth';
 import { ensureContentSafety } from '../../services/contentFilter';
@@ -91,6 +96,20 @@ export default function CourseDetailScreen() {
 
     const [hasReviewed, setHasReviewed] = useState(false);
     const [aiSummary, setAiSummary] = useState<string>('');
+
+    // Review-guidance: does the logged-in user have THIS course in their
+    // timetable? If so they actually took it — the highest-value review source —
+    // so we surface a stronger, personalized nudge.
+    const { isInSchedule, refresh: refreshScheduleReviewPrompts } = useScheduleReviewPrompts(user?.uid);
+    const courseInSchedule = isInSchedule(course?.code);
+
+    // Post-submit celebratory feedback (replaces a plain Alert).
+    const [successOverlay, setSuccessOverlay] = useState<{ visible: boolean; isFirst: boolean; helpedCount: number }>(
+        { visible: false, isFirst: false, helpedCount: 0 }
+    );
+
+    // Shareable-card sheet (course-level or single-review). null = closed.
+    const [shareTarget, setShareTarget] = useState<ShareCardPayload | null>(null);
 
     // Form State
     const [rating, setRating] = useState(0);
@@ -541,10 +560,16 @@ export default function CourseDetailScreen() {
             setReviewTags([]);
             setReviewContent('');
             setIsAnonymous(false);
-            Alert.alert(
-                '评价发布成功',
-                wasFirstReview ? '感谢你的点评！首次评价奖励 +15 积分已到账 🎉' : '感谢你的点评！'
-            );
+
+            // Celebratory feedback instead of a flat system alert.
+            setSuccessOverlay({
+                visible: true,
+                isFirst: wasFirstReview,
+                helpedCount: reviews.length + 1,
+            });
+
+            // This course is now reviewed — drop it from the user's pending nudges.
+            void refreshScheduleReviewPrompts();
 
             // Silent background refresh to replace temp entry with real DB row
             getReviewsAndHasReviewed(id as string, user.uid, course?.code).then(({ reviews, hasReviewed }) => {
@@ -779,6 +804,45 @@ export default function CourseDetailScreen() {
 
     const allReviewTags = Array.from(new Set(reviews.flatMap(r => r.tags))).filter(Boolean);
 
+    // ── Build payloads for the shareable card ────────────────────────────
+    const buildCoursePayload = (): ShareCardPayload | null => {
+        if (!course) return null;
+        const rated = reviews.filter(r => r.rating);
+        const avg = rated.length > 0 ? rated.reduce((s, r) => s + r.rating!, 0) / rated.length : 0;
+        const diffReviews = reviews.filter(r => r.difficulty > 0);
+        const avgDiff = diffReviews.length > 0
+            ? diffReviews.reduce((s, r) => s + r.difficulty, 0) / diffReviews.length
+            : 0;
+        // Feature the most-liked review, falling back to the first with content.
+        const featured = reviews.find(r => r.id === topLikedId && r.content?.trim())
+            || reviews.find(r => r.content?.trim())
+            || null;
+        return {
+            variant: 'course',
+            course: { code: course.code, name: course.name, department: course.department, credits: course.credits },
+            avgRating: avg,
+            reviewCount: reviews.length,
+            avgDifficulty: avgDiff,
+            tags: allReviewTags.slice(0, 3),
+            quote: featured
+                ? { text: featured.content, author: featured.isAnonymous ? t('courses.live_reviews_anon') : featured.authorName }
+                : null,
+        };
+    };
+
+    const buildReviewPayload = (item: Review): ShareCardPayload | null => {
+        if (!course) return null;
+        return {
+            variant: 'review',
+            course: { code: course.code, name: course.name, department: course.department },
+            review: {
+                content: item.content,
+                rating: item.rating,
+                author: item.isAnonymous ? t('courses.live_reviews_anon') : item.authorName,
+            },
+        };
+    };
+
     // Helper: rating → left-bar color
     const ratingBarColor = (rating?: number) => {
         if (!rating) return '#D1D5DB';
@@ -829,16 +893,7 @@ export default function CourseDetailScreen() {
                     </View>
                 </View>
                 {item.rating ? (
-                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
-                        {[1, 2, 3, 4, 5].map(s => (
-                            <Star
-                                key={s}
-                                size={12}
-                                color="#F59E0B"
-                                fill={s <= item.rating! ? '#F59E0B' : 'transparent'}
-                            />
-                        ))}
-                    </View>
+                    <StarRating rating={item.rating} size={12} gap={2} />
                 ) : null}
             </View>
 
@@ -875,6 +930,13 @@ export default function CourseDetailScreen() {
                         ]}>
                             {item.likes}
                         </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.shareReviewBtn}
+                        onPress={() => setShareTarget(buildReviewPayload(item))}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Share2 size={14} color="#6B7280" />
                     </TouchableOpacity>
                     {user && item.authorId === user.uid && (
                         <TouchableOpacity style={styles.deleteTag} onPress={() => handleDeleteReview(item)}>
@@ -1038,7 +1100,13 @@ export default function CourseDetailScreen() {
                     <ChevronLeft size={24} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle} numberOfLines={1}>{course.code}</Text>
-                <View style={{ width: 24 }} />
+                <TouchableOpacity
+                    style={styles.headerShareButton}
+                    onPress={() => setShareTarget(buildCoursePayload())}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <Share2 size={20} color="#fff" />
+                </TouchableOpacity>
             </View>
 
             <View style={{ flex: 1 }}>
@@ -1058,14 +1126,7 @@ export default function CourseDetailScreen() {
                                 if (avg === 0) return null;
                                 return (
                                     <>
-                                        {[1, 2, 3, 4, 5].map(s => (
-                                            <Star
-                                                key={s}
-                                                size={13}
-                                                color="#F59E0B"
-                                                fill={s <= Math.round(avg) ? '#F59E0B' : 'transparent'}
-                                            />
-                                        ))}
+                                        <StarRating rating={avg} size={13} gap={2} />
                                         <Text style={styles.courseMetaText}>{avg.toFixed(1)}</Text>
                                         <Text style={styles.courseMetaDot}>·</Text>
                                     </>
@@ -1144,6 +1205,31 @@ export default function CourseDetailScreen() {
                                 </View>
                             )}
 
+                            {/* Schedule-aware nudge: this course is in the user's
+                                timetable but they haven't reviewed it yet. The
+                                empty state below already prompts when there are
+                                no reviews, so only show this when reviews exist. */}
+                            {courseInSchedule && !hasReviewed && !reviewsLoading && reviews.length > 0 && (
+                                <TouchableOpacity
+                                    style={styles.scheduleNudge}
+                                    activeOpacity={0.9}
+                                    onPress={() => setModalVisible(true)}
+                                >
+                                    <CalendarCheck size={20} color="#1D4ED8" />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.scheduleNudgeTitle}>
+                                            {t('courses.schedule_nudge_title', { code: course.code, defaultValue: '你这学期在上 {{code}}' })}
+                                        </Text>
+                                        <Text style={styles.scheduleNudgeDesc}>
+                                            {t('courses.schedule_nudge_desc', '你的亲身体验最有参考价值，写两句帮学弟学妹避坑吧')}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.scheduleNudgeBtn}>
+                                        <Text style={styles.scheduleNudgeBtnText}>{t('courses.schedule_nudge_action', '写评价')}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+
                             {/* Combined filter row: sort chips + separator + tag chips */}
                             <ScrollView
                                 horizontal
@@ -1198,11 +1284,19 @@ export default function CourseDetailScreen() {
                                 </View>
                             ) : sortedReviews.length === 0 ? (
                                 <View style={styles.emptyCtaCard}>
-                                    <Text style={styles.emptyCtaEmoji}>📝</Text>
-                                    <Text style={styles.emptyCtaTitle}>成为第一个点评的人</Text>
-                                    <Text style={styles.emptyCtaDesc}>分享你的上课体验，帮助学弟学妹做决定</Text>
+                                    <Text style={styles.emptyCtaEmoji}>{courseInSchedule ? '📅' : '📝'}</Text>
+                                    <Text style={styles.emptyCtaTitle}>
+                                        {courseInSchedule
+                                            ? t('courses.empty_cta_title_schedule', '你这学期在上这门课')
+                                            : t('courses.empty_cta_title', '成为第一个点评的人')}
+                                    </Text>
+                                    <Text style={styles.emptyCtaDesc}>
+                                        {courseInSchedule
+                                            ? t('courses.empty_cta_desc_schedule', '你的亲身体验最有参考价值，花 30 秒点评一下，还能领 +15 积分')
+                                            : t('courses.empty_cta_desc', '分享你的上课体验，帮助学弟学妹做决定')}
+                                    </Text>
                                     <TouchableOpacity style={styles.emptyCtaButton} onPress={() => setModalVisible(true)}>
-                                        <Text style={styles.emptyCtaButtonText}>写评价 · 领 +15 积分</Text>
+                                        <Text style={styles.emptyCtaButtonText}>{t('courses.empty_cta_button', '写评价 · 领 +15 积分')}</Text>
                                     </TouchableOpacity>
                                 </View>
                             ) : (
@@ -1462,6 +1556,13 @@ export default function CourseDetailScreen() {
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
+
+            {/* Shareable card sheet (course or single review) */}
+            <ShareCardSheet
+                visible={!!shareTarget}
+                payload={shareTarget}
+                onClose={() => setShareTarget(null)}
+            />
 
             {/* Post Teaming Modal */}
             <Modal
@@ -1864,6 +1965,13 @@ export default function CourseDetailScreen() {
                 </View>
             </Modal>
             {ugcActions.ActionSheet}
+
+            <ReviewSuccessOverlay
+                visible={successOverlay.visible}
+                isFirst={successOverlay.isFirst}
+                helpedCount={successOverlay.helpedCount}
+                onClose={() => setSuccessOverlay(prev => ({ ...prev, visible: false }))}
+            />
         </View>
         </TouchableWithoutFeedback>
     );
@@ -1894,6 +2002,7 @@ const styles = StyleSheet.create({
         borderBottomRightRadius: 16,
     },
     backButton: { padding: 4 },
+    headerShareButton: { padding: 4, width: 24, alignItems: 'flex-end' },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
     scrollContent: { paddingTop: 0, paddingBottom: 40 },
     courseInfoCard: {
@@ -2229,6 +2338,41 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#BFDBFE',
     },
+    scheduleNudge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginHorizontal: 16,
+        marginTop: 4,
+        marginBottom: 4,
+        padding: 14,
+        backgroundColor: '#EFF6FF',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    scheduleNudgeTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1E3A8A',
+    },
+    scheduleNudgeDesc: {
+        marginTop: 2,
+        fontSize: 12,
+        lineHeight: 17,
+        color: '#475569',
+    },
+    scheduleNudgeBtn: {
+        backgroundColor: '#1D4ED8',
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+    },
+    scheduleNudgeBtnText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#fff',
+    },
     emptyCtaEmoji: {
         fontSize: 40,
         marginBottom: 12,
@@ -2300,6 +2444,7 @@ const styles = StyleSheet.create({
     reviewActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     likeButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     likeCount: { fontSize: 12, color: '#6B7280' },
+    shareReviewBtn: { alignItems: 'center', justifyContent: 'center', padding: 4, opacity: 0.7 },
     deleteTag: {
         alignItems: 'center',
         justifyContent: 'center',

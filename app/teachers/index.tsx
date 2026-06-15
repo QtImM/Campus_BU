@@ -1,5 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
-import { ArrowLeft, ChevronRight, Search, Star } from 'lucide-react-native';
+import { ArrowLeft, ChevronRight, Search } from 'lucide-react-native';
+import { StarRating } from '../../components/common/StarRating';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -107,10 +108,14 @@ export default function TeacherListScreen() {
 
                     <View style={styles.statsRow}>
                         <View style={styles.ratingBadge}>
-                            <Star size={14} color="#F59E0B" fill="#F59E0B" />
-                            <Text style={styles.ratingText}>
-                                {item.reviewCount > 0 ? item.ratingAvg.toFixed(1) : t('teachers.no_reviews')}
-                            </Text>
+                            {item.reviewCount > 0 ? (
+                                <>
+                                    <StarRating rating={item.ratingAvg} size={12} gap={1} />
+                                    <Text style={styles.ratingText}>{item.ratingAvg.toFixed(1)}</Text>
+                                </>
+                            ) : (
+                                <Text style={styles.ratingText}>{t('teachers.no_reviews')}</Text>
+                            )}
                         </View>
                         <Text style={styles.reviewCount}>({t('teachers.reviews_count', { count: item.reviewCount })})</Text>
                     </View>

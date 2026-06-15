@@ -20,7 +20,6 @@ import { fetchAnonymousPostsByAuthor, fetchLikedPosts, fetchPostsByAuthor, toggl
 import { getFollowCounts } from '../../services/follows';
 import { fetchNotifications, isDailyDigestNotification, markAllAsRead, markAsRead, mergeNotificationsById, Notification, subscribeToNotifications } from '../../services/notifications';
 import { getPushNotificationsEnabled, setPushNotificationsEnabled as updatePushNotificationsEnabled } from '../../services/push_notifications';
-import { supabase } from '../../services/supabase';
 import { fetchUnreadModerationAlertCount } from '../../services/moderation';
 import { Post, User as UserProfile } from '../../types';
 import { isAdmin } from '../../utils/userUtils';
@@ -259,49 +258,49 @@ export default function ProfileScreen() {
         };
     }, []);
 
-    const resolveNotificationRoute = async (relatedId: string): Promise<string | null> => {
-        const [postResult, exchangeResult] = await Promise.all([
-            supabase.from('posts').select('id').eq('id', relatedId).maybeSingle(),
-            supabase.from('course_exchanges').select('id').eq('id', relatedId).maybeSingle(),
-        ]);
+    // Infer the destination synchronously from the notification payload so we can
+    // navigate instantly without waiting on existence-check round trips.
+    const resolveNotificationRoute = (notification: Notification): string | null => {
+        const relatedId = notification.related_id;
+        if (!relatedId) return null;
 
-        if (postResult.data) return `/campus/${relatedId}`;
-        if (exchangeResult.data) return '/courses/exchange';
-        return null;
+        // New-style notifications carry a JSON `key` identifying the source.
+        let key = '';
+        try {
+            const data = JSON.parse(notification.content);
+            if (data && typeof data.key === 'string') key = data.key;
+        } catch {
+            // Legacy plain-text content – fall back to keyword sniffing below.
+        }
+        const hint = key || (notification.content || '').toLowerCase();
+
+        if (hint.includes('post')) return `/campus/${relatedId}`;
+        if (hint.includes('exchange')) return '/courses/exchange';
+        // teaming / review / unknown: preserve prior behaviour (campus feed).
+        return '/(tabs)/campus';
     };
 
-    const handleNotificationPress = async (notification: Notification) => {
-        if (!notification.is_read) {
-            try {
-                await markAsRead(notification.id);
-                setNotifications(prev => prev.map(n =>
-                    n.id === notification.id ? { ...n, is_read: true } : n
-                ));
-                await refreshGlobalCount();
-            } catch (error) {
-                console.error('Error marking notification read:', error);
-            }
+    const handleNotificationPress = (notification: Notification) => {
+        // Navigate first (this is what the user is waiting for); persist read
+        // state and refresh the badge in the background.
+        const route = notification.related_id ? resolveNotificationRoute(notification) : null;
+        if (route) {
+            setShowNotifications(false);
+            router.push(route as any);
         }
 
-        if (notification.related_id) {
-            setShowNotifications(false);
-            try {
-                const route = await resolveNotificationRoute(notification.related_id);
-                if (route) {
-                    router.push(route as any);
-                    return;
+        if (!notification.is_read) {
+            setNotifications(prev => prev.map(n =>
+                n.id === notification.id ? { ...n, is_read: true } : n
+            ));
+            void (async () => {
+                try {
+                    await markAsRead(notification.id);
+                    await refreshGlobalCount();
+                } catch (error) {
+                    console.error('Error marking notification read:', error);
                 }
-            } catch (error) {
-                console.error('Error resolving notification route:', error);
-            }
-
-            // Fallback for legacy/invalid related IDs
-            const content = (notification.content || '').toLowerCase();
-            if (content.includes('exchange')) {
-                router.push('/courses/exchange');
-            } else {
-                router.push('/(tabs)/campus');
-            }
+            })();
         }
     };
 

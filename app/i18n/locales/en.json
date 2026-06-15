@@ -43,6 +43,15 @@
         "anonymous_student": "Anonymous Student",
         "official_reply": "Official Reply"
     },
+    "share": {
+        "card_tagline": "HK Universities · Course Reviews",
+        "card_cta": "Get HKCampus · See all reviews",
+        "card_reviews_count": "{{count}} reviews",
+        "card_difficulty": "Difficulty {{value}}",
+        "sheet_title": "Share this card",
+        "sheet_subtitle": "Drop it in the freshman group chat 🙌",
+        "share_action": "Share card"
+    },
     "courses": {
         "title": "Course Review",
         "search_placeholder": "Enter course code...",
@@ -51,6 +60,20 @@
         "live_reviews_title": "🔥 Latest student reviews",
         "live_reviews_more": "See all",
         "live_reviews_anon": "Anonymous",
+        "live_reviews_invite": "Write your review · +15 pts",
+        "rate_your_courses_title": "Rate the courses you're taking",
+        "schedule_nudge_title": "You're taking {{code}} this term",
+        "schedule_nudge_desc": "Your first-hand experience helps the most — drop a quick review",
+        "schedule_nudge_action": "Review",
+        "empty_cta_title": "Be the first to review",
+        "empty_cta_desc": "Share your experience to help others decide",
+        "empty_cta_title_schedule": "You're taking this course this term",
+        "empty_cta_desc_schedule": "Your first-hand experience helps the most — review in 30s and earn +15 pts",
+        "empty_cta_button": "Review · earn +15 pts",
+        "review_success_title": "Review posted",
+        "review_success_points": "First review +15 pts",
+        "review_success_helped": "{{count}} reviews now helping students choose 🙌",
+        "review_success_helped_first": "Your review will help students choosing courses 🙌",
         "all_reviews_title": "All Reviews",
         "all_reviews_subtitle": "Latest reviews from across campus",
         "all_reviews_empty": "No reviews yet",
@@ -312,6 +335,8 @@
         "teaming_comment": "{{name}} commented on your {{course}} teaming request.",
         "teaming_like": "Someone liked your {{course}} teaming request!",
         "review_like": "Someone liked your review for {{course}}!",
+        "review_reminder_title": "Rate {{code}}?",
+        "review_reminder_body": "Your course is wrapping up — take 30 seconds to review it and help future students 🙌",
         "moderation_report_created": "A new report has been submitted ({{targetType}} / {{reason}}). Please review it soon."
     },
     "messages": {
