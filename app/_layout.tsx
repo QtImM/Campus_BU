@@ -18,6 +18,7 @@ import { prefetchLocalCourses } from '../services/courses';
 import { acceptCommunityEula, hasAcceptedCommunityEula } from '../services/moderation';
 import { syncScheduleToWidgetForUser } from '../services/widgetBridge';
 import { syncReviewReminders } from '../services/review_reminders';
+import { useClipboardDeepLink } from '../hooks/useClipboardDeepLink';
 import { registerForPushNotificationsAsync, savePushToken } from '../services/push_notifications';
 import { initMonitoring, setMonitoringUser, wrapRootComponent } from '../lib/monitoring';
 import './i18n/i18n'; // Initialize i18n
@@ -251,6 +252,9 @@ function RootLayout() {
     const t = setTimeout(() => void syncReviewReminders(currentUser.uid), 6000);
     return () => clearTimeout(t);
   }, [currentUser?.uid]);
+
+  // Detect share tokens in clipboard (like Douyin/XHS style deep links)
+  useClipboardDeepLink();
 
   const handleAcceptEula = async () => {
     const accepted = await acceptCommunityEula(currentUser?.uid || null);

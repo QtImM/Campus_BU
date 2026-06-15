@@ -1,14 +1,12 @@
 import { formatDistanceToNow } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-    Bell,
     ChevronLeft,
     ChevronRight,
     Heart,
     MessageCircle,
     MoreHorizontal,
     Send,
-    Share2,
     Trash2,
 } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
@@ -31,8 +29,8 @@ import {
 } from 'react-native';
 import { ActionModal } from '../../components/campus/ActionModal';
 import { AdminDeletionModal, DeletionReason } from '../../components/campus/AdminDeletionModal';
-import { BottomSheet } from '../../components/campus/BottomSheet';
 import { BroadcastModal } from '../../components/campus/BroadcastModal';
+import { PostShareSheet } from '../../components/campus/PostShareSheet';
 import { SharePostModal } from '../../components/campus/SharePostModal';
 import { Toast, ToastType } from '../../components/campus/Toast';
 import { CachedRemoteImage } from '../../components/common/CachedRemoteImage';
@@ -1067,110 +1065,57 @@ export default function PostDetailScreen() {
                 </View>
 
                 {/* ── Modals ── */}
-                <BottomSheet
+                <PostShareSheet
                     visible={settingsSheetVisible}
                     onClose={() => setSettingsSheetVisible(false)}
-                >
-                    {/* Share post option - always shown at the top */}
-                    {currentUser?.uid && (
-                        <TouchableOpacity
-                            style={styles.shareOption}
-                            onPress={() => {
-                                setSettingsSheetVisible(false);
-                                setShowShareModal(true);
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.shareIconContainer}>
-                                <Share2 size={20} color="#1E3A8A" />
-                            </View>
-                            <Text style={styles.shareText}>{t('profile.share.share_post', '分享帖子')}</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {!!post && !isOwnPost && (
-                        <TouchableOpacity
-                            style={styles.shareOption}
-                            onPress={() => {
-                                setSettingsSheetVisible(false);
-                                ugcActions.openActions({
-                                    id: post.id,
-                                    targetId: post.id,
-                                    targetType: 'post',
-                                    content: post.content,
-                                    authorId: post.authorId,
-                                    authorName: post.authorName,
-                                    isAnonymous: post.isAnonymous,
-                                });
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.shareIconContainer}>
-                                <MoreHorizontal size={20} color="#1E3A8A" />
-                            </View>
-                            <Text style={styles.shareText}>{t('moderation.ugc_actions_entry')}</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Admin broadcast push */}
-                    {isAdminUser && !!post && (
-                        <TouchableOpacity
-                            style={styles.shareOption}
-                            onPress={handleBroadcastPress}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.broadcastIconContainer}>
-                                <Bell size={20} color="#1E3A8A" />
-                            </View>
-                            <Text style={styles.shareText}>{t('campus_detail.broadcast_push')}</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Admin-only delete option (for admin viewing others' posts) */}
-                    {isAdminUser && !isOwnPost && (
-                        <TouchableOpacity
-                            style={styles.adminDeleteOption}
-                            onPress={handleAdminDeletePress}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.adminDeleteIconContainer}>
-                                <Trash2 size={20} color="#DC2626" />
-                            </View>
-                            <Text style={styles.adminDeleteText}>{t('campus_detail.admin_delete', '管理员删除')}</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* User delete option (for own posts - normal users and admins) */}
-                    {isOwnPost && (
-                        <TouchableOpacity
-                            style={styles.adminDeleteOption}
-                            onPress={handleUserDeletePress}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.adminDeleteIconContainer}>
-                                <Trash2 size={20} color="#111827" />
-                            </View>
-                            <Text style={[styles.adminDeleteText, { color: '#111827' }]}>{t('campus_detail.delete_post_title', '删除帖子')}</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Admin viewing own post: show both options (user + admin) */}
-                    {isAdminUser && isOwnPost && (
-                        <TouchableOpacity
-                            style={styles.adminDeleteOption}
-                            onPress={handleAdminDeletePress}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.adminDeleteIconContainer}>
-                                <Trash2 size={20} color="#DC2626" />
-                            </View>
-                            <Text style={styles.adminDeleteText}>{t('campus_detail.admin_delete', '管理员删除')}</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Empty content for non-admin users viewing others' posts (no share) */}
-                    {!currentUser && !isAdminUser && !isOwnPost && <View style={{ flex: 1 }} />}
-                </BottomSheet>
+                    currentUserId={currentUser?.uid}
+                    postId={id}
+                    postContent={post?.content}
+                    postImageUrl={post?.imageUrl}
+                    isOwnPost={isOwnPost}
+                    isAdmin={isAdminUser}
+                    isAnonymousPost={post?.isAnonymous}
+                    authorId={post?.authorId}
+                    authorName={post?.authorName}
+                    onShareToUser={async (receiverId, message) => {
+                        await sendDirectMessage(currentUser?.uid || '', receiverId, message);
+                    }}
+                    onOpenFriendList={() => setShowShareModal(true)}
+                    onDeletePost={handleUserDeletePress}
+                    onAdminDelete={handleAdminDeletePress}
+                    onBroadcast={handleBroadcastPress}
+                    onBlockUser={() => {
+                        if (post) {
+                            ugcActions.openActions({
+                                id: post.id,
+                                targetId: post.id,
+                                targetType: 'post',
+                                content: post.content,
+                                authorId: post.authorId,
+                                authorName: post.authorName,
+                                isAnonymous: post.isAnonymous,
+                            });
+                        }
+                    }}
+                    onHidePost={post ? async () => {
+                        await addHiddenPostId(post.id);
+                        DeviceEventEmitter.emit('feed_post_hidden', { id: post.id, targetType: 'post' });
+                        setPost(null);
+                    } : undefined}
+                    onReport={() => {
+                        if (post) {
+                            ugcActions.openActions({
+                                id: post.id,
+                                targetId: post.id,
+                                targetType: 'post',
+                                content: post.content,
+                                authorId: post.authorId,
+                                authorName: post.authorName,
+                                isAnonymous: post.isAnonymous,
+                            });
+                        }
+                    }}
+                />
                 <AdminDeletionModal
                     visible={adminDeletionModalVisible}
                     onConfirm={handleAdminDeleteConfirm}
@@ -1666,60 +1611,6 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#6B7280',
         fontWeight: '600',
-    },
-    shareOption: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        gap: 12,
-    },
-    shareIconContainer: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#EFF6FF',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    broadcastIconContainer: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#DBEAFE',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    shareText: {
-        fontSize: 16,
-        color: '#111827',
-        fontWeight: '600',
-    },
-    adminDeleteOption: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        gap: 12,
-    },
-    adminDeleteIconContainer: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#FEF2F2',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    adminDeleteText: {
-        fontSize: 16,
-        color: '#DC2626',
-        fontWeight: '600',
-    },
-    settingsSheetContent: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingTop: 20,
     },
     settingsSheetTitle: {
         fontSize: 18,

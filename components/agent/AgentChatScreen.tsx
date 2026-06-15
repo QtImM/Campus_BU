@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { ArrowLeft, Bot, Send, Sparkles, User } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -104,7 +104,6 @@ const shouldUseLatestDigest = (input: string): boolean => {
 
 export default function AgentChatScreen({ showBackButton = false }: AgentChatScreenProps) {
     const router = useRouter();
-    const params = useLocalSearchParams<{ digestDate?: string }>();
     const insets = useSafeAreaInsets();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<{
@@ -132,16 +131,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     const scrollViewRef = useRef<ScrollView>(null);
     const agentRef = useRef<AgentExecutor | null>(null);
 
-    const parseDigestDateParam = (value?: string): Date | null => {
-        if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-            return null;
-        }
-        const parsed = new Date(`${value}T00:00:00+08:00`);
-        if (Number.isNaN(parsed.getTime())) {
-            return null;
-        }
-        return parsed;
-    };
 
     useEffect(() => {
         if (!currentUser?.uid) {
@@ -154,52 +143,10 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
     }, [currentUser?.uid]);
 
     useEffect(() => {
-        let cancelled = false;
-
-        async function injectDailyDigest() {
-            if (!currentUser?.uid) {
-                return;
-            }
-
-            try {
-                const preferredDate = parseDigestDateParam(
-                    Array.isArray(params.digestDate) ? params.digestDate[0] : params.digestDate
-                );
-                const result = preferredDate
-                    ? await runDailyDigestJobForUser(currentUser.uid, preferredDate, { sendPush: false })
-                    : await runDailyDigestJobForUser(currentUser.uid, undefined, { sendPush: false });
-                if (!result.ok || !result.payload || cancelled) {
-                    return;
-                }
-
-                const payload = result.payload;
-                const digestMessageId = `daily-digest-${payload.date}`;
-                setMessages((prev) => {
-                    if (prev.some((message) => message.id === digestMessageId)) {
-                        return prev;
-                    }
-
-                    return [
-                        ...prev,
-                        {
-                            role: 'assistant',
-                            content: payload.message,
-                            id: digestMessageId,
-                        },
-                    ];
-                });
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-            } catch (error) {
-                console.warn('[AgentChat] Failed to inject daily digest message:', error);
-            }
-        }
-
-        void injectDailyDigest();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [currentUser?.uid, params.digestDate]);
+        if (!currentUser?.uid) return;
+        // Preload digest into cache so it's instant when user taps "最近有什么新鲜资讯"
+        void runDailyDigestJobForUser(currentUser.uid, undefined, { sendPush: false }).catch(() => {});
+    }, [currentUser?.uid]);
 
     useEffect(() => {
         agentRef.current?.setDeviceLocation(deviceLocation);
@@ -277,7 +224,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
         try {
             const digestResult = await runDailyDigestJobForUser(currentUser.uid, undefined, {
-                ignoreEnabledCheck: true,
                 sendPush: false,
             });
 
@@ -307,7 +253,6 @@ export default function AgentChatScreen({ showBackButton = false }: AgentChatScr
 
         try {
             const digestResult = await runDailyDigestJobForUser(currentUser.uid, undefined, {
-                ignoreEnabledCheck: true,
                 sendPush: false,
             });
 

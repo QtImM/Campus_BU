@@ -148,8 +148,11 @@ const CourseBody: React.FC<{ payload: ShareCardPayload; t: (k: string, d?: any) 
 
             {quote && !!quote.text?.trim() && (
                 <View style={styles.quoteCard}>
-                    <Text style={styles.quoteText} numberOfLines={3}>{quote.text.trim()}</Text>
-                    <Text style={styles.quoteAuthor}>— {quote.author}</Text>
+                    <View style={styles.quoteAccent} />
+                    <View style={styles.quoteContent}>
+                        <Text style={styles.quoteText} numberOfLines={3}>{quote.text.trim()}</Text>
+                        <Text style={styles.quoteAuthor}>— {quote.author}</Text>
+                    </View>
                 </View>
             )}
 
@@ -298,21 +301,31 @@ const styles = StyleSheet.create({
         marginTop: 6,
     },
     quoteCard: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
+        flexDirection: 'row',
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        borderRadius: 12,
         marginTop: 20,
+        overflow: 'hidden',
+    },
+    quoteAccent: {
+        width: 3,
+        backgroundColor: 'rgba(251,191,36,0.7)',
+    },
+    quoteContent: {
+        flex: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
     },
     quoteText: {
         fontSize: 13.5,
         lineHeight: 20,
-        color: '#334155',
+        color: 'rgba(255,255,255,0.92)',
         fontWeight: '500',
+        fontStyle: 'italic',
     },
     quoteAuthor: {
         fontSize: 11,
-        color: '#94A3B8',
+        color: 'rgba(255,255,255,0.55)',
         fontWeight: '600',
         textAlign: 'right',
         marginTop: 8,

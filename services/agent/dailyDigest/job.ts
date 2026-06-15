@@ -6,7 +6,6 @@ import { sendDailyDigestPush } from './push';
 import {
     getCachedDailyDigest,
     getDatabaseDailyDigest,
-    getDailyDigestEnabled,
     getLatestDatabaseDailyDigest,
     saveCachedDailyDigest,
     saveDatabaseDailyDigest,
@@ -81,16 +80,8 @@ export const runDailyDigestJobForUser = async (
         };
     }
 
-    const digestEnabled = await getDailyDigestEnabled(userId);
-    if (!options?.ignoreEnabledCheck && !digestEnabled) {
-        return {
-            ok: false,
-            reason: 'disabled',
-        };
-    }
-
     const dateStr = getDailyDigestDate(date);
-    const shouldSendPush = options.sendPush !== false;
+    const shouldSendPush = options.sendPush === true;
     const todayStr = getDailyDigestDate(new Date());
     const shouldFallbackToRecent = dateStr === todayStr;
 
