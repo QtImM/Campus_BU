@@ -123,7 +123,7 @@ function buildQueryBuilderUrl(rootPath: string, limit: number): string {
     orderby: "@jcr:content/displayTime",
     "orderby.sort": "desc",
     "p.hits": "full",
-    "p.nodedepth": "2",
+    "p.nodedepth": "8",
   });
   return `${HKBU_HOST}/bin/querybuilder.json?${p.toString()}`;
 }
@@ -164,6 +164,28 @@ function extractImageUrl(content: any): string | null {
   return raw.startsWith("http") ? raw : `${HKBU_HOST}${raw}`;
 }
 
+function extractBodyTexts(obj: any): string[] {
+  const texts: string[] = [];
+  if (!obj || typeof obj !== "object") return texts;
+  for (const key of Object.keys(obj)) {
+    if (key === "text" && typeof obj[key] === "string" && obj[key].length > 100) {
+      texts.push(obj[key]);
+    } else if (typeof obj[key] === "object" && obj[key] !== null) {
+      texts.push(...extractBodyTexts(obj[key]));
+    }
+  }
+  return texts;
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&#039;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function normalizeHits(payload: any): FeedItem[] {
   const hits: any[] = Array.isArray(payload?.hits) ? payload.hits : [];
   const items: FeedItem[] = [];
@@ -171,12 +193,18 @@ function normalizeHits(payload: any): FeedItem[] {
     const jcrPath: string | undefined = hit?.["jcr:path"];
     const content = hit?.["jcr:content"] ?? {};
     const titleEn: string = (content?.["jcr:title"] ?? "").toString().trim();
-    if (!jcrPath || !titleEn) continue; // skip non-article / PDF / malformed
+    if (!jcrPath || !titleEn) continue;
+
+    // Extract full article body from nested text components
+    const bodyHtmlParts = extractBodyTexts(content?.root ?? {});
+    const bodyPlain = bodyHtmlParts.map(htmlToPlainText).filter((t) => t.length > 40).join("\n\n");
+    const descEn = bodyPlain || (content?.["jcr:description"] ?? "").toString().trim();
+
     items.push({
       externalId: jcrPath,
       url: pathToUrl(jcrPath),
       titleEn,
-      descEn: (content?.["jcr:description"] ?? "").toString().trim(),
+      descEn,
       imageUrl: extractImageUrl(content),
       publishedAt: parseDate(content?.["displayTime"]) ?? parseDate(hit?.["jcr:created"]),
     });
@@ -193,27 +221,89 @@ function parseDDMMYYYY(raw: string): string | null {
   return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00Z`).toISOString();
 }
 
+const NAV_PATTERNS = /^(home|news|back|projects|events|faculty|department|research|contact|menu|search|skip|breadcrumb)/i;
+
+async function fetchArticleHtml(url: string): Promise<{ desc: string; image: string | null }> {
+  try {
+    const res = await fetchWithTimeout(url, REQUEST_TIMEOUT_MS);
+    if (!res.ok) return { desc: "", image: null };
+    const html = await res.text();
+
+    // Extract first meaningful article image
+    let image: string | null = null;
+    const imgRe = /src="(\/f\/news\/[^"]+)"/;
+    const imgMatch = imgRe.exec(html);
+    if (imgMatch) image = `${RESEARCH_HOST}${imgMatch[1]}`;
+
+    // Extract body paragraphs, filtering out navigation/header noise
+    const paragraphs: string[] = [];
+    const pRe = /<p[^>]*>([\s\S]*?)<\/p>/g;
+    let pMatch: RegExpExecArray | null;
+    while ((pMatch = pRe.exec(html)) !== null && paragraphs.length < 4) {
+      const text = pMatch[1]
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/&#039;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (text.length < 80) continue;
+      if (NAV_PATTERNS.test(text)) continue;
+      paragraphs.push(text);
+    }
+
+    return { desc: paragraphs.join("\n\n"), image };
+  } catch {
+    return { desc: "", image: null };
+  }
+}
+
 async function fetchResearchHtml(listingUrl: string, limit: number): Promise<FeedItem[]> {
   const res = await fetchWithTimeout(listingUrl, REQUEST_TIMEOUT_MS);
   if (!res.ok) throw new Error(`research HTML fetch failed: HTTP ${res.status}`);
   const html = await res.text();
 
   const items: FeedItem[] = [];
-  // Pattern: date → href → title (repeating blocks)
-  const blockRe = /ev-blk__sm-date date">(\d{2}\.\d{2}\.\d{4})[\s\S]*?href="\/news\/([a-z0-9][^"]+)"[\s\S]*?underline-link__line">([^<]+)/g;
+  // Actual page order: date → href/title → image
+  const blockRe = /ev-blk__sm-date date">(\d{2}\.\d{2}\.\d{4})[\s\S]*?href="\/news\/([a-z0-9][^"]+)"[\s\S]*?underline-link__line">([^<]+)[\s\S]*?src="(\/f\/news\/[^"]+)"/g;
   let match: RegExpExecArray | null;
   while ((match = blockRe.exec(html)) !== null && items.length < limit) {
-    const [, dateStr, slug, title] = match;
+    const [, dateStr, slug, title, imgPath] = match;
     if (slug.startsWith("page")) continue;
     items.push({
       externalId: `/news/${slug}`,
       url: `${RESEARCH_HOST}/news/${slug}`,
       titleEn: title.trim().replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#039;/g, "'").replace(/&quot;/g, '"'),
       descEn: "",
-      imageUrl: null,
+      imageUrl: `${RESEARCH_HOST}${imgPath}`,
       publishedAt: parseDDMMYYYY(dateStr),
     });
   }
+
+  // Fallback: if image-inclusive regex didn't match, try without image
+  if (items.length === 0) {
+    const fallbackRe = /ev-blk__sm-date date">(\d{2}\.\d{2}\.\d{4})[\s\S]*?href="\/news\/([a-z0-9][^"]+)"[\s\S]*?underline-link__line">([^<]+)/g;
+    let fm: RegExpExecArray | null;
+    while ((fm = fallbackRe.exec(html)) !== null && items.length < limit) {
+      const [, dateStr, slug, title] = fm;
+      if (slug.startsWith("page")) continue;
+      items.push({
+        externalId: `/news/${slug}`,
+        url: `${RESEARCH_HOST}/news/${slug}`,
+        titleEn: title.trim().replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#039;/g, "'").replace(/&quot;/g, '"'),
+        descEn: "",
+        imageUrl: null,
+        publishedAt: parseDDMMYYYY(dateStr),
+      });
+    }
+  }
+
+  // Fetch each article's detail page concurrently for body content (and image if missing)
+  await Promise.all(items.map(async (item) => {
+    const detail = await fetchArticleHtml(item.url);
+    if (detail.desc) item.descEn = detail.desc;
+    if (!item.imageUrl && detail.image) item.imageUrl = detail.image;
+  }));
+
   return items;
 }
 

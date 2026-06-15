@@ -1,6 +1,6 @@
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'expo-router';
-import { Bell, ChevronRight, Copy, Globe, Heart as HeartIcon, HelpCircle, LogOut, Mail, MessageSquare, Shield, Sparkles, X } from 'lucide-react-native';
+import { Bell, BookOpen, ChevronRight, Copy, Globe, Heart as HeartIcon, HelpCircle, LogOut, Mail, MessageSquare, Shield, Sparkles, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Animated, Dimensions, FlatList, Linking, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
@@ -19,6 +19,7 @@ import { fetchAnonymousPostsByAuthor, fetchLikedPosts, fetchPostsByAuthor, toggl
 import { getFollowCounts } from '../../services/follows';
 import { fetchNotifications, isDailyDigestNotification, markAllAsRead, markAsRead, mergeNotificationsById, Notification, subscribeToNotifications } from '../../services/notifications';
 import { getPushNotificationsEnabled, setPushNotificationsEnabled as updatePushNotificationsEnabled } from '../../services/push_notifications';
+import { getPendingCourseSubmissionCount } from '../../services/courses';
 import { fetchUnreadModerationAlertCount } from '../../services/moderation';
 import { Post, User as UserProfile } from '../../types';
 import { isAdmin } from '../../utils/userUtils';
@@ -44,6 +45,7 @@ type ProfileScreenCache = {
     pushNotificationsEnabled: boolean;
     isAdminUser: boolean;
     adminModerationUnreadCount: number;
+    adminPendingCourseCount: number;
 };
 
 let profileScreenCache: ProfileScreenCache | null = null;
@@ -65,6 +67,7 @@ export default function ProfileScreen() {
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [isAdminUser, setIsAdminUser] = useState(() => profileScreenCache?.isAdminUser || false);
     const [adminModerationUnreadCount, setAdminModerationUnreadCount] = useState(() => profileScreenCache?.adminModerationUnreadCount || 0);
+    const [adminPendingCourseCount, setAdminPendingCourseCount] = useState(() => profileScreenCache?.adminPendingCourseCount || 0);
     const [rewardPoints, setRewardPoints] = useState(0);
     const [rewardLevel, setRewardLevel] = useState<LevelInfo>(() => getLevelInfo(0));
     const loadTokenRef = useRef(0);
@@ -133,15 +136,22 @@ export default function ProfileScreen() {
                 }).catch(() => {});
 
                 let adminUnreadCount = 0;
+                let pendingCourseCount = 0;
                 if (adminStatus) {
-                    const unreadCount = await fetchUnreadModerationAlertCount(user.uid);
+                    const [unreadCount, courseCount] = await Promise.all([
+                        fetchUnreadModerationAlertCount(user.uid),
+                        getPendingCourseSubmissionCount(),
+                    ]);
                     if (loadToken !== loadTokenRef.current) {
                         return;
                     }
                     setAdminModerationUnreadCount(unreadCount);
+                    setAdminPendingCourseCount(courseCount);
                     adminUnreadCount = unreadCount;
+                    pendingCourseCount = courseCount;
                 } else {
                     setAdminModerationUnreadCount(0);
+                    setAdminPendingCourseCount(0);
                 }
 
                 profileScreenCache = {
@@ -161,6 +171,7 @@ export default function ProfileScreen() {
                     pushNotificationsEnabled: enabled,
                     isAdminUser: adminStatus,
                     adminModerationUnreadCount: adminUnreadCount,
+                    adminPendingCourseCount: pendingCourseCount,
                 };
             } else {
                 setProfile(null);
@@ -170,6 +181,7 @@ export default function ProfileScreen() {
                 setPushNotificationsEnabledState(false);
                 setIsAdminUser(false);
                 setAdminModerationUnreadCount(0);
+                setAdminPendingCourseCount(0);
                 setLoadingProfile(false);
                 profileScreenCache = {
                     profile: null,
@@ -179,6 +191,7 @@ export default function ProfileScreen() {
                     pushNotificationsEnabled: false,
                     isAdminUser: false,
                     adminModerationUnreadCount: 0,
+                    adminPendingCourseCount: 0,
                 };
             }
         } catch (error) {
@@ -214,9 +227,11 @@ export default function ProfileScreen() {
             pushNotificationsEnabled,
             isAdminUser,
             adminModerationUnreadCount,
+            adminPendingCourseCount,
         };
     }, [
         adminModerationUnreadCount,
+        adminPendingCourseCount,
         isAdminUser,
         loadingNotifications,
         loadingProfile,
@@ -862,6 +877,25 @@ export default function ProfileScreen() {
                                         <View style={styles.menuAlertBadge}>
                                             <Text style={styles.menuAlertBadgeText}>
                                                 {adminModerationUnreadCount > 99 ? '99+' : adminModerationUnreadCount}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    <ChevronRight size={20} color="#9CA3AF" />
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                        {isAdminUser && (
+                            <TouchableOpacity
+                                style={styles.menuItem}
+                                onPress={() => router.push('/admin/course-submissions' as any)}
+                            >
+                                <BookOpen size={20} color="#1E3A8A" />
+                                <Text style={styles.menuText}>课程申请审核</Text>
+                                <View style={styles.menuRight}>
+                                    {adminPendingCourseCount > 0 && (
+                                        <View style={styles.menuAlertBadge}>
+                                            <Text style={styles.menuAlertBadgeText}>
+                                                {adminPendingCourseCount > 99 ? '99+' : adminPendingCourseCount}
                                             </Text>
                                         </View>
                                     )}

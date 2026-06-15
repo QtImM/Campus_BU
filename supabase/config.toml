@@ -15,3 +15,8 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/broadcast_push/deno.json"
 entrypoint = "./functions/broadcast_push/index.ts"
+
+[functions.crawl_hkbu]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/crawl_hkbu/index.ts"

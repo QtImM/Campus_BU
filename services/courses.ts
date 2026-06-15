@@ -1185,6 +1185,22 @@ export const getUserCourseSubmissions = async (userId: string): Promise<CourseSu
 };
 
 /**
+ * 获取待审核课程提交数量（管理员红点用）
+ */
+export const getPendingCourseSubmissionCount = async (): Promise<number> => {
+    const { count, error } = await supabase
+        .from('course_submissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+    if (error) {
+        console.error('Error fetching pending submission count:', error);
+        return 0;
+    }
+    return count || 0;
+};
+
+/**
  * 获取所有待审核的课程提交（管理员用）
  */
 export const getPendingCourseSubmissions = async (): Promise<CourseSubmission[]> => {
