@@ -19,7 +19,7 @@ import { acceptCommunityEula, hasAcceptedCommunityEula } from '../services/moder
 import { syncScheduleToWidgetForUser } from '../services/widgetBridge';
 import { syncReviewReminders } from '../services/review_reminders';
 import { useClipboardDeepLink } from '../hooks/useClipboardDeepLink';
-import { registerForPushNotificationsAsync, savePushToken } from '../services/push_notifications';
+import { initializePushNotifications } from '../services/push_notifications';
 import { initMonitoring, setMonitoringUser, wrapRootComponent } from '../lib/monitoring';
 import './i18n/i18n'; // Initialize i18n
 import { i18nPromise } from './i18n/i18n';
@@ -188,10 +188,10 @@ function RootLayout() {
                   if (inAuthGroup && currentSegment !== 'setup' && !isForgotPasswordPage) {
                     router.replace('/(tabs)/campus');
                   }
-                  // Request push permission after login (non-blocking); token save skipped if undefined (e.g. Expo Go)
-                  registerForPushNotificationsAsync()
-                    .then(token => { if (token) savePushToken(user.uid, token).catch(() => {}); })
-                    .catch(() => {});
+                  // Request push permission after login (non-blocking). On first
+                  // grant this also turns the in-app "推送通知" toggle ON so it
+                  // matches the permission the user accepted.
+                  initializePushNotifications(user.uid).catch(() => {});
                 }
               })
               .catch(e => console.log('Profile check failed:', e));

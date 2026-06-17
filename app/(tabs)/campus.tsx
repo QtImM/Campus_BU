@@ -5,6 +5,7 @@ import { Check, X as CloseIcon, Globe, Plus, Search, Calendar, BookOpen, Shoppin
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+    ActivityIndicator,
     Animated,
     DeviceEventEmitter,
     Dimensions,
@@ -30,11 +31,11 @@ import { ForumPostRow } from '../../components/forum/ForumPostRow';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
 import { useThrottledCallback } from '../../hooks/useThrottle';
 import { useUgcEntryActions } from '../../hooks/useUgcEntryActions';
-import { getCurrentUser } from '../../services/auth';
-import { cachePost, deletePost, fetchPosts, POSTS_PAGE_SIZE, subscribeToPosts, togglePostLike } from '../../services/campus';
+import { getCurrentUser, getCurrentUserId, onAuthChange } from '../../services/auth';
+import { cachePost, deletePost, fetchPosts, loadFeedCache, POSTS_PAGE_SIZE, saveFeedCache, subscribeToPosts, togglePostLike } from '../../services/campus';
 import { addHiddenPostId, filterHiddenPosts, getHiddenPostIds } from '../../services/feedPreferences';
 import { getCurrentPrompt, WeeklyPrompt } from '../../services/weeklyPrompts';
-import { fetchForumPosts, fetchLatestPostTimePerCategory, FORUM_PAGE_SIZE } from '../../services/forum';
+import { fetchForumPosts, fetchLatestPostTimePerCategory, FORUM_PAGE_SIZE, loadForumFeedCache, saveForumFeedCache } from '../../services/forum';
 import { computeUnseenCategories, getCategorySeenMap, markCategorySeen, mergeCategoriesSeen } from '../../services/forumSeen';
 import { ForumCategory, ForumPost, ForumSort, Post, PostCategory } from '../../types';
 import { isRemoteImageUrl, normalizeRemoteImageUrl } from '../../utils/remoteImage';
@@ -97,10 +98,11 @@ export default function CampusScreen() {
   const [forumRefreshing, setForumRefreshing] = useState(false);
   const [loadingMorePosts, setLoadingMorePosts] = useState(false);
   const [loadingMoreForum, setLoadingMoreForum] = useState(false);
-  const [postsPage, setPostsPage] = useState(0);
   const [forumPage, setForumPage] = useState(0);
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const [hasMoreForum, setHasMoreForum] = useState(true);
+  // Keyset cursor for the discover feed: created_at (ISO) of the oldest loaded post.
+  const oldestPostCursorRef = useRef<string | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: ToastType }>({ visible: false, message: '', type: 'success' });
@@ -131,33 +133,83 @@ export default function CampusScreen() {
     if (newTab !== mainTab) setMainTab(newTab);
   };
 
-  const loadPosts = useCallback(async (isSilent = false, p = 0) => {
+  // Warm expo-image's cache for cover images so they're already decoded by the
+  // time the card scrolls into view — the biggest "fully painted" win on a feed.
+  const prefetchCovers = useCallback((items: Post[]) => {
+    try {
+      const urls = items
+        .map(p => p.images?.find(isRemoteImageUrl) ?? (isRemoteImageUrl(p.imageUrl) ? p.imageUrl : null))
+        .filter((u): u is string => !!u)
+        .slice(0, 20);
+      if (urls.length) void ExpoImageLib.prefetch(urls);
+    } catch { /* prefetch is best-effort */ }
+  }, []);
+
+  const loadPosts = useCallback(async (isSilent = false) => {
     try {
       if (!isSilent) setLoading(true);
-      const user = await resolveCurrentUserSafely();
-      const data = await fetchPosts('All', user?.uid, p, POSTS_PAGE_SIZE);
-      const hiddenIds = await getHiddenPostIds();
+      // Resolve the full user profile in parallel to populate UI state, but do
+      // NOT block the feed fetch on its (networked) profile round-trip — the
+      // feed only needs the uid, which getCurrentUserId() reads from the local
+      // session. This keeps cold-start feed loading off the slow path.
+      void resolveCurrentUserSafely();
+      const [uid, hiddenIds] = await Promise.all([getCurrentUserId(), getHiddenPostIds()]);
+      const data = await fetchPosts('All', uid ?? undefined, { limit: POSTS_PAGE_SIZE });
       const filtered = filterHiddenPosts(data, hiddenIds);
-      if (p === 0) setPosts(filtered);
-      else setPosts(prev => [...prev, ...filtered.filter(n => !prev.find(x => x.id === n.id))]);
-      setPostsPage(p);
+      setPosts(filtered);
+      void saveFeedCache(data);
+      oldestPostCursorRef.current = data.length ? new Date(data[data.length - 1].createdAt).toISOString() : null;
       setHasMorePosts(data.length >= POSTS_PAGE_SIZE);
+      prefetchCovers(filtered);
     } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
-  }, [resolveCurrentUserSafely]);
+  }, [resolveCurrentUserSafely, prefetchCovers]);
 
-  const loadForumPosts = async (isRefresh = false, p = 0) => {
+  // Keyset "load more": fetch posts strictly older than the oldest one we hold.
+  // Stays O(1) at depth (no offset scan-and-skip) and immune to inserts shifting
+  // page boundaries.
+  const loadMorePosts = useCallback(async () => {
+    if (loadingMorePosts || !hasMorePosts || loading) return;
+    const cursor = oldestPostCursorRef.current;
+    if (!cursor) return;
+    try {
+      setLoadingMorePosts(true);
+      const [uid, hiddenIds] = await Promise.all([getCurrentUserId(), getHiddenPostIds()]);
+      const data = await fetchPosts('All', uid ?? undefined, { beforeCreatedAt: cursor, limit: POSTS_PAGE_SIZE });
+      const filtered = filterHiddenPosts(data, hiddenIds);
+      setPosts(prev => [...prev, ...filtered.filter(n => !prev.find(x => x.id === n.id))]);
+      if (data.length) oldestPostCursorRef.current = new Date(data[data.length - 1].createdAt).toISOString();
+      setHasMorePosts(data.length >= POSTS_PAGE_SIZE);
+      prefetchCovers(filtered);
+    } catch (e) { console.error(e); } finally { setLoadingMorePosts(false); }
+  }, [loadingMorePosts, hasMorePosts, loading, prefetchCovers]);
+
+  const loadForumPosts = useCallback(async (isRefresh = false, p = 0) => {
     try {
       if (isRefresh) setForumRefreshing(true);
-      const user = await resolveCurrentUserSafely();
-      const data = await fetchForumPosts('all', 'recommended', user?.uid, p, FORUM_PAGE_SIZE);
-      const hiddenIds = await getHiddenPostIds();
+      void resolveCurrentUserSafely();
+      const [uid, hiddenIds] = await Promise.all([getCurrentUserId(), getHiddenPostIds()]);
+      const data = await fetchForumPosts('all', 'recommended', uid ?? undefined, p, FORUM_PAGE_SIZE);
       const filtered = filterHiddenPosts(data, hiddenIds);
-      if (p === 0) setForumPosts(filtered);
+      if (p === 0) { setForumPosts(filtered); void saveForumFeedCache(data); }
       else setForumPosts(prev => [...prev, ...filtered.filter(n => !prev.find(x => x.id === n.id))]);
       setForumPage(p);
       setHasMoreForum(data.length >= FORUM_PAGE_SIZE);
     } catch (e) { console.error(e); } finally { setForumRefreshing(false); }
-  };
+  }, [resolveCurrentUserSafely]);
+
+  const loadMoreForum = useCallback(async () => {
+    if (loadingMoreForum || !hasMoreForum || forumRefreshing) return;
+    const next = forumPage + 1;
+    try {
+      setLoadingMoreForum(true);
+      const [uid, hiddenIds] = await Promise.all([getCurrentUserId(), getHiddenPostIds()]);
+      const data = await fetchForumPosts('all', 'recommended', uid ?? undefined, next, FORUM_PAGE_SIZE);
+      const filtered = filterHiddenPosts(data, hiddenIds);
+      setForumPosts(prev => [...prev, ...filtered.filter(n => !prev.find(x => x.id === n.id))]);
+      setForumPage(next);
+      setHasMoreForum(data.length >= FORUM_PAGE_SIZE);
+    } catch (e) { console.error(e); } finally { setLoadingMoreForum(false); }
+  }, [loadingMoreForum, hasMoreForum, forumRefreshing, forumPage]);
 
   const refreshUnseenSections = useCallback(async () => {
     try {
@@ -187,16 +239,75 @@ export default function CampusScreen() {
   });
 
   useEffect(() => {
-    loadPosts();
+    let active = true;
+    // Hydrate the discover feed from disk instantly so cold start shows real
+    // content right away, then revalidate from the network in the background.
+    (async () => {
+      const cached = await loadFeedCache();
+      if (!active || cached.length === 0) return;
+      const hiddenIds = await getHiddenPostIds();
+      setPosts(filterHiddenPosts(cached, hiddenIds));
+      setLoading(false);
+    })();
+    // Same stale-while-revalidate trick for the forum tab so it isn't blank on
+    // a cold start while the network refresh runs.
+    (async () => {
+      const cachedForum = await loadForumFeedCache();
+      if (!active || cachedForum.length === 0) return;
+      const hiddenIds = await getHiddenPostIds();
+      setForumPosts(filterHiddenPosts(cachedForum, hiddenIds));
+    })();
+    loadPosts(true); // silent revalidate (won't re-show the skeleton if cache hit)
     loadForumPosts();
     refreshUnseenSections();
     getCurrentPrompt().then(setWeeklyPrompt).catch(() => {});
-  }, [refreshUnseenSections]);
+    return () => { active = false; };
+  }, [refreshUnseenSections, loadPosts, loadForumPosts]);
+
+  // Re-load when the signed-in account actually changes (login / logout /
+  // account switch). Without this the tab stays mounted across re-login and
+  // would keep showing the previous account's posts and like state.
+  const lastUidRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const unsub = onAuthChange((user) => {
+      const uid = user?.uid ?? null;
+      if (lastUidRef.current === undefined) {
+        // First listener event on mount — the mount effect already triggered
+        // the initial load; just record the baseline so we don't double-fetch.
+        lastUidRef.current = uid;
+        setCurrentUser(user);
+        return;
+      }
+      if (uid === lastUidRef.current) return;
+      lastUidRef.current = uid;
+      setCurrentUser(user);
+      setPosts([]);
+      setForumPosts([]);
+      oldestPostCursorRef.current = null;
+      setForumPage(0);
+      setHasMorePosts(true);
+      setHasMoreForum(true);
+      loadPosts();
+      loadForumPosts();
+      refreshUnseenSections();
+    });
+    return unsub;
+  }, [loadPosts, loadForumPosts, refreshUnseenSections]);
 
   const filteredPosts = useMemo(() => {
     const res = activeCategory === 'All' ? posts : posts.filter(p => p.category === activeCategory);
     return [...res].sort((a, b) => sortOrder === 'latest' ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() : b.likes - a.likes);
   }, [posts, activeCategory, sortOrder]);
+
+  // The discover tab renders a masonry grid inside a plain ScrollView (not a
+  // FlatList), so we detect "near the bottom" manually to trigger load-more.
+  const handleDiscoverScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!currentUser) return; // guests see a fixed 4-post preview; don't load more
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 600) {
+      void loadMorePosts();
+    }
+  }, [loadMorePosts, currentUser]);
 
   const handlePostPress = useThrottledCallback((postId: string) => {
     const post = posts.find(p => p.id === postId);
@@ -271,7 +382,7 @@ export default function CampusScreen() {
         style={{ flex: 1 }}
       >
         <View style={{ width: SCREEN_W, flex: 1 }}>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadPosts(true, 0)} tintColor="#1E3A8A" />}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} onScroll={handleDiscoverScroll} scrollEventThrottle={400} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadPosts(true); }} tintColor="#1E3A8A" />}>
             <View style={styles.filterContainer}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterList}>
                 {CATEGORIES.map(item => (
@@ -317,23 +428,26 @@ export default function CampusScreen() {
                 </View>
               </View>
             ) : (
-              <MasonryGrid
-                data={currentUser ? filteredPosts : filteredPosts.slice(0, 4)}
-                columnGap={8}
-                columnPadding={12}
-                keyExtractor={(p) => p.id}
-                renderItem={(p) => (
-                  <MasonryPostCard
-                    key={p.id}
-                    post={p}
-                    onPress={() => handlePostPress(p.id)}
-                    onLike={() => handleLike(p.id)}
-                    onLongPress={() => handleDiscoverCardLongPress(p)}
-                    currentUserId={currentUser?.uid}
-                    onAuthorPress={(authorId) => { if (!p.isAnonymous) router.push({ pathname: '/profile/[id]', params: { id: authorId } }); }}
-                  />
-                )}
-              />
+              <>
+                <MasonryGrid
+                  data={currentUser ? filteredPosts : filteredPosts.slice(0, 4)}
+                  columnGap={8}
+                  columnPadding={12}
+                  keyExtractor={(p) => p.id}
+                  renderItem={(p) => (
+                    <MasonryPostCard
+                      key={p.id}
+                      post={p}
+                      onPress={() => handlePostPress(p.id)}
+                      onLike={() => handleLike(p.id)}
+                      onLongPress={() => handleDiscoverCardLongPress(p)}
+                      currentUserId={currentUser?.uid}
+                      onAuthorPress={(authorId) => { if (!p.isAnonymous) router.push({ pathname: '/profile/[id]', params: { id: authorId } }); }}
+                    />
+                  )}
+                />
+                {currentUser && loadingMorePosts && <ActivityIndicator style={{ paddingVertical: 20 }} color="#1E3A8A" />}
+              </>
             )}
           </ScrollView>
         </View>
@@ -357,6 +471,9 @@ export default function CampusScreen() {
             )}
             renderItem={({ item }) => <ForumPostRow post={item} onPress={() => handleForumPostPress(item.id)} onAuthorPress={(id) => router.push({ pathname: '/profile/[id]', params: { id } })} />}
             refreshControl={<RefreshControl refreshing={forumRefreshing} onRefresh={() => { void loadForumPosts(true, 0); void refreshUnseenSections(); }} tintColor="#1E3A8A" />}
+            onEndReached={() => { void loadMoreForum(); }}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={loadingMoreForum ? <ActivityIndicator style={{ paddingVertical: 20 }} color="#1E3A8A" /> : null}
             contentContainerStyle={{ paddingBottom: 120 }}
           />
         </View>

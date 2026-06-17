@@ -5,6 +5,8 @@ import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { getFollowingUserIds } from './follows';
 import { getBlockedUserIds } from './moderation';
 import { supabase } from './supabase';
+import storage from '../lib/storage';
+import { registerCacheReset } from '../lib/cacheRegistry';
 
 const POSTS_TABLE = 'posts';
 const COMMENTS_TABLE = 'post_comments';
@@ -23,6 +25,47 @@ export const getCachedPost = (postId: string): Post | null => {
     if (!entry || Date.now() - entry.ts > POST_CACHE_TTL) return null;
     return entry.post;
 };
+
+// Drop the in-memory post cache on sign-out / account switch so a new account
+// never sees the previous user's per-post state (e.g. isLiked).
+registerCacheReset(() => _postCache.clear());
+
+// ── Persisted feed cache (stale-while-revalidate for instant cold start) ──────
+// The first page of the discover feed is mirrored to disk so a cold start can
+// render real content immediately while the network refresh runs in the
+// background, instead of staring at skeletons for 5-10s.
+const FEED_CACHE_KEY = 'campus_feed_cache_v1';
+const FEED_CACHE_MAX = 20;
+
+export const saveFeedCache = async (posts: Post[]): Promise<void> => {
+    try {
+        await storage.setItem(FEED_CACHE_KEY, JSON.stringify(posts.slice(0, FEED_CACHE_MAX)));
+    } catch {
+        // Non-fatal: cache is an optimization only.
+    }
+};
+
+export const loadFeedCache = async (): Promise<Post[]> => {
+    try {
+        const raw = await storage.getItem(FEED_CACHE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? (parsed as Post[]) : [];
+    } catch {
+        return [];
+    }
+};
+
+export const clearFeedCache = async (): Promise<void> => {
+    try {
+        await storage.removeItem(FEED_CACHE_KEY);
+    } catch {
+        // ignore
+    }
+};
+
+// Also drop the persisted feed on sign-out (async, fire-and-forget).
+registerCacheReset(() => { void clearFeedCache(); });
 
 const CATEGORY_TO_TYPE: Record<PostCategory, PostType | 'all'> = {
     'All': 'all',
@@ -131,29 +174,113 @@ const markFollowingAuthors = async (posts: Post[], currentUserId?: string) => {
 
 export const POSTS_PAGE_SIZE = 20;
 
-/**
- * Fetch posts by category (supports pagination via page/pageSize)
- */
-export const fetchPosts = async (
-    category?: PostCategory,
-    currentUserId?: string,
-    page?: number,
-    pageSize: number = POSTS_PAGE_SIZE,
-): Promise<Post[]> => {
-    let query = supabase.from(POSTS_TABLE).select('*, author:users!author_id(*)');
+// Columns the feed/list/detail views actually consume (everything
+// mapSupabaseToPost reads). Replaces `select('*, author:users!author_id(*)')`,
+// which pulled every post column plus every joined user column
+// (social_tags, bio, created_at, …) the UI never looks at.
+const POST_LIST_SELECT =
+    'id, content, type, author_id, author_name, author_avatar, author_major, author_email, '
+    + 'images, location_tag, lat, lng, likes, comments_count, is_anonymous, created_at, '
+    + 'prompt_id, topic_title_zh, topic_title_en, '
+    + 'author:users!author_id(id, display_name, avatar_url, major, email)';
 
-    const type = CATEGORY_TO_TYPE[category || 'All'];
+export interface FetchPostsOptions {
+    /** Keyset cursor: return only posts strictly older than this ISO timestamp. */
+    beforeCreatedAt?: string;
+    /** Page size for paginated (feed) loads. Defaults to POSTS_PAGE_SIZE. */
+    limit?: number;
+}
+
+// Map a get_discover_feed() RPC row (flat author_* + u_* columns + computed
+// is_liked/is_following) to a Post.
+const mapFeedRpcRow = (row: any): Post => {
+    let images: string[] = [];
+    if (Array.isArray(row.images)) images = row.images;
+    else if (typeof row.images === 'string') {
+        try { images = JSON.parse(row.images); } catch { /* ignore */ }
+    }
+
+    const useInline = row.is_anonymous || !row.u_display_name;
+
+    return {
+        id: row.id,
+        authorId: row.author_id,
+        authorName: useInline ? row.author_name : row.u_display_name,
+        authorEmail: row.is_anonymous ? undefined : (row.author_email || row.u_email || undefined),
+        authorMajor: useInline ? row.author_major : row.u_major,
+        authorAvatar: useInline ? row.author_avatar : row.u_avatar_url,
+        content: row.content,
+        category: TYPE_TO_CATEGORY[row.type] || 'All',
+        type: row.type as PostType,
+        imageUrl: images.length > 0 ? images[0] : undefined,
+        images,
+        likes: row.likes || 0,
+        comments: row.comments_count || 0,
+        isAnonymous: row.is_anonymous || false,
+        createdAt: new Date(row.created_at),
+        location: row.lat && row.lng ? {
+            lat: row.lat,
+            lng: row.lng,
+            name: row.location_tag || 'Pin Location',
+        } : undefined,
+        promptId: row.prompt_id ?? undefined,
+        topicTitleZh: row.topic_title_zh ?? undefined,
+        topicTitleEn: row.topic_title_en ?? undefined,
+        isLiked: !!row.is_liked,
+        isFollowingAuthor: !!row.is_following,
+    };
+};
+
+// Once we learn the RPC isn't deployed, stop paying a failing round-trip on
+// every load and use the PostgREST fallback directly.
+let _feedRpcUnavailable = false;
+
+const fetchFeedViaRpc = async (
+    type: PostType | 'all',
+    currentUserId: string | undefined,
+    before: string | undefined,
+    limit: number,
+): Promise<Post[] | null> => {
+    if (_feedRpcUnavailable) return null;
+
+    const { data, error } = await supabase.rpc('get_discover_feed', {
+        p_user_id: currentUserId ?? null,
+        p_type: type === 'all' ? null : type,
+        p_before: before ?? null,
+        p_limit: limit,
+    });
+
+    if (error) {
+        // PGRST202 = function not found in schema cache → not deployed; stop
+        // trying. Anything else (transient) → fall back just for this call.
+        if (error.code === 'PGRST202' || /could not find the function|does not exist/i.test(error.message || '')) {
+            _feedRpcUnavailable = true;
+        }
+        return null;
+    }
+
+    return (data || []).map(mapFeedRpcRow);
+};
+
+// PostgREST path: column-projected query + parallel user-specific enrichment.
+// Used unbounded (no opts → e.g. map pins) and as the fallback when the RPC is
+// unavailable. `before` enables keyset pagination; `limit` caps the page.
+const fetchPostsViaRest = async (
+    type: PostType | 'all',
+    currentUserId: string | undefined,
+    before: string | undefined,
+    limit: number | undefined,
+): Promise<Post[]> => {
+    let query = supabase.from(POSTS_TABLE).select(POST_LIST_SELECT);
+
     if (type !== 'all') {
         query = query.eq('type', type);
     }
 
     query = query.order('created_at', { ascending: false });
 
-    if (page !== undefined) {
-        const from = page * pageSize;
-        const to = from + pageSize - 1;
-        query = query.range(from, to);
-    }
+    if (before) query = query.lt('created_at', before);
+    if (limit !== undefined) query = query.limit(limit);
 
     const { data, error } = await query;
 
@@ -197,12 +324,43 @@ export const fetchPosts = async (
 };
 
 /**
+ * Fetch posts by category.
+ *
+ * - Without `opts`: returns ALL matching posts in one query (used by the map
+ *   for pins). Unchanged behaviour.
+ * - With `opts`: paginated feed mode. Tries the single-round-trip
+ *   get_discover_feed RPC first (joins author + computes like/follow state +
+ *   excludes blocked authors server-side), falling back to the PostgREST query
+ *   with keyset pagination if the RPC isn't available.
+ */
+export const fetchPosts = async (
+    category?: PostCategory,
+    currentUserId?: string,
+    opts?: FetchPostsOptions,
+): Promise<Post[]> => {
+    const type = CATEGORY_TO_TYPE[category || 'All'];
+
+    if (opts) {
+        const limit = opts.limit ?? POSTS_PAGE_SIZE;
+        const rpcPosts = await fetchFeedViaRpc(type, currentUserId, opts.beforeCreatedAt, limit);
+        if (rpcPosts) {
+            rpcPosts.forEach(cachePost);
+            return rpcPosts;
+        }
+        return fetchPostsViaRest(type, currentUserId, opts.beforeCreatedAt, limit);
+    }
+
+    // Unbounded mode (e.g. map pins): every matching post, no pagination.
+    return fetchPostsViaRest(type, currentUserId, undefined, undefined);
+};
+
+/**
  * Fetch posts created by a specific author.
  */
 export const fetchPostsByAuthor = async (authorId: string, currentUserId?: string): Promise<Post[]> => {
     const { data, error } = await supabase
         .from(POSTS_TABLE)
-        .select('*, author:users!author_id(*)')
+        .select(POST_LIST_SELECT)
         .eq('author_id', authorId)
         .order('created_at', { ascending: false });
 
@@ -255,7 +413,7 @@ export const fetchAnonymousPostsByAuthor = async (authorId: string, currentUserI
 
     const { data, error } = await supabase
         .from(POSTS_TABLE)
-        .select('*, author:users!author_id(*)')
+        .select(POST_LIST_SELECT)
         .eq('author_id', authorId)
         .eq('is_anonymous', true)
         .order('created_at', { ascending: false });
@@ -314,7 +472,7 @@ export const fetchLikedPosts = async (userId: string, currentUserId?: string): P
 
     const { data, error } = await supabase
         .from(POSTS_TABLE)
-        .select('*, author:users!author_id(*)')
+        .select(POST_LIST_SELECT)
         .in('id', likedPostIds);
 
     if (error) {
@@ -365,7 +523,7 @@ export const fetchLikedPosts = async (userId: string, currentUserId?: string): P
  */
 export const searchPosts = async (queryText: string, currentUserId?: string): Promise<Post[]> => {
     // using user-defined ilike search here. To make it more robust we can search by content or author name
-    let query = supabase.from(POSTS_TABLE).select('*, author:users!author_id(*)');
+    let query = supabase.from(POSTS_TABLE).select(POST_LIST_SELECT);
 
     if (queryText && queryText.trim().length > 0) {
         query = query.or(`content.ilike.%${queryText}%,author_name.ilike.%${queryText}%`);
@@ -416,7 +574,7 @@ export const searchPosts = async (queryText: string, currentUserId?: string): Pr
 export const fetchPostById = async (postId: string, currentUserId?: string): Promise<Post | null> => {
     const { data, error } = await supabase
         .from(POSTS_TABLE)
-        .select('*, author:users!author_id(*)')
+        .select(POST_LIST_SELECT)
         .eq('id', postId)
         .single();
 
@@ -456,7 +614,7 @@ export const fetchPostsByPromptId = async (
 ): Promise<Post[]> => {
     const { data, error } = await supabase
         .from(POSTS_TABLE)
-        .select('*, author:users!author_id(*)')
+        .select(POST_LIST_SELECT)
         .eq('prompt_id', promptId)
         .order('created_at', { ascending: false })
         .limit(100);

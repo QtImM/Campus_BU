@@ -114,6 +114,7 @@ export const MasonryPostCard: React.FC<MasonryPostCardProps> = React.memo(
                                     style={styles.coverImage}
                                     contentFit="cover"
                                     recyclingKey={coverImage}
+                                    thumbWidth={200}
                                 />
                                 {post.category && post.category !== 'All' && (
                                     <View

@@ -69,6 +69,56 @@ async function enablePushForUser(userId: string): Promise<boolean> {
 }
 
 /**
+ * Call this once on app entry (after login / after onboarding setup). It keeps
+ * the in-app "推送通知" toggle (the per-user preference key) in sync with the OS
+ * permission, based on the user's stored preference:
+ *
+ *  - never set  → first run: prompt for OS permission; if granted and the token
+ *                 saves, AUTO-ENABLE the in-app toggle so it reflects reality.
+ *                 (Previously the toggle stayed OFF until manually flipped, so
+ *                 users had to grant permission AND toggle it on by hand.)
+ *  - 'true'     → already enabled: refresh the token so it stays valid.
+ *  - 'false'    → user explicitly opted out: do nothing, never re-subscribe.
+ */
+export async function initializePushNotifications(userId: string): Promise<void> {
+    if (!userId) return;
+
+    let pref: string | null = null;
+    try {
+        pref = await storage.getItem(getPushNotificationsEnabledKey(userId));
+    } catch {
+        pref = null;
+    }
+
+    // Respect an explicit opt-out — don't silently re-subscribe.
+    if (pref === 'false') return;
+
+    const token = await registerForPushNotificationsAsync();
+    if (!token) {
+        // Permission denied, Expo Go, or a transient network failure. Leave the
+        // preference unset so we can prompt again next launch; retry on resume.
+        if (pref === null) scheduleDeferredRegistration(userId);
+        return;
+    }
+
+    const saved = await savePushToken(userId, token);
+    if (!saved) {
+        scheduleDeferredRegistration(userId);
+        return;
+    }
+
+    // First successful grant → turn the in-app toggle ON so it matches the
+    // permission the user just accepted.
+    if (pref !== 'true') {
+        try {
+            await storage.setItem(getPushNotificationsEnabledKey(userId), 'true');
+        } catch (error) {
+            console.error('Error persisting push notification preference:', error);
+        }
+    }
+}
+
+/**
  * Requests permission and gets the Expo Push Token for the current device.
  * Includes retry logic for transient network failures.
  * @returns The Expo push token string or undefined if failed/denied

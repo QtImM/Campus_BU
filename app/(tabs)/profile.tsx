@@ -14,7 +14,7 @@ import { ProfilePostFeed } from '../../components/profile/ProfilePostFeed';
 import { ProfileTabs, ProfileTabType } from '../../components/profile/ProfileTabs';
 import { useNotifications } from '../../context/NotificationContext';
 import { useLoginPrompt } from '../../hooks/useLoginPrompt';
-import { getCurrentUser, getUserProfile, signOut, uploadAndUpdateAvatar } from '../../services/auth';
+import { getCurrentUser, getUserProfile, onAuthChange, signOut, uploadAndUpdateAvatar } from '../../services/auth';
 import { fetchAnonymousPostsByAuthor, fetchLikedPosts, fetchPostsByAuthor, togglePostLike } from '../../services/campus';
 import { getFollowCounts } from '../../services/follows';
 import { fetchNotifications, isDailyDigestNotification, markAllAsRead, markAsRead, mergeNotificationsById, Notification, subscribeToNotifications } from '../../services/notifications';
@@ -213,6 +213,43 @@ export default function ProfileScreen() {
         return () => {
             loadTokenRef.current += 1;
         };
+    }, []);
+
+    // Reload profile whenever the signed-in account actually changes (sign-out,
+    // sign-in, or account switch without fully closing the app). Without this,
+    // the tab stays mounted across re-login and keeps showing the previous
+    // account's name/avatar/notifications.
+    const lastProfileUidRef = useRef<string | null | undefined>(undefined);
+    useEffect(() => {
+        const unsub = onAuthChange((user) => {
+            const uid = user?.uid ?? null;
+            if (lastProfileUidRef.current === undefined) {
+                lastProfileUidRef.current = uid;
+                return;
+            }
+            if (uid === lastProfileUidRef.current) return;
+            lastProfileUidRef.current = uid;
+            profileScreenCache = null;
+            loadTokenRef.current += 1;
+            setProfile(null);
+            setUserId(null);
+            setUserEmail('');
+            setNotifications([]);
+            if (uid) {
+                // Show loading skeleton immediately so the profile tab never
+                // sits on "访客 / guest" while the new session's profile fetch
+                // is in-flight (avoids a loadingProfile=false, profile=null gap
+                // between the state reset above and loadData's first setState).
+                setLoadingProfile(true);
+                void loadData();
+            } else {
+                setLoadingProfile(false);
+            }
+        });
+        return unsub;
+    // loadData is defined inline in the component; it's stable across renders
+    // because it closes over loadTokenRef (a ref) and setState functions (stable).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {

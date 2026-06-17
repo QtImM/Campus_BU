@@ -5,6 +5,8 @@ import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { getFollowingUserIds } from './follows';
 import { getBlockedUserIds } from './moderation';
 import { supabase } from './supabase';
+import storage from '../lib/storage';
+import { registerCacheReset } from '../lib/cacheRegistry';
 
 const FORUM_POSTS = 'forum_posts';
 const FORUM_COMMENTS = 'forum_comments';
@@ -23,6 +25,58 @@ export const getCachedForumPost = (postId: string): ForumPost | null => {
     if (!entry || Date.now() - entry.ts > FORUM_POST_CACHE_TTL) return null;
     return entry.post;
 };
+
+// ── Persisted forum feed cache (stale-while-revalidate for instant cold start) ──
+// Mirrors the discover feed's disk cache (services/campus.ts): the first page of
+// the recommended forum list is written to disk so a cold start renders real
+// content immediately instead of a blank list while the network refresh runs.
+const FORUM_FEED_CACHE_KEY = 'forum_feed_cache_v1';
+const FORUM_FEED_CACHE_MAX = 20;
+
+export const saveForumFeedCache = async (posts: ForumPost[]): Promise<void> => {
+    try {
+        await storage.setItem(FORUM_FEED_CACHE_KEY, JSON.stringify(posts.slice(0, FORUM_FEED_CACHE_MAX)));
+    } catch {
+        // Non-fatal: cache is an optimization only.
+    }
+};
+
+export const loadForumFeedCache = async (): Promise<ForumPost[]> => {
+    try {
+        const raw = await storage.getItem(FORUM_FEED_CACHE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        // Revive Date fields — JSON round-trips them to strings, and consumers
+        // (e.g. ForumPostRow's formatDistanceToNow) require real Date objects.
+        return (parsed as any[]).map((p) => ({
+            ...p,
+            createdAt: new Date(p.createdAt),
+            lastReplyAt: new Date(p.lastReplyAt),
+            pinnedAt: p.pinnedAt ? new Date(p.pinnedAt) : undefined,
+            lastVerifiedAt: p.lastVerifiedAt ? new Date(p.lastVerifiedAt) : undefined,
+        })) as ForumPost[];
+    } catch {
+        return [];
+    }
+};
+
+export const clearForumFeedCache = async (): Promise<void> => {
+    try {
+        await storage.removeItem(FORUM_FEED_CACHE_KEY);
+    } catch {
+        // ignore
+    }
+};
+
+// Drop forum caches on sign-out / account switch. forum.ts previously
+// registered no reset, so its in-memory caches (post + category list) survived
+// re-login and could surface the previous account's per-post state.
+registerCacheReset(() => {
+    _forumPostCache.clear();
+    _categoryListCache.clear();
+    void clearForumFeedCache();
+});
 
 // ── Helper: 原子地调整帖子的 reply_count / upvote_count ─────────────────────────
 // 对应 supabase migration 20260420_forum_editorial_support.sql 中的 RPC

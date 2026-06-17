@@ -41,6 +41,7 @@ const RightThumb: React.FC<{ uri: string }> = ({ uri }) => {
             uri={uri}
             style={[styles.thumb, !ready && styles.thumbLoading]}
             onLoad={() => setReady(true)}
+            thumbWidth={THUMB}
         />
     );
 };

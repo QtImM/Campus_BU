@@ -6,6 +6,7 @@ import { compressImageForUpload } from '../utils/image';
 import { IMMUTABLE_STORAGE_CACHE_CONTROL } from '../utils/remoteImage';
 import { supabase } from './supabase';
 import { clearLocalEulaConsent } from './moderation';
+import { registerCacheReset, resetAllCaches } from '../lib/cacheRegistry';
 
 // Global flag to skip auth redirects during password reset flow
 let skipAuthRedirect = false;
@@ -99,6 +100,12 @@ export const signUp = async (email: string, password: string) => {
 
 // Sign in
 export const signIn = async (email: string, password: string) => {
+    // Stop any in-flight autoRefresh before establishing the new session.
+    // Without this, a pending refresh that completes mid-login can call
+    // signOut({scope:'local'}) (see _fetchCurrentUser error handler), which
+    // clears the brand-new session we just stored → profile loads as null
+    // → "访客" stuck on screen.
+    supabase.auth.stopAutoRefresh();
     const normalizedEmail = email.toLowerCase().trim();
     const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
@@ -106,11 +113,28 @@ export const signIn = async (email: string, password: string) => {
     });
     if (error) throw error;
 
+    // Wipe any caches still holding the previous account's data, and drop the
+    // 30s current-user cache synchronously so the new session is read fresh
+    // (don't rely solely on the async onAuthStateChange listener, which can
+    // land after a screen has already re-read getCurrentUser()).
+    invalidateCurrentUserCache();
+    _userProfileCache.clear();
+    resetAllCaches();
+
     return data.user ? { ...data.user, uid: data.user.id } : null;
 };
 
 // Sign out
 export const signOut = async () => {
+    // Stop the auto-refresh timer BEFORE calling signOut. Without this, an
+    // in-flight token refresh can race with the sign-out: the refresh response
+    // arrives after the session is cleared, Supabase stores the new tokens,
+    // and the user ends up silently re-logged-in as their previous account.
+    supabase.auth.stopAutoRefresh();
+    // Clear local app caches so nothing can re-read stale account data.
+    invalidateCurrentUserCache();
+    _userProfileCache.clear();
+    resetAllCaches();
     await supabase.auth.signOut();
 };
 
@@ -180,6 +204,10 @@ export const createUserProfile = async (
 // ── User profile cache (instant public profile page render) ──────────────────
 const _userProfileCache = new Map<string, { user: User; ts: number }>();
 const USER_PROFILE_CACHE_TTL = 60_000;
+
+// Ensure the profile cache is also wiped when any other module triggers a
+// global cache reset (belt-and-suspenders alongside signIn/signOut).
+registerCacheReset(() => _userProfileCache.clear());
 
 export const getCachedUserProfile = (uid: string): User | null => {
     const entry = _userProfileCache.get(uid);
@@ -359,6 +387,25 @@ export const getCurrentUser = async () => {
     });
 
     return _currentUserPromise;
+};
+
+// Lightweight: returns just the signed-in user's id from the local session,
+// WITHOUT the (networked) profile fetch that getCurrentUser() performs.
+// Use this to gate data loads (e.g. feeds) that only need the uid — it keeps
+// cold-start feed loading off the profile round-trip's critical path.
+export const getCurrentUserId = async (): Promise<string | null> => {
+    try {
+        const { data } = await supabase.auth.getSession();
+        return data.session?.user?.id ?? null;
+    } catch (error) {
+        if (isInvalidRefreshTokenError(error)) {
+            console.warn('[auth.ts] clearing invalid persisted session (getCurrentUserId)');
+            await supabase.auth.signOut({ scope: 'local' });
+            return null;
+        }
+        // Non-fatal: treat as guest for the purpose of data loading.
+        return null;
+    }
 };
 
 // Re-export auth as compatibility object if needed, but preferably avoid usage.
